@@ -1,0 +1,27 @@
+import pytest
+from pydantic import ValidationError
+
+from app.config import AppConfig
+
+
+def test_config_reads_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    config = AppConfig()
+    assert config.database_url == "postgresql+psycopg://u:p@h:5432/d"
+    assert config.environment == "development"
+
+
+def test_config_without_database_url_fails_naming_the_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(ValidationError, match="database_url"):
+        AppConfig()
+
+
+def test_config_rejects_unknown_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.setenv("ENVIRONMENT", "staging")
+    with pytest.raises(ValidationError):
+        AppConfig()

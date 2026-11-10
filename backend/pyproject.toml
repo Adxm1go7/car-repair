@@ -1,0 +1,48 @@
+[project]
+name = "garage-backend"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Adam Ornoch", email = "Adamigo77@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.20.1",
+    "fastapi>=0.162.0",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-settings>=2.16.1",
+    "sqlalchemy>=2.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.0",
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.3",
+    "testcontainers[postgres]>=4.15.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
