@@ -40,3 +40,17 @@ def test_downgrade_to_0001_drops_catalogue_tables(fresh_database_url: str) -> No
     tables = set(inspect(make_engine(fresh_database_url)).get_table_names())
     assert tables.isdisjoint(CATALOGUE_TABLES)
     assert "settings" in tables
+
+
+def test_upgrade_head_creates_reservations(fresh_database_url: str) -> None:
+    command.upgrade(alembic_config(fresh_database_url), "head")
+    assert "reservations" in inspect(make_engine(fresh_database_url)).get_table_names()
+
+
+def test_downgrade_to_0002_drops_reservations(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "head")
+    command.downgrade(cfg, "0002")
+    tables = set(inspect(make_engine(fresh_database_url)).get_table_names())
+    assert "reservations" not in tables
+    assert "services" in tables

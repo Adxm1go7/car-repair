@@ -21,8 +21,13 @@ No `.env` file is needed. To override defaults, copy `.env.example` to `.env`.
 | Web app | http://localhost:8080 |
 | API docs (Swagger) | http://localhost:8000/docs |
 | API health | http://localhost:8000/api/health |
+| Availability example | http://localhost:8000/api/availability?services=mot-test&date=YYYY-MM-DD |
 | Mailpit (captured emails) | http://localhost:8025 |
 | PostgreSQL | `localhost:5433`, user/password/db `garage` |
+
+For the availability example, use a date (`YYYY-MM-DD`) from today up to 60 days ahead.
+Repeat `services=` to book several services together, for example
+`?services=full-service&services=front-brake-pads&date=...`.
 
 Stop with `docker compose down`. Add `-v` to also delete the database volume.
 

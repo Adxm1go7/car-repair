@@ -23,6 +23,8 @@ DEFAULT_SETTINGS: Final[dict[str, Any]] = {
     "free_cancellation_hours": 24,
     "deposit_amount_pence": 2000,
     "garage_timezone": "Europe/London",
+    "slot_grid_minutes": 30,
+    "bay_buffer_minutes": 15,
     "garage_contact": DEMO_GARAGE_CONTACT,
 }
 

@@ -51,6 +51,11 @@ jobs:
       - run: docker compose up --build -d --wait --wait-timeout 180
       - run: curl -fsS http://localhost:8080/api/health | grep '"status":"ok"'
       - run: curl -fsS http://localhost:8080/api/services | grep '"slug":"mot-test"'
+      - name: Availability returns slots for tomorrow
+        run: |
+          tomorrow=$(TZ=Europe/London date -d tomorrow +%F)
+          url="http://localhost:8080/api/availability?services=mot-test&date=$tomorrow"
+          curl -fsS "$url" | grep -F '"slots":[{'
       - if: failure()
         run: docker compose logs
       - if: always()
