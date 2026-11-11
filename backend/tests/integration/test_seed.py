@@ -43,6 +43,8 @@ def test_seed_inserts_default_settings(db_session: Session) -> None:
         "free_cancellation_hours": 24,
         "deposit_amount_pence": 2000,
         "garage_timezone": "Europe/London",
+        "slot_grid_minutes": 30,
+        "bay_buffer_minutes": 15,
         "garage_contact": {
             "name": "Hillside Motors",
             "address": "12 Station Road, Anytown, AT1 2CD",
@@ -55,7 +57,7 @@ def test_seed_inserts_default_settings(db_session: Session) -> None:
 def test_seed_twice_creates_no_duplicate_settings(db_session: Session) -> None:
     seed(db_session)
     seed(db_session)
-    assert count(db_session, Setting) == 7
+    assert count(db_session, Setting) == 9
 
 
 def test_seed_keeps_admin_edited_value(db_session: Session) -> None:
@@ -79,7 +81,7 @@ def test_upgrade_head_on_seeded_database_keeps_data(fresh_database_url: str) -> 
         session.commit()
     command.upgrade(cfg, "head")
     with Session(make_engine(fresh_database_url)) as session:
-        assert count(session, Setting) == 7
+        assert count(session, Setting) == 9
         assert catalogue_counts(session) == DEMO_COUNTS
 
 
