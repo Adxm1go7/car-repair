@@ -54,8 +54,10 @@ def reserve(
         policy = replace(policy, cutoff_minutes=cutoff_minutes)
     day = start.astimezone(policy.zone).date()
     availability = day_availability(session, services, day, now, policy)
-    # Aware datetimes compare as instants, whatever zone they're written in.
-    slot = next((s for s in availability.slots if s.start == start), None)
+    # Compare in UTC. Two times with the same tzinfo compare by wall clock and ignore `fold`,
+    # so the second 01:30 on a clock-change day would otherwise match the first.
+    wanted_start = start.astimezone(UTC)
+    slot = next((s for s in availability.slots if s.start.astimezone(UTC) == wanted_start), None)
     if slot is None:
         raise SlotUnavailable
 

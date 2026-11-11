@@ -1,6 +1,6 @@
 """Loading availability data and reserving a slot, against the seeded demo garage."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.orm import Session
 
 from app.availability.engine import Policy
-from app.models import Bay, Reservation, Service, Setting
+from app.models import Bay, OpeningHours, Reservation, Service, Setting
 from app.repositories.availability import (
     SettingsUnavailable,
     day_availability,
@@ -141,6 +141,19 @@ def test_cutoff_override_allows_a_start_inside_the_cutoff(seeded: Session) -> No
     reserve(seeded, mot, local(9), local(8, 30), cutoff_minutes=0)
 
 
+def test_reserve_second_occurrence_of_repeated_hour_is_not_the_first(seeded: Session) -> None:
+    # 2026-10-25 (a Sunday): 01:00-01:59 happens twice. Open 00:00-03:00 for this test.
+    sunday = seeded.get(OpeningHours, 6)
+    assert sunday is not None
+    sunday.open_time, sunday.close_time = time(0), time(3)
+    seeded.flush()
+    mot = [service(seeded, "mot-test").id]
+    second_0130 = datetime(2026, 10, 25, 1, 30, fold=1, tzinfo=LONDON)  # 01:30 UTC
+    # The grid offers the first 01:30 (00:30 UTC); the second one isn't a grid start.
+    with pytest.raises(SlotUnavailable):
+        reserve(seeded, mot, second_0130, datetime(2026, 10, 20, tzinfo=UTC))
+
+
 def test_unknown_service_raises_value_error(seeded: Session) -> None:
     with pytest.raises(ValueError):
         reserve(seeded, [999_999], local(9), NOW)
@@ -180,6 +193,10 @@ def test_load_policy_reads_seeded_settings(seeded: Session) -> None:
         ("bay_buffer_minutes", -1),
         ("booking_cutoff_minutes", "soon"),
         ("garage_timezone", "Mars/Base"),
+        ("garage_timezone", "Europe"),  # a folder of zones, not a zone
+        ("slot_grid_minutes", 1441),
+        ("bay_buffer_minutes", 1441),
+        ("booking_cutoff_minutes", 525_601),
     ],
 )
 def test_load_policy_rejects_broken_settings(seeded: Session, key: str, value: Any) -> None:
@@ -188,7 +205,7 @@ def test_load_policy_rejects_broken_settings(seeded: Session, key: str, value: A
         load_policy(seeded)
 
 
-@pytest.mark.parametrize("value", [DELETE, "lots", -1])
+@pytest.mark.parametrize("value", [DELETE, "lots", -1, 3651])
 def test_load_booking_window_rejects_broken_setting(seeded: Session, value: Any) -> None:
     set_setting(seeded, "booking_window_days", value)
     with pytest.raises(SettingsUnavailable):

@@ -19,6 +19,9 @@ from app.repositories.availability import (
 
 router = APIRouter()
 
+MAX_SERVICES = 20
+MAX_SLUG_LENGTH = 64  # Service.slug is String(64)
+
 SessionDep = Annotated[Session, Depends(get_session)]
 NowDep = Annotated[datetime, Depends(utc_now)]
 
@@ -57,6 +60,11 @@ def availability(
 
     if not services or any(not slug for slug in services):
         raise _reject("Choose at least one service")
+    if len(services) > MAX_SERVICES:
+        raise _reject(f"Choose at most {MAX_SERVICES} services")
+    # A NUL can't be sent to PostgreSQL at all, and no slug is longer than its column.
+    if any("\x00" in slug or len(slug) > MAX_SLUG_LENGTH for slug in services):
+        raise _reject("Unknown service")
     if len(set(services)) != len(services):
         raise _reject("Each service can only be chosen once")
     found = find_active_services(session, services)

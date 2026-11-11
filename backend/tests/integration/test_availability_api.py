@@ -1,6 +1,6 @@
 """GET /api/availability against the seeded demo garage."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 from typing import Any, cast
 
 import pytest
@@ -105,6 +105,29 @@ def test_existing_reservation_removes_slots(client: TestClient, db_session: Sess
     assert result[0] == "09:30"
 
 
+def test_buffer_past_midnight_respects_next_days_reservation(
+    client: TestClient, db_session: Session
+) -> None:
+    # Open late on Tuesday; a block starts at midnight. A 22:50 MOT ends 23:50, but its
+    # 15-minute buffer runs to 00:05 and would overlap the block, so it mustn't be offered.
+    tuesday = db_session.get(OpeningHours, 1)
+    assert tuesday is not None
+    tuesday.open_time, tuesday.close_time = time(8, 20), time(23, 50)
+    mot_bay = db_session.scalars(select(Bay.id).where(Bay.slug == "mot-bay")).one()
+    midnight = datetime(2026, 11, 11, tzinfo=UTC)
+    db_session.add(
+        Reservation(
+            bay_id=mot_bay,
+            kind="block",
+            during=Range(midnight, midnight + timedelta(hours=1)),
+        )
+    )
+    db_session.flush()
+    result = starts(get(client, "mot-test").json())
+    assert "22:20" in result
+    assert "22:50" not in result
+
+
 def test_needs_approval_services_get_slots(client: TestClient) -> None:
     body = get(client, "clutch-replacement").json()
     assert len(body["slots"]) == 8
@@ -120,8 +143,16 @@ def test_missing_services_is_rejected(client: TestClient) -> None:
 
 @pytest.mark.parametrize(
     "services",
-    [[""], ["mot-test", "mot-test"], ["no-such-service"], ["full-service"]],
-    ids=["empty", "repeated", "unknown", "inactive"],
+    [
+        [""],
+        ["mot-test", "mot-test"],
+        ["no-such-service"],
+        ["full-service"],
+        ["mot\x00"],
+        ["x" * 65],
+        [f"service-{n}" for n in range(21)],
+    ],
+    ids=["empty", "repeated", "unknown", "inactive", "nul-byte", "too-long", "too-many"],
 )
 def test_rejects_bad_services(client: TestClient, db_session: Session, services: list[str]) -> None:
     full_service = db_session.scalars(select(Service).where(Service.slug == "full-service")).one()
@@ -156,6 +187,7 @@ def test_today_follows_garage_zone_near_midnight(client: TestClient) -> None:
         ("slot_grid_minutes", DELETE),
         ("garage_timezone", "Mars/Base"),
         ("booking_window_days", "lots"),
+        ("booking_window_days", 10_000_000),
     ],
 )
 def test_broken_settings_give_503(

@@ -25,10 +25,14 @@ class SettingsUnavailable(Exception):
     """A setting the engine needs is missing or invalid."""
 
 
-def _int_setting(session: Session, key: str, minimum: int) -> int:
+MINUTES_PER_DAY = 24 * 60
+
+
+def _int_setting(session: Session, key: str, minimum: int, maximum: int) -> int:
+    """An integer setting within sane bounds. Huge values would overflow date arithmetic."""
     value = get_setting(session, key)
     # bool is a subclass of int in Python, but `true` is not a number of minutes.
-    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+    if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
         raise SettingsUnavailable(key)
     return value
 
@@ -39,18 +43,19 @@ def load_policy(session: Session) -> Policy:
         raise SettingsUnavailable("garage_timezone")
     try:
         zone = ZoneInfo(name)
-    except (ZoneInfoNotFoundError, ValueError) as error:
+    # OSError: a name like "Europe" points at a folder of zones, not a zone file.
+    except (ZoneInfoNotFoundError, ValueError, OSError) as error:
         raise SettingsUnavailable("garage_timezone") from error
     return Policy(
         zone=zone,
-        grid_minutes=_int_setting(session, "slot_grid_minutes", 5),
-        buffer_minutes=_int_setting(session, "bay_buffer_minutes", 0),
-        cutoff_minutes=_int_setting(session, "booking_cutoff_minutes", 0),
+        grid_minutes=_int_setting(session, "slot_grid_minutes", 5, MINUTES_PER_DAY),
+        buffer_minutes=_int_setting(session, "bay_buffer_minutes", 0, MINUTES_PER_DAY),
+        cutoff_minutes=_int_setting(session, "booking_cutoff_minutes", 0, 365 * MINUTES_PER_DAY),
     )
 
 
 def load_booking_window_days(session: Session) -> int:
-    return _int_setting(session, "booking_window_days", 0)
+    return _int_setting(session, "booking_window_days", 0, 3650)
 
 
 def find_active_services(session: Session, slugs: Sequence[str]) -> list[Service]:
@@ -80,12 +85,14 @@ def day_availability(
         hours = DayHours(open=row.open_time, close=row.close_time, breaks=breaks)
 
     # The whole local day, as a UTC range, so a 23- or 25-hour day is covered exactly.
+    # It's extended by the buffer, because a late job's buffer can run past midnight.
     day_start = datetime.combine(day, time(0), tzinfo=policy.zone).astimezone(UTC)
     day_end = datetime.combine(day + timedelta(days=1), time(0), tzinfo=policy.zone).astimezone(UTC)
+    search_end = day_end + timedelta(minutes=policy.buffer_minutes)
     reservations = session.scalars(
         select(Reservation).where(
             Reservation.active.is_(True),
-            Reservation.during.overlaps(Range(day_start, day_end)),
+            Reservation.during.overlaps(Range(day_start, search_end)),
         )
     )
     occupied = [
