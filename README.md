@@ -12,7 +12,8 @@ docker compose up --build
 ```
 
 This starts PostgreSQL, Mailpit, the API and the web app. On every start the API applies
-database migrations and seeds default settings (safe to re-run; existing values are kept).
+database migrations and seeds default settings and the demo garage (safe to re-run; existing
+values are kept).
 No `.env` file is needed. To override defaults, copy `.env.example` to `.env`.
 
 | What | URL |
@@ -33,6 +34,22 @@ docker compose exec api python -m app.seed
 
 > **All default credentials and values in this repo are for local development only.**
 > Production must set its own values through environment variables.
+
+## Changing the demo data
+
+The demo garage (Hillside Motors: its services, bays, opening hours and contact details) is
+fictional. Its values live in one file, `backend/app/demo_data.py`.
+
+The seed only adds what's missing. It never overwrites a value or brings back something that
+was removed, so edits to `demo_data.py` don't reach a database that already exists. To load
+your edited values, reset the database:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+Admin screens for editing the catalogue arrive in Milestone 7.
 
 ## Local development
 

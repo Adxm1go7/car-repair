@@ -50,6 +50,7 @@ jobs:
       - uses: actions/checkout@v5
       - run: docker compose up --build -d --wait --wait-timeout 180
       - run: curl -fsS http://localhost:8080/api/health | grep '"status":"ok"'
+      - run: curl -fsS http://localhost:8080/api/services | grep '"slug":"mot-test"'
       - if: failure()
         run: docker compose logs
       - if: always()
