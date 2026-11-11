@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from testcontainers.community.postgres import PostgresContainer
 
 from app.config import AppConfig
-from app.db import make_engine
+from app.db import get_session, make_engine
 from app.main import create_app
 
 ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
@@ -65,4 +65,17 @@ def db_session(migrated_url: str) -> Iterator[Session]:
 @pytest.fixture
 def client(postgres_url: str) -> Iterator[TestClient]:
     with TestClient(create_app(AppConfig(database_url=postgres_url))) as client:
+        yield client
+
+
+@pytest.fixture
+def api_client(db_session: Session, migrated_url: str) -> Iterator[TestClient]:
+    """A client whose routes use the test's db_session, so test data is rolled back afterwards."""
+    app = create_app(AppConfig(database_url=migrated_url))
+
+    def use_test_session() -> Iterator[Session]:
+        yield db_session
+
+    app.dependency_overrides[get_session] = use_test_session
+    with TestClient(app) as client:
         yield client

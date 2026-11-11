@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.catalogue import Bay, BayType, OpeningHours, OpeningHoursBreak, Service
 from app.models.setting import Setting
 
-__all__ = ["Base", "Setting"]
+__all__ = ["Base", "Bay", "BayType", "OpeningHours", "OpeningHoursBreak", "Service", "Setting"]
