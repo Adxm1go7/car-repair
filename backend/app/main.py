@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import catalogue, health
+from app.api import availability, catalogue, health
 from app.config import AppConfig, get_config
 from app.db import make_engine
 
@@ -21,4 +21,5 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.state.engine = engine
     app.include_router(health.router, prefix="/api")
     app.include_router(catalogue.router, prefix="/api")
+    app.include_router(availability.router, prefix="/api")
     return app
