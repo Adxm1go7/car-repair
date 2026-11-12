@@ -21,6 +21,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+from app.models.catalogue import Service
 from app.models.reservation import Reservation
 
 BOOKING_STATUSES: Final[tuple[str, ...]] = (
@@ -109,3 +110,6 @@ class BookingItem(Base):
     price_to_pence: Mapped[int | None] = mapped_column(Integer)
     duration_minutes: Mapped[int] = mapped_column(Integer)
     position: Mapped[int] = mapped_column(Integer)
+
+    # Read for the slug only: the slug identifies a service, so it isn't snapshotted.
+    service: Mapped[Service] = relationship(viewonly=True)

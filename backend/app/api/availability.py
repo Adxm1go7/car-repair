@@ -1,26 +1,23 @@
 """Public, read-only availability: which start times are free for some services on one day."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.validation import check_bookable_date, resolve_services
 from app.clock import utc_now
 from app.db import get_session
 from app.repositories.availability import (
     SettingsUnavailable,
     day_availability,
-    find_active_services,
     load_booking_window_days,
     load_policy,
 )
 
 router = APIRouter()
-
-MAX_SERVICES = 20
-MAX_SLUG_LENGTH = 64  # Service.slug is String(64)
 
 SessionDep = Annotated[Session, Depends(get_session)]
 NowDep = Annotated[datetime, Depends(utc_now)]
@@ -40,10 +37,6 @@ class AvailabilityOut(BaseModel):
     slots: list[SlotOut]
 
 
-def _reject(detail: str) -> HTTPException:
-    return HTTPException(status_code=422, detail=detail)
-
-
 @router.get("/availability")
 def availability(
     session: SessionDep,
@@ -58,25 +51,8 @@ def availability(
     except SettingsUnavailable as error:
         raise HTTPException(status_code=503, detail="Availability unavailable") from error
 
-    if not services or any(not slug for slug in services):
-        raise _reject("Choose at least one service")
-    if len(services) > MAX_SERVICES:
-        raise _reject(f"Choose at most {MAX_SERVICES} services")
-    # A NUL can't be sent to PostgreSQL at all, and no slug is longer than its column.
-    if any("\x00" in slug or len(slug) > MAX_SLUG_LENGTH for slug in services):
-        raise _reject("Unknown service")
-    if len(set(services)) != len(services):
-        raise _reject("Each service can only be chosen once")
-    found = find_active_services(session, services)
-    if len(found) != len(services):
-        missing = sorted(set(services) - {service.slug for service in found})
-        raise _reject(f"Unknown service: {', '.join(missing)}")
-
-    today = now.astimezone(policy.zone).date()
-    if day < today:
-        raise _reject("That date has already passed")
-    if day > today + timedelta(days=window_days):
-        raise _reject(f"Bookings open at most {window_days} days ahead")
+    found = resolve_services(session, services)
+    check_bookable_date(day, now, policy.zone, window_days)
 
     result = day_availability(session, found, day, now, policy)
     return AvailabilityOut(

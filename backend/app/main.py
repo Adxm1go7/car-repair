@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.api import availability, catalogue, health
+from app.api import availability, catalogue, health, holds
 from app.config import AppConfig, get_config
 from app.db import make_engine
 
@@ -42,4 +42,5 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(catalogue.router, prefix="/api")
     app.include_router(availability.router, prefix="/api")
+    app.include_router(holds.router, prefix="/api")
     return app
