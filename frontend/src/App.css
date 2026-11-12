@@ -242,3 +242,106 @@ a {
   text-decoration: none;
   cursor: pointer;
 }
+
+/* --- choosing a time ------------------------------------------------------------- */
+
+.back {
+  margin: 16px 0 0;
+}
+
+.step-title {
+  margin: 8px 0 4px;
+  font-size: 1.5rem;
+}
+
+.chosen {
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+
+.day-strip {
+  display: flex;
+  gap: 8px;
+  margin: 0 -16px;
+  padding: 4px 16px 12px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+}
+
+.day {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+
+.day[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.day:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.day-weekday {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.day-date {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.slot {
+  padding: 12px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.slot:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.notice {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-weight: 600;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

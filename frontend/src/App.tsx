@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { Link, Route, Routes, useSearchParams } from 'react-router'
 import './App.css'
+import { BookPage } from './booking/BookPage.tsx'
 import { parseSelection, selectionQuery, totalMinutes } from './booking/selection.ts'
 import { fetchCatalogue } from './catalogue/api.ts'
 import { formatDuration, formatPrice } from './catalogue/format.ts'
@@ -177,8 +178,8 @@ export function App({ now = () => new Date() }: { now?: () => Date }): JSX.Eleme
   return (
     <Routes>
       <Route path="/" element={<CataloguePage catalogue={state.catalogue} now={now()} />} />
-      {/* Filled in by the time picker and confirmation tasks. */}
-      <Route path="/book" element={<main className="page" />} />
+      <Route path="/book" element={<BookPage catalogue={state.catalogue} now={now} />} />
+      {/* Filled in by the confirmation task. */}
       <Route path="/booked/:reference" element={<main className="page" />} />
     </Routes>
   )
