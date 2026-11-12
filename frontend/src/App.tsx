@@ -75,13 +75,17 @@ function ChooseTimeBar({ services, chosen }: { services: Service[]; chosen: stri
 function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }): JSX.Element {
   const { services, hours, garage } = catalogue
   const [searchParams, setSearchParams] = useSearchParams()
-  // The choice lives in the URL, so Back from the time picker keeps it. Only instant
-  // services can be chosen; anything else in the URL is ignored.
-  const bookable = new Set(services.filter((s) => s.approval_mode === 'instant').map((s) => s.slug))
-  const chosen = parseSelection(`?${searchParams.toString()}`).filter((slug) => bookable.has(slug))
+  // The choice starts from the URL and is copied back to it, so Back from the time picker
+  // keeps it. It is held here too, so a tick shows at once rather than after the URL
+  // updates. Only instant services can be chosen; anything else in the URL is ignored.
+  const [chosen, setChosen] = useState(() => {
+    const bookable = new Set(services.filter((s) => s.approval_mode === 'instant').map((s) => s.slug))
+    return parseSelection(`?${searchParams.toString()}`).filter((slug) => bookable.has(slug))
+  })
 
   function toggle(slug: string): void {
     const next = chosen.includes(slug) ? chosen.filter((s) => s !== slug) : [...chosen, slug]
+    setChosen(next)
     setSearchParams(new URLSearchParams(next.map((s) => ['services', s])), { replace: true })
   }
 

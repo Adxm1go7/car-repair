@@ -56,6 +56,28 @@ jobs:
           tomorrow=$(TZ=Europe/London date -d tomorrow +%F)
           url="http://localhost:8080/api/availability?services=mot-test&date=$tomorrow"
           curl -fsS "$url" | grep -F '"slots":[{'
+      - name: Worker is running
+        run: test "$(docker compose ps worker --format '{{.State}}')" = running
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - run: npm ci
+        working-directory: e2e
+      - run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      - name: End-to-end test
+        run: npm test
+        working-directory: e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          if-no-files-found: ignore
       - if: failure()
         run: docker compose logs
       - if: always()

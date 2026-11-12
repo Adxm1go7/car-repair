@@ -11,9 +11,14 @@ Prerequisite: [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 docker compose up --build
 ```
 
-This starts PostgreSQL, Mailpit, the API and the web app. On every start the API applies
-database migrations and seeds default settings and the demo garage (safe to re-run; existing
-values are kept).
+This starts PostgreSQL, Mailpit, the API, the web app and a worker. On every start the API
+applies database migrations and seeds default settings and the demo garage (safe to re-run;
+existing values are kept). The worker releases slot holds that have run out, every 60 seconds
+(`WORKER_INTERVAL_SECONDS`).
+
+To book, open http://localhost:8080, tick one or more services, click **Choose a time**, pick
+a day and a time, then enter your details and confirm. The time is held for you for 10
+minutes while you type. There is no payment step yet.
 No `.env` file is needed. To override defaults, copy `.env.example` to `.env`.
 
 | What | URL |
@@ -96,6 +101,22 @@ npm run build
 
 `npm run dev` starts the dev server on http://localhost:5173 and proxies `/api` to
 `http://localhost:8000`.
+
+### End-to-end test (`e2e/`)
+
+A [Playwright](https://playwright.dev/) test books an MOT in a real browser, then checks the
+booked time is no longer offered. It runs against the Compose stack, so start that first:
+
+```bash
+docker compose up --build -d --wait
+cd e2e
+npm ci
+npx playwright install chromium
+npm test
+```
+
+Each run makes a real booking in the local database. `docker compose down -v` clears them.
+Set `BASE_URL` to test another address.
 
 ## Documentation
 
