@@ -114,7 +114,7 @@ All public, no login. Every 422 has a **string** `detail` (see "Housekeeping").
 **`POST /api/holds`**
 
 ```json
-{ "services": ["full-service", "brake-pads-front"], "start": "2026-11-12T08:30:00+00:00" }
+{ "services": ["full-service", "front-brake-pads"], "start": "2026-11-12T08:30:00+00:00" }
 ```
 
 - Validates `services` exactly as `GET /api/availability` does: same rules, same messages, same limits (move the checks into one shared function rather than copying them). It also **rejects needs-approval services** ("This service needs approval — please call us").
@@ -130,7 +130,7 @@ All public, no login. Every 422 has a **string** `detail` (see "Housekeeping").
   "expires_in_seconds": 600,
   "start": "2026-11-12T08:30:00+00:00",
   "end": "2026-11-12T13:00:00+00:00",
-  "services": [{ "slug": "full-service", "name": "Full service", "duration_minutes": 180, "price_from_pence": 18900, "price_to_pence": null }]
+  "services": [{ "slug": "full-service", "name": "Full service", "duration_minutes": 180, "price_from_pence": 21900, "price_to_pence": null }]
 }
 ```
 
