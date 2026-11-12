@@ -198,3 +198,47 @@ a {
   border-radius: 10px;
   background: var(--surface);
 }
+
+/* --- choosing services ---------------------------------------------------------- */
+
+.pick {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.card-chosen {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.call-us {
+  margin: 0;
+  color: var(--badge-text);
+  font-size: 0.9rem;
+}
+
+.choose-bar {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.button {
+  display: block;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--surface);
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}

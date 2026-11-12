@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
+import { Link, Route, Routes, useSearchParams } from 'react-router'
 import './App.css'
+import { parseSelection, selectionQuery, totalMinutes } from './booking/selection.ts'
 import { fetchCatalogue } from './catalogue/api.ts'
 import { formatDuration, formatPrice } from './catalogue/format.ts'
 import { openTodayText } from './catalogue/openToday.ts'
@@ -26,24 +28,61 @@ function groupByCategory(services: Service[]): [string, Service[]][] {
   return [...groups.entries()]
 }
 
-function ServiceCard({ service }: { service: Service }): JSX.Element {
+type CardProps = { service: Service; chosen: boolean; onToggle: (slug: string) => void }
+
+function ServiceCard({ service, chosen, onToggle }: CardProps): JSX.Element {
+  const headingId = `service-${service.slug}`
+  const instant = service.approval_mode === 'instant'
   return (
-    <li className="card">
+    <li className={chosen ? 'card card-chosen' : 'card'}>
       <div className="card-title">
-        <h3>{service.name}</h3>
-        {service.approval_mode === 'needs_approval' && <span className="badge">Needs approval</span>}
+        {instant && (
+          <input
+            type="checkbox"
+            className="pick"
+            aria-labelledby={headingId}
+            checked={chosen}
+            onChange={() => onToggle(service.slug)}
+          />
+        )}
+        <h3 id={headingId}>{service.name}</h3>
+        {!instant && <span className="badge">Needs approval</span>}
       </div>
       <p className="card-description">{service.description}</p>
       <p className="card-meta">
         <span>{formatDuration(service.duration_minutes)}</span>
         <span className="price">{formatPrice(service.price_from_pence, service.price_to_pence)}</span>
       </p>
+      {!instant && <p className="call-us">Needs approval — call us</p>}
     </li>
+  )
+}
+
+function ChooseTimeBar({ services, chosen }: { services: Service[]; chosen: string[] }): JSX.Element {
+  const count = chosen.length
+  const label = `Choose a time · ${count} service${count === 1 ? '' : 's'} · ${formatDuration(totalMinutes(services, chosen))}`
+  return (
+    <div className="choose-bar">
+      <Link className="button" to={`/book${selectionQuery(chosen)}`}>
+        {label}
+      </Link>
+    </div>
   )
 }
 
 function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }): JSX.Element {
   const { services, hours, garage } = catalogue
+  const [searchParams, setSearchParams] = useSearchParams()
+  // The choice lives in the URL, so Back from the time picker keeps it. Only instant
+  // services can be chosen; anything else in the URL is ignored.
+  const bookable = new Set(services.filter((s) => s.approval_mode === 'instant').map((s) => s.slug))
+  const chosen = parseSelection(`?${searchParams.toString()}`).filter((slug) => bookable.has(slug))
+
+  function toggle(slug: string): void {
+    const next = chosen.includes(slug) ? chosen.filter((s) => s !== slug) : [...chosen, slug]
+    setSearchParams(new URLSearchParams(next.map((s) => ['services', s])), { replace: true })
+  }
+
   return (
     <>
       <header className="site-header">
@@ -56,7 +95,12 @@ function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }):
             <h2>{category}</h2>
             <ul className="cards">
               {items.map((service) => (
-                <ServiceCard key={service.slug} service={service} />
+                <ServiceCard
+                  key={service.slug}
+                  service={service}
+                  chosen={chosen.includes(service.slug)}
+                  onToggle={toggle}
+                />
               ))}
             </ul>
           </section>
@@ -88,6 +132,7 @@ function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }):
           </address>
         </section>
       </main>
+      {chosen.length > 0 && <ChooseTimeBar services={services} chosen={chosen} />}
     </>
   )
 }
@@ -129,5 +174,12 @@ export function App({ now = () => new Date() }: { now?: () => Date }): JSX.Eleme
     )
   }
 
-  return <CataloguePage catalogue={state.catalogue} now={now()} />
+  return (
+    <Routes>
+      <Route path="/" element={<CataloguePage catalogue={state.catalogue} now={now()} />} />
+      {/* Filled in by the time picker and confirmation tasks. */}
+      <Route path="/book" element={<main className="page" />} />
+      <Route path="/booked/:reference" element={<main className="page" />} />
+    </Routes>
+  )
 }
