@@ -9,6 +9,7 @@ import { selectionQuery } from './selection.ts'
 import type { Availability, AvailabilitySlot, Hold } from './types.ts'
 
 type Props = {
+  initialNotice?: string
   services: string[]
   days: BookableDay[]
   zone: string
@@ -21,11 +22,11 @@ type Loaded = { key: string; result: Result<Availability> }
 const TAKEN = 'Sorry, someone just took that time.'
 const MIXED = "These services can't be booked together — please book them separately"
 
-export function TimePicker({ services, days, zone, onHeld }: Props): JSX.Element {
+export function TimePicker({ initialNotice, services, days, zone, onHeld }: Props): JSX.Element {
   const [selected, setSelected] = useState(() => days.find((day) => day.open)?.date ?? null)
   const [version, setVersion] = useState(0) // bump to reload the same day
   const [loaded, setLoaded] = useState<Loaded | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(initialNotice ?? null)
   const [holding, setHolding] = useState(false)
 
   const key = `${selected ?? ''}#${version}`

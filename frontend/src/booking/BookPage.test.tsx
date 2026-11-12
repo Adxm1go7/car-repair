@@ -28,14 +28,15 @@ const HOLD: Hold = {
   services: [],
 }
 
-type Stub = { availability?: Partial<Availability>; holdStatus?: number }
+/** confirmStatus 0 means confirm never answers. */
+type Stub = { availability?: Partial<Availability>; holdStatus?: number; confirmStatus?: number }
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status })
 }
 
 /** A fake backend. Returns the fetch mock so tests can count calls. */
-function stubApi({ availability = {}, holdStatus = 201 }: Stub = {}): ReturnType<typeof vi.fn> {
+function stubApi({ availability = {}, holdStatus = 201, confirmStatus = 200 }: Stub = {}): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn((url: string) => {
     if (url === '/api/services') return Promise.resolve(json(SERVICES))
     if (url === '/api/opening-hours') return Promise.resolve(json(SUNDAY_CLOSED))
@@ -59,6 +60,24 @@ function stubApi({ availability = {}, holdStatus = 201 }: Stub = {}): ReturnType
     if (url === '/api/holds') {
       return Promise.resolve(
         holdStatus === 201 ? json(HOLD, 201) : json({ detail: 'That time has just been taken' }, 409),
+      )
+    }
+    if (url === '/api/holds/ABCD-EFGH') return Promise.resolve(new Response(null, { status: 204 }))
+    if (url === '/api/holds/ABCD-EFGH/confirm') {
+      if (confirmStatus === 0) return new Promise<Response>(() => {}) // never answers
+      return Promise.resolve(
+        confirmStatus === 200
+          ? json({
+              reference: 'ABCD-EFGH',
+              status: 'confirmed',
+              start: SLOTS[0].start,
+              end: SLOTS[0].end,
+              services: [],
+              registration: 'AB12CDE',
+              make: 'Ford',
+              model: 'Focus',
+            })
+          : json({ detail: 'Your hold has expired' }, confirmStatus),
       )
     }
     return Promise.resolve(json({}, 404))
@@ -153,4 +172,96 @@ it('redirects to the services page when only needs-approval services are chosen'
   stubApi()
   renderAt('/book?services=clutch-replacement')
   expect(await screen.findByRole('heading', { level: 1, name: 'Hillside Motors' })).toBeInTheDocument()
+})
+
+async function fillDetails(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.type(screen.getByLabelText('Name'), 'Sam Driver')
+  await user.type(screen.getByLabelText('Phone'), '07700 900123')
+  await user.type(screen.getByLabelText('Email'), 'sam@example.com')
+  await user.type(screen.getByLabelText('Registration'), 'AB12CDE')
+  await user.type(screen.getByLabelText('Make'), 'Ford')
+  await user.type(screen.getByLabelText('Model'), 'Focus')
+}
+
+it('goes back to the times after the hold runs out, keeping what was typed', async () => {
+  stubApi({ confirmStatus: 410 })
+  renderAt('/book?services=mot-test')
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  await screen.findByRole('heading', { name: 'Your details' })
+  await fillDetails(user)
+  await user.click(screen.getByRole('button', { name: 'Confirm booking' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Your hold ran out, so we released that time.')
+  expect(screen.getByRole('heading', { name: 'Choose a time' })).toBeInTheDocument()
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  expect(await screen.findByLabelText('Name')).toHaveValue('Sam Driver')
+  expect(screen.getByLabelText('Model')).toHaveValue('Focus')
+})
+
+it('shows the booked page after confirming', async () => {
+  stubApi()
+  renderAt('/book?services=mot-test')
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  await screen.findByRole('heading', { name: 'Your details' })
+  await fillDetails(user)
+  await user.click(screen.getByRole('button', { name: 'Confirm booking' }))
+  expect(await screen.findByRole('heading', { level: 1, name: "You're booked" })).toBeInTheDocument()
+  expect(screen.getByText('ABCD-EFGH')).toBeInTheDocument()
+})
+
+function released(fetchMock: ReturnType<typeof vi.fn>): RequestInit | undefined {
+  const call = fetchMock.mock.calls.find(
+    ([url, init]) => url === '/api/holds/ABCD-EFGH' && (init as RequestInit | undefined)?.method === 'DELETE',
+  )
+  return call?.[1] as RequestInit | undefined
+}
+
+it('change time releases the hold and keeps what was typed', async () => {
+  const fetchMock = stubApi()
+  renderAt('/book?services=mot-test')
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  await screen.findByRole('heading', { name: 'Your details' })
+  await fillDetails(user)
+  await user.click(screen.getByRole('button', { name: 'Change time' }))
+
+  expect(await screen.findByRole('heading', { name: 'Choose a time' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Change time' })).not.toBeInTheDocument()
+  expect(JSON.parse(String(released(fetchMock)?.body))).toEqual({ hold_token: 'token' })
+
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  expect(await screen.findByLabelText('Name')).toHaveValue('Sam Driver')
+  expect(screen.getByLabelText('Model')).toHaveValue('Focus')
+})
+
+it('change time sits next to change services and is off while confirming', async () => {
+  stubApi({ confirmStatus: 0 })
+  renderAt('/book?services=mot-test')
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  const nav = await screen.findByRole('navigation', { name: 'Booking steps' })
+  expect(within(nav).getByRole('link', { name: '← Change services' })).toBeInTheDocument()
+  expect(within(nav).getByRole('button', { name: 'Change time' })).toBeEnabled()
+  await fillDetails(user)
+  await user.click(screen.getByRole('button', { name: 'Confirm booking' }))
+  expect(within(nav).getByRole('button', { name: 'Change time' })).toBeDisabled()
+})
+
+it('change services releases the hold and drops what was typed', async () => {
+  const fetchMock = stubApi()
+  renderAt('/book?services=mot-test')
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  await screen.findByRole('heading', { name: 'Your details' })
+  await fillDetails(user)
+  await user.click(screen.getByRole('link', { name: '← Change services' }))
+
+  expect(await screen.findByRole('checkbox', { name: 'MOT test' })).toBeChecked()
+  expect(released(fetchMock)).toBeDefined()
+
+  await user.click(screen.getByRole('link', { name: /Choose a time/ }))
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  expect(await screen.findByLabelText('Name')).toHaveValue('')
 })

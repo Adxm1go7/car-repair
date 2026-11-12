@@ -246,7 +246,16 @@ a {
 /* --- choosing a time ------------------------------------------------------------- */
 
 .back {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: baseline;
   margin: 16px 0 0;
+}
+
+.link-button:disabled {
+  color: var(--muted);
+  cursor: wait;
 }
 
 .step-title {
@@ -344,4 +353,113 @@ a {
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* --- details and booked ------------------------------------------------------------ */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 480px;
+}
+
+.hold-banner {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--open-bg);
+  color: var(--open-text);
+  font-weight: 600;
+}
+
+.countdown {
+  font-variant-numeric: tabular-nums;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field input,
+.field textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.field [aria-invalid='true'] {
+  border-color: #c0392b;
+}
+
+.field-error {
+  margin: 0;
+  color: #c0392b;
+  font-size: 0.9rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .field [aria-invalid='true'] {
+    border-color: #ff8a7a;
+  }
+
+  .field-error {
+    color: #ff8a7a;
+  }
+}
+
+.details .button {
+  width: 100%;
+  margin: 4px 0 0;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+
+.booked-when {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.booked-services {
+  padding-left: 20px;
+}
+
+.booked-reference {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.booked-reference dt {
+  color: var(--muted);
+}
+
+.booked-reference dd {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
 }
