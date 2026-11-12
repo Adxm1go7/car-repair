@@ -17,7 +17,8 @@ from app.availability.engine import (
     ServiceInfo,
     find_slots,
 )
-from app.models import Bay, OpeningHours, Reservation, Service
+from app.models import Bay, Booking, OpeningHours, Reservation, Service
+from app.repositories.bookings import expired_hold
 from app.repositories.catalogue import get_setting
 
 
@@ -58,6 +59,10 @@ def load_booking_window_days(session: Session) -> int:
     return _int_setting(session, "booking_window_days", 0, 3650)
 
 
+def load_hold_minutes(session: Session) -> int:
+    return _int_setting(session, "slot_hold_minutes", 1, MINUTES_PER_DAY)
+
+
 def find_active_services(session: Session, slugs: Sequence[str]) -> list[Service]:
     """Active services with these slugs, in `slugs` order. Unknown or inactive ones are absent."""
     statement = select(Service).where(Service.slug.in_(slugs), Service.active.is_(True))
@@ -89,10 +94,14 @@ def day_availability(
     day_start = datetime.combine(day, time(0), tzinfo=policy.zone).astimezone(UTC)
     day_end = datetime.combine(day + timedelta(days=1), time(0), tzinfo=policy.zone).astimezone(UTC)
     search_end = day_end + timedelta(minutes=policy.buffer_minutes)
+    # A hold past its expiry time frees its slot straight away, even before the worker
+    # (or the next hold) gets round to releasing it.
+    expired = select(Booking.id).where(Booking.reservation_id == Reservation.id, expired_hold(now))
     reservations = session.scalars(
         select(Reservation).where(
             Reservation.active.is_(True),
             Reservation.during.overlaps(Range(day_start, search_end)),
+            ~expired.exists(),
         )
     )
     occupied = [
