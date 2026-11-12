@@ -40,6 +40,17 @@ services:
       retries: 10
       start_period: 10s
 
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-garage}:${POSTGRES_PASSWORD:-garage}@db:5432/${POSTGRES_DB:-garage}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      WORKER_INTERVAL_SECONDS: ${WORKER_INTERVAL_SECONDS:-60}
+    depends_on:
+      api:
+        condition: service_healthy  # the api runs the migrations on start
+
   web:
     build: ./frontend
     ports:

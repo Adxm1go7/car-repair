@@ -25,3 +25,22 @@ def test_config_rejects_unknown_environment(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("ENVIRONMENT", "staging")
     with pytest.raises(ValidationError):
         AppConfig()
+
+
+def test_worker_interval_defaults_to_60(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.delenv("WORKER_INTERVAL_SECONDS", raising=False)
+    assert AppConfig().worker_interval_seconds == 60
+
+
+def test_worker_interval_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.setenv("WORKER_INTERVAL_SECONDS", "5")
+    assert AppConfig().worker_interval_seconds == 5
+
+
+def test_worker_interval_below_1_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.setenv("WORKER_INTERVAL_SECONDS", "0")
+    with pytest.raises(ValidationError, match="worker_interval_seconds"):
+        AppConfig()
