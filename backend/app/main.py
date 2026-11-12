@@ -1,11 +1,30 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from app.api import availability, catalogue, health
 from app.config import AppConfig, get_config
 from app.db import make_engine
+
+LOCATION_PARTS = {"body", "query", "path", "header", "cookie"}
+
+
+def validation_message(error: RequestValidationError) -> str:
+    """The first problem as "<field>: <message>", matching the string details routes raise."""
+    first = error.errors()[0]
+    names = [part for part in first.get("loc", ()) if isinstance(part, str)]
+    fields = [part for part in names if part not in LOCATION_PARTS]
+    field = fields[-1] if fields else "request"
+    message = str(first.get("msg", "Invalid value")).removeprefix("Value error, ")
+    return f"{field}: {message}"
+
+
+async def validation_error_handler(request: Request, error: Exception) -> JSONResponse:
+    assert isinstance(error, RequestValidationError)  # noqa: S101 - registered only for this type
+    return JSONResponse(status_code=422, content={"detail": validation_message(error)})
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
@@ -19,6 +38,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     app = FastAPI(title="Garage API", lifespan=lifespan)
     app.state.engine = engine
+    app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(health.router, prefix="/api")
     app.include_router(catalogue.router, prefix="/api")
     app.include_router(availability.router, prefix="/api")
