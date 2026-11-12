@@ -47,6 +47,23 @@ def test_upgrade_head_creates_reservations(fresh_database_url: str) -> None:
     assert "reservations" in inspect(make_engine(fresh_database_url)).get_table_names()
 
 
+BOOKING_TABLES = {"bookings", "booking_items"}
+
+
+def test_upgrade_head_creates_booking_tables(fresh_database_url: str) -> None:
+    command.upgrade(alembic_config(fresh_database_url), "head")
+    assert set(inspect(make_engine(fresh_database_url)).get_table_names()) >= BOOKING_TABLES
+
+
+def test_downgrade_to_0003_drops_booking_tables(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "head")
+    command.downgrade(cfg, "0003")
+    tables = set(inspect(make_engine(fresh_database_url)).get_table_names())
+    assert tables.isdisjoint(BOOKING_TABLES)
+    assert "reservations" in tables
+
+
 def test_downgrade_to_0002_drops_reservations(fresh_database_url: str) -> None:
     cfg = alembic_config(fresh_database_url)
     command.upgrade(cfg, "head")
