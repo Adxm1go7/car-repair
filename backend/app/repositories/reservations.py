@@ -43,6 +43,8 @@ def reserve(
     if start.tzinfo is None or start.utcoffset() is None:
         raise ValueError("start must be timezone-aware")
     wanted = set(service_ids)
+    if len(wanted) != len(service_ids):
+        raise ValueError("Duplicate service")
     services = list(
         session.scalars(select(Service).where(Service.id.in_(wanted), Service.active.is_(True)))
     )

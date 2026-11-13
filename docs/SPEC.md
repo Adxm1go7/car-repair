@@ -38,7 +38,7 @@ These decisions are settled. Rows marked *proposed* are my defaults that you acc
 | Deposit | Flat £20 per booking in Stripe test mode, balance paid in person. Refundable when cancelled 24 hours or more ahead. For approval bookings it is requested after approval. |
 | Notifications | Email only in v1: confirmation, reminder, cancellation, reschedule, "car ready". SMS can be added later behind the same interface. |
 | Garage-initiated changes | If staff cancel or move a booking, the system emails the customer, refunds the deposit and offers a new slot. |
-| Policy settings | *Proposed*: booking window 60 days, cut-off 2 hours before a slot, slot hold 10 minutes, free cancellation 24 hours. All stored as settings, not hardcoded. |
+| Policy settings | *Proposed*: booking window 60 days, cut-off 2 hours before a slot, slot hold 5 minutes (shortened from 10 in Milestone 4), free cancellation 24 hours. All stored as settings, not hardcoded. |
 | Stack | Python with FastAPI, React with TypeScript, PostgreSQL, Docker Compose, GitHub Actions. |
 | Photos | Enquiry photo uploads, stored in S3-compatible object storage. |
 | Staff interface | Responsive, usable on a phone or tablet in the workshop. |
@@ -84,7 +84,7 @@ Six flows cover the whole product. Each should become at least one end-to-end te
 
 1. The customer selects one or more services. The system sums their durations and finds a bay type that can take them.
 2. The customer sees open slots that fit the total duration and picks one.
-3. The slot is held for 10 minutes while the customer enters name, phone, email and car details and pays the £20 deposit.
+3. The slot is held for 5 minutes while the customer enters name, phone, email and car details and pays the £20 deposit.
 4. On payment success the booking becomes confirmed and a confirmation email with a token link is sent.
 5. If the hold expires before payment, the slot is released and the customer is told.
 

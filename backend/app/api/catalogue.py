@@ -8,6 +8,11 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy.orm import Session
 
 from app.db import get_session
+from app.repositories.availability import (
+    SettingsUnavailable,
+    load_booking_window_days,
+    load_hold_minutes,
+)
 from app.repositories.catalogue import get_setting, list_active_services, list_opening_hours
 
 router = APIRouter()
@@ -78,6 +83,23 @@ def opening_hours(session: SessionDep) -> list[OpeningDayOut]:
             )
         )
     return days
+
+
+class BookingPolicyOut(BaseModel):
+    booking_window_days: int
+    slot_hold_minutes: int
+
+
+@router.get("/booking-policy")
+def booking_policy(session: SessionDep) -> BookingPolicyOut:
+    """How far ahead the booking page may offer days, and how long a hold lasts."""
+    try:
+        return BookingPolicyOut(
+            booking_window_days=load_booking_window_days(session),
+            slot_hold_minutes=load_hold_minutes(session),
+        )
+    except SettingsUnavailable as error:
+        raise HTTPException(status_code=503, detail="Booking unavailable") from error
 
 
 @router.get("/garage")

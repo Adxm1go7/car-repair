@@ -19,7 +19,7 @@ from app.models import Bay, BayType, OpeningHours, OpeningHoursBreak, Service, S
 DEFAULT_SETTINGS: Final[dict[str, Any]] = {
     "booking_window_days": 60,
     "booking_cutoff_minutes": 120,
-    "slot_hold_minutes": 10,
+    "slot_hold_minutes": 5,
     "free_cancellation_hours": 24,
     "deposit_amount_pence": 2000,
     "garage_timezone": "Europe/London",

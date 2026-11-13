@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,8 @@ class AppConfig(BaseSettings):
 
     database_url: str
     environment: Literal["development", "test", "production"] = "development"
+    # How often the worker releases expired holds.
+    worker_interval_seconds: int = Field(default=60, ge=1)
 
 
 @lru_cache

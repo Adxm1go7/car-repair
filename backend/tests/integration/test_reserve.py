@@ -159,6 +159,13 @@ def test_unknown_service_raises_value_error(seeded: Session) -> None:
         reserve(seeded, [999_999], local(9), NOW)
 
 
+def test_duplicate_service_ids_are_rejected(seeded: Session) -> None:
+    # Merging them would silently book a shorter job than the customer asked for.
+    mot = service(seeded, "mot-test").id
+    with pytest.raises(ValueError, match="Duplicate service"):
+        reserve(seeded, [mot, mot], local(9), NOW)
+
+
 def test_naive_start_raises_value_error(seeded: Session) -> None:
     with pytest.raises(ValueError):
         reserve(seeded, [service(seeded, "mot-test").id], datetime(2026, 11, 10, 9), NOW)
