@@ -73,4 +73,4 @@ def test_availability_respects_a_confirmed_booking_past_its_hold_time(seeded: Se
 
 
 def test_load_hold_minutes_reads_the_setting(seeded: Session) -> None:
-    assert load_hold_minutes(seeded) == 10
+    assert load_hold_minutes(seeded) == 5

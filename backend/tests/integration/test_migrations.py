@@ -1,6 +1,6 @@
 from alembic import command
 from conftest import alembic_config
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from app.db import make_engine
 
@@ -71,3 +71,39 @@ def test_downgrade_to_0002_drops_reservations(fresh_database_url: str) -> None:
     tables = set(inspect(make_engine(fresh_database_url)).get_table_names())
     assert "reservations" not in tables
     assert "services" in tables
+
+
+def _hold_minutes(url: str) -> object:
+    with make_engine(url).connect() as connection:
+        return connection.execute(
+            text("SELECT value FROM settings WHERE key = 'slot_hold_minutes'")
+        ).scalar_one()
+
+
+def _set_hold_minutes(url: str, value: int) -> None:
+    with make_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO settings (key, value) VALUES ('slot_hold_minutes', CAST(:v AS jsonb)) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"
+            ),
+            {"v": str(value)},
+        )
+
+
+def test_0005_shortens_the_old_default_hold_to_5_minutes(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "0004")
+    _set_hold_minutes(fresh_database_url, 10)
+    command.upgrade(cfg, "0005")
+    assert _hold_minutes(fresh_database_url) == 5
+    command.downgrade(cfg, "0004")
+    assert _hold_minutes(fresh_database_url) == 10
+
+
+def test_0005_keeps_a_hold_length_someone_chose(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "0004")
+    _set_hold_minutes(fresh_database_url, 15)
+    command.upgrade(cfg, "0005")
+    assert _hold_minutes(fresh_database_url) == 15

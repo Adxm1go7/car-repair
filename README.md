@@ -17,8 +17,8 @@ existing values are kept). The worker releases slot holds that have run out, eve
 (`WORKER_INTERVAL_SECONDS`).
 
 To book, open http://localhost:8080, tick one or more services, click **Choose a time**, pick
-a day and a time, then enter your details and confirm. The time is held for you for 10
-minutes while you type. There is no payment step yet.
+a day and a time, then enter your details and confirm. The time is held for you for 5
+minutes while you type (the `slot_hold_minutes` setting). There is no payment step yet.
 No `.env` file is needed. To override defaults, copy `.env.example` to `.env`.
 
 | What | URL |

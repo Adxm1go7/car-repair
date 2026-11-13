@@ -124,7 +124,7 @@ def test_odd_references_give_404(client: TestClient, reference: str) -> None:
 
 def test_late_confirm_gives_410_and_releases(client: TestClient, db_session: Session) -> None:
     created = hold(client)
-    set_now(client, NOW + timedelta(minutes=10))  # exactly at expiry counts as expired
+    set_now(client, NOW + timedelta(minutes=5))  # exactly at expiry counts as expired
     response = confirm(client, created)
     assert response.status_code == 410
     assert response.json() == {"detail": "Your hold has expired"}

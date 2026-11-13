@@ -54,8 +54,8 @@ def test_hold_returns_201_with_the_design_shape(client: TestClient) -> None:
     body = response.json()
     assert body["start"] == MOT_0800
     assert body["end"] == "2026-11-10T09:00:00+00:00"
-    assert body["expires_at"] == "2026-11-09T09:10:00+00:00"
-    assert body["expires_in_seconds"] == 600
+    assert body["expires_at"] == "2026-11-09T09:05:00+00:00"
+    assert body["expires_in_seconds"] == 300
     assert body["services"] == [
         {
             "slug": "mot-test",
@@ -167,7 +167,7 @@ def test_broken_hold_setting_gives_503(client: TestClient, db_session: Session) 
 
 def test_expired_hold_is_freed_on_the_spot(client: TestClient, db_session: Session) -> None:
     first = hold(client, ["mot-test"], MOT_0800).json()
-    set_now(client, NOW + timedelta(minutes=10, seconds=1))
+    set_now(client, NOW + timedelta(minutes=5, seconds=1))
     assert MOT_0800 in mot_starts(client)  # before anything has released it
     assert hold(client, ["mot-test"], MOT_0800).status_code == 201
     released = booking(db_session, first["reference"])

@@ -90,7 +90,7 @@ All Claude's calls. Migration `0004`.
 | `duration_minutes` | integer, not null, > 0 | Snapshot. |
 | `position` | integer, not null | The order the customer picked them in. Unique per booking. |
 
-**Settings**: none new. The hold uses the existing `slot_hold_minutes` (10). It must be a whole number from 1 to 1440, or the hold endpoint gives 503.
+**Settings**: none new. The hold uses the existing `slot_hold_minutes`, shortened from 10 to 5 by migration 0005 (only where it was still the old default). It must be a whole number from 1 to 1440, or the hold endpoint gives 503.
 
 ## Holds and expiry
 
@@ -109,7 +109,7 @@ All Claude's calls. Migration `0004`.
 
 All public, no login. Every 422 has a **string** `detail` (see "Housekeeping").
 
-**`GET /api/booking-policy`** → `200 {"booking_window_days": 60, "slot_hold_minutes": 10}`. 503 when either setting is missing or invalid.
+**`GET /api/booking-policy`** → `200 {"booking_window_days": 60, "slot_hold_minutes": 5}`. 503 when either setting is missing or invalid.
 
 **`POST /api/holds`**
 
@@ -127,7 +127,7 @@ All public, no login. Every 422 has a **string** `detail` (see "Housekeeping").
   "reference": "7K3Q-M2PX",
   "hold_token": "…",
   "expires_at": "2026-11-12T08:40:00+00:00",
-  "expires_in_seconds": 600,
+  "expires_in_seconds": 300,
   "start": "2026-11-12T08:30:00+00:00",
   "end": "2026-11-12T13:00:00+00:00",
   "services": [{ "slug": "full-service", "name": "Full service", "duration_minutes": 180, "price_from_pence": 21900, "price_to_pence": null }]

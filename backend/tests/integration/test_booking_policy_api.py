@@ -17,7 +17,7 @@ def client(api_client: TestClient, db_session: Session) -> TestClient:
 def test_policy_shape(client: TestClient) -> None:
     response = client.get("/api/booking-policy")
     assert response.status_code == 200
-    assert response.json() == {"booking_window_days": 60, "slot_hold_minutes": 10}
+    assert response.json() == {"booking_window_days": 60, "slot_hold_minutes": 5}
 
 
 @pytest.mark.parametrize("key", ["booking_window_days", "slot_hold_minutes"])
