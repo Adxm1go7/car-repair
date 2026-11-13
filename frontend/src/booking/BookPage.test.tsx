@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import type { JSX } from 'react'
+import { MemoryRouter, useNavigate } from 'react-router'
 import { afterEach, expect, it, vi } from 'vitest'
 import { App } from '../App.tsx'
 import type { OpeningDay } from '../catalogue/types.ts'
@@ -89,6 +90,26 @@ function stubApi({ availability = {}, holdStatus = 201, confirmStatus = 200 }: S
 function renderAt(entry: string): void {
   render(
     <MemoryRouter initialEntries={[entry]}>
+      <App now={NOW} />
+    </MemoryRouter>,
+  )
+}
+
+/** Stands in for the browser's Back button. */
+function BackButton(): JSX.Element {
+  const navigate = useNavigate()
+  return (
+    <button type="button" onClick={() => void navigate(-1)}>
+      Browser back
+    </button>
+  )
+}
+
+/** The booking page, arrived at from the services page, so there is somewhere to go back to. */
+function renderWithHistory(): void {
+  render(
+    <MemoryRouter initialEntries={['/', '/book?services=mot-test']} initialIndex={1}>
+      <BackButton />
       <App now={NOW} />
     </MemoryRouter>,
   )
@@ -264,4 +285,68 @@ it('change services releases the hold and drops what was typed', async () => {
   await user.click(screen.getByRole('link', { name: /Choose a time/ }))
   await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
   expect(await screen.findByLabelText('Name')).toHaveValue('')
+})
+
+it('change services does nothing while confirming', async () => {
+  const fetchMock = stubApi({ confirmStatus: 0 })
+  renderAt('/book?services=mot-test')
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  await screen.findByRole('heading', { name: 'Your details' })
+  await fillDetails(user)
+  await user.click(screen.getByRole('button', { name: 'Confirm booking' }))
+
+  const changeServices = screen.getByRole('link', { name: '← Change services' })
+  expect(changeServices).toHaveAttribute('aria-disabled', 'true')
+  await user.click(changeServices)
+  expect(screen.getByRole('heading', { name: 'Your details' })).toBeInTheDocument()
+  expect(released(fetchMock)).toBeUndefined()
+})
+
+// --- leaving without a button ------------------------------------------------------
+
+async function holdFirstTime(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  await screen.findByRole('heading', { name: 'Your details' })
+}
+
+it('the browser back button releases the hold', async () => {
+  const fetchMock = stubApi()
+  renderWithHistory()
+  const user = userEvent.setup()
+  await holdFirstTime(user)
+  await user.click(screen.getByRole('button', { name: 'Browser back' }))
+  expect(await screen.findByRole('checkbox', { name: 'MOT test' })).toBeInTheDocument()
+  expect(JSON.parse(String(released(fetchMock)?.body))).toEqual({ hold_token: 'token' })
+})
+
+it('a refresh or closing the tab releases the hold in a way that outlives the page', async () => {
+  const fetchMock = stubApi()
+  renderAt('/book?services=mot-test')
+  await holdFirstTime(userEvent.setup())
+  window.dispatchEvent(new Event('pagehide'))
+  expect(released(fetchMock)?.keepalive).toBe(true)
+})
+
+it('leaving before holding a time releases nothing', async () => {
+  const fetchMock = stubApi()
+  renderWithHistory()
+  const user = userEvent.setup()
+  await screen.findByRole('button', { name: '08:00 – 09:00' })
+  window.dispatchEvent(new Event('pagehide'))
+  await user.click(screen.getByRole('button', { name: 'Browser back' }))
+  await screen.findByRole('checkbox', { name: 'MOT test' })
+  expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')).toBe(false)
+})
+
+it('a confirmed booking is never released', async () => {
+  const fetchMock = stubApi()
+  renderWithHistory()
+  const user = userEvent.setup()
+  await holdFirstTime(user)
+  await fillDetails(user)
+  await user.click(screen.getByRole('button', { name: 'Confirm booking' }))
+  await screen.findByRole('heading', { level: 1, name: "You're booked" })
+  window.dispatchEvent(new Event('pagehide'))
+  expect(released(fetchMock)).toBeUndefined()
 })

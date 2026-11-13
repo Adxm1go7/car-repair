@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import type { JSX } from 'react'
@@ -119,7 +119,57 @@ it('reports expiry once when the countdown reaches zero', () => {
   expect(onExpired).toHaveBeenCalledTimes(1)
 })
 
+/** A fetch whose single answer the test sends when it chooses. */
+function answerLater(): (status: number, body?: unknown) => void {
+  let send: (response: Response) => void = () => {}
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise<Response>((resolve) => (send = resolve))),
+  )
+  return (status, body = {}) => send(new Response(JSON.stringify(body), { status }))
+}
+
+it('a confirm that lands after the countdown ends still counts as booked', async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date', 'performance'] })
+  const reply = answerLater()
+  const { onBooked, onExpired } = renderForm(DETAILS)
+  act(() => vi.advanceTimersByTime(597_000)) // 0:03 left
+  await act(async () => fireEvent.click(confirmButton()))
+  act(() => vi.advanceTimersByTime(5_000)) // the countdown passes zero mid-request
+  expect(onExpired).not.toHaveBeenCalled()
+
+  await act(async () => {
+    reply(200, SUMMARY)
+    await Promise.resolve()
+  })
+  expect(onBooked).toHaveBeenCalledWith(SUMMARY)
+  expect(onExpired).not.toHaveBeenCalled()
+})
+
+it('a 410 that lands after the countdown ends reports expiry once', async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date', 'performance'] })
+  const reply = answerLater()
+  const { onBooked, onExpired } = renderForm(DETAILS)
+  await act(async () => fireEvent.click(confirmButton()))
+  act(() => vi.advanceTimersByTime(605_000))
+  expect(onExpired).not.toHaveBeenCalled()
+
+  await act(async () => {
+    reply(410, { detail: 'Your hold has expired' })
+    await Promise.resolve()
+  })
+  expect(onExpired).toHaveBeenCalledTimes(1)
+  expect(onBooked).not.toHaveBeenCalled()
+})
+
 // --- the form -----------------------------------------------------------------------
+
+it('moves focus to the first field with a problem', async () => {
+  answer(200, SUMMARY)
+  renderForm({ ...DETAILS, email: 'sam', registration: 'A' })
+  await userEvent.setup().click(confirmButton())
+  expect(screen.getByLabelText('Email')).toHaveFocus()
+})
 
 it('labels every field', () => {
   renderForm()

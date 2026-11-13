@@ -463,3 +463,8 @@ a {
   letter-spacing: 0.05em;
   font-variant-numeric: tabular-nums;
 }
+
+.link-disabled {
+  color: var(--muted);
+  cursor: wait;
+}

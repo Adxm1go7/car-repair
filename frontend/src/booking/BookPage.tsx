@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import type { JSX } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { JSX, RefObject } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { formatDuration } from '../catalogue/format.ts'
 import type { Catalogue } from '../catalogue/types.ts'
@@ -27,6 +27,13 @@ const EMPTY_DETAILS: CustomerDetails = {
 
 type Props = { catalogue: Catalogue; now: () => Date }
 
+/** Give the held slot back, once. Best effort: if it fails, the hold runs out by itself. */
+function releaseHold(unreleased: RefObject<Hold | null>): void {
+  const hold = unreleased.current
+  unreleased.current = null
+  if (hold) void cancelHold(hold.reference, hold.hold_token)
+}
+
 /** Choose a time, then enter details. The chosen services come from the URL. */
 export function BookPage({ catalogue, now }: Props): JSX.Element {
   const { services, hours, garage } = catalogue
@@ -38,6 +45,20 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
   const [details, setDetails] = useState<CustomerDetails>(EMPTY_DETAILS)
   const [submitting, setSubmitting] = useState(false)
   const navigate = useNavigate()
+  // The hold this page should give back if the customer leaves. It is cleared once the
+  // booking is confirmed, the hold has run out, or it has already been released.
+  const unreleased = useRef<Hold | null>(null)
+
+  // Leaving without a button: Back (or any link) unmounts this page; a refresh or closing
+  // the tab fires pagehide, where cancelHold's keepalive lets the request outlive the page.
+  useEffect(() => {
+    const onPageHide = (): void => releaseHold(unreleased)
+    window.addEventListener('pagehide', onPageHide)
+    return () => {
+      window.removeEventListener('pagehide', onPageHide)
+      releaseHold(unreleased)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -57,9 +78,8 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
   const zone = garage.timezone
   const held = step.kind === 'details' ? step.hold : null
 
-  /** Give the held slot back. Best effort: if it fails, the hold runs out by itself. */
   function release(): void {
-    if (held) void cancelHold(held.reference, held.hold_token)
+    releaseHold(unreleased)
   }
 
   function changeTime(): void {
@@ -70,7 +90,16 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
   return (
     <main className="page">
       <nav className="back" aria-label="Booking steps">
-        <Link to={`/${selectionQuery(chosen)}`} onClick={release}>
+        <Link
+          to={`/${selectionQuery(chosen)}`}
+          aria-disabled={submitting || undefined}
+          className={submitting ? 'link-disabled' : undefined}
+          onClick={(event) => {
+            // Mid-confirm the booking may already be made: stay until the reply decides.
+            if (submitting) event.preventDefault()
+            else release()
+          }}
+        >
           ← Change services
         </Link>
         {held && (
@@ -99,7 +128,10 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
           services={chosen}
           days={bookableDays(todayInZone(now(), zone), policy.data.booking_window_days, hours)}
           zone={zone}
-          onHeld={(hold) => setStep({ kind: 'details', hold })}
+          onHeld={(hold) => {
+            unreleased.current = hold
+            setStep({ kind: 'details', hold })
+          }}
         />
       ) : (
         <DetailsForm
@@ -109,8 +141,12 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
           values={details}
           onValuesChange={setDetails}
           onSubmittingChange={setSubmitting}
-          onExpired={() => setStep({ kind: 'picking', notice: RAN_OUT })}
+          onExpired={() => {
+            unreleased.current = null // the server has already let it go
+            setStep({ kind: 'picking', notice: RAN_OUT })
+          }}
           onBooked={(summary) => {
+            unreleased.current = null // booked: never give it back
             void navigate(`/booked/${summary.reference}`, { state: summary })
           }}
         />

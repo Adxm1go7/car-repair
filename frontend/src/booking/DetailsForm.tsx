@@ -74,12 +74,23 @@ export function DetailsForm(props: Props): JSX.Element {
     onExpired()
   }
 
+  // While a confirm is in flight the server decides, not this page's countdown: the
+  // request may have reached the server in time even though the reply arrives after zero.
+  const inFlight = useRef(false)
+  const timeUp = useRef(false)
+
+  function countdownEnded(): void {
+    if (inFlight.current) timeUp.current = true
+    else expire()
+  }
+
   function setSending(sending: boolean): void {
+    inFlight.current = sending
     setSubmitting(sending)
     onSubmittingChange(sending)
   }
 
-  const remaining = useCountdown(hold.expires_in_seconds, expire)
+  const remaining = useCountdown(hold.expires_in_seconds, countdownEnded)
 
   function update(key: keyof CustomerDetails, value: string): void {
     onValuesChange({ ...values, [key]: value })
@@ -91,7 +102,11 @@ export function DetailsForm(props: Props): JSX.Element {
     const found = validateDetails(values)
     setErrors(found)
     setProblem(null)
-    if (Object.keys(found).length > 0) return
+    const first = Object.keys(found)[0] // fields are checked in the order they appear
+    if (first !== undefined) {
+      document.getElementById(`field-${first}`)?.focus() // so a screen reader reads the error
+      return
+    }
 
     setSending(true)
     const result = await confirmHold(hold.reference, hold.hold_token, values)
@@ -102,8 +117,8 @@ export function DetailsForm(props: Props): JSX.Element {
       return
     }
     setSending(false)
-    if (result.kind === 'expired') {
-      expire()
+    if (result.kind === 'expired' || timeUp.current) {
+      expire() // the server said so, or the time ran out and the confirm didn't go through
       return
     }
     const forField = fieldError(result.detail)

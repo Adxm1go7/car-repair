@@ -64,10 +64,14 @@ export function confirmHold(
   })
 }
 
-/** Gives the slot back. Best effort: if it fails, the hold simply runs out on its own. */
+/**
+ * Gives the slot back. Best effort: if it fails, the hold simply runs out on its own.
+ * `keepalive` lets the request finish even if the page is closing or reloading.
+ */
 export async function cancelHold(reference: string, token: string): Promise<void> {
   try {
-    await fetch(`/api/holds/${encodeURIComponent(reference)}`, post({ hold_token: token }, 'DELETE'))
+    const init = { ...post({ hold_token: token }, 'DELETE'), keepalive: true }
+    await fetch(`/api/holds/${encodeURIComponent(reference)}`, init)
   } catch {
     // nothing to do: the hold expires by itself
   }
