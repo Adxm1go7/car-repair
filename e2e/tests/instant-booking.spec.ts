@@ -23,11 +23,17 @@ async function payInStripe(page: Page): Promise<void> {
   await card.fill(TEST_CARD)
   await stripe.getByPlaceholder('MM / YY').fill('12 / 34')
   await stripe.getByPlaceholder('CVC').fill('123')
-  // Stripe asks for these depending on the account's settings and the browser's country.
+  // Stripe asks for these depending on the account's settings and where the browser is.
+  // CI runs in the US, where Stripe defaults to a US ZIP code and offers to save the card
+  // with Link (which then wants a phone number): pin the country and opt out.
   const name = stripe.getByLabel(/cardholder name|name on card/i)
   if (await name.isVisible()) await name.fill('Sam Driver')
-  const postcode = stripe.getByLabel(/postal code|postcode|zip/i)
-  if (await postcode.isVisible()) await postcode.fill('AT1 2CD')
+  const country = stripe.getByLabel(/country or region/i)
+  if (await country.isVisible()) await country.selectOption('GB')
+  const postcode = stripe.getByLabel(/postal code|postcode|zip/i).or(stripe.getByPlaceholder(/postal code|postcode|zip/i))
+  if (await postcode.first().isVisible()) await postcode.first().fill('SW1A 1AA')
+  const link = stripe.getByRole('checkbox', { name: /save my information/i })
+  if ((await link.count()) > 0 && (await link.isChecked())) await link.uncheck()
   await stripe.getByRole('button', { name: /^pay/i }).click()
 }
 

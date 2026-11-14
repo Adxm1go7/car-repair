@@ -39,7 +39,7 @@ notepad .env
 
 Fill in the two lines and save:
 
-```
+```ini
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
@@ -96,8 +96,11 @@ To see webhooks working too, install the Stripe command-line tool (Stripe CLI):
 4. Keep this running in its own terminal while you test. It passes Stripe's messages to the API:
 
    ```powershell
-   C:\Tools\stripe\stripe.exe listen --forward-to localhost:8000/api/stripe/webhook
+   C:\Tools\stripe\stripe.exe listen --forward-to localhost:8000/api/stripe/webhook `
+     --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.expired,refund.created,refund.updated,charge.refund.updated
    ```
+
+   Recent versions of the CLI insist on the `--events` list. Without it they quit straight away.
 
    Each payment then shows lines like `checkout.session.completed [200]`.
 

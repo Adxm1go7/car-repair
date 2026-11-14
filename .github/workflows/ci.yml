@@ -74,10 +74,18 @@ jobs:
       - name: Forward Stripe's webhooks to the api
         run: |
           secret=$(stripe listen --api-key "$STRIPE_SECRET_KEY" --print-secret)
+          test -n "$secret"
           echo "::add-mask::$secret"
           echo "STRIPE_WEBHOOK_SECRET=$secret" >> "$GITHUB_ENV"
-          nohup stripe listen --api-key "$STRIPE_SECRET_KEY" \
+          # The events the api handles (app/api/stripe_webhook.py). This CLI version insists
+          # on a list, and quits without forwarding anything if it gets none.
+          events=checkout.session.completed,checkout.session.async_payment_succeeded
+          events=$events,checkout.session.expired,refund.created,refund.updated,charge.refund.updated
+          nohup stripe listen --api-key "$STRIPE_SECRET_KEY" --events "$events" \
             --forward-to localhost:8000/api/stripe/webhook > stripe-listen.log 2>&1 &
+          sleep 5
+          # It must still be running, or no webhook reaches the api.
+          if ! kill -0 $! 2>/dev/null; then cat stripe-listen.log; exit 1; fi
       - run: docker compose up --build -d --wait --wait-timeout 180
       - run: curl -fsS http://localhost:8080/api/health | grep '"status":"ok"'
       - run: curl -fsS http://localhost:8080/api/services | grep '"slug":"mot-test"'
