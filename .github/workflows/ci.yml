@@ -46,8 +46,38 @@ jobs:
   compose:
     needs: [backend, frontend]
     runs-on: ubuntu-latest
+    env:
+      # Stripe test-mode keys from the repository's secrets (docs/stripe-setup.md). Compose
+      # passes them to the api and worker. Never demo mode here: see the check below.
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+      STRIPE_CLI_VERSION: 1.55.3
     steps:
       - uses: actions/checkout@v5
+      - name: Stripe test keys are set
+        run: |
+          if [ -z "$STRIPE_SECRET_KEY" ] || [ -z "$STRIPE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Add STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY as repository secrets (docs/stripe-setup.md)"
+            exit 1
+          fi
+          case "$STRIPE_SECRET_KEY" in
+            sk_test_*) ;;
+            *) echo "::error::STRIPE_SECRET_KEY must be a test key (sk_test_...)"; exit 1 ;;
+          esac
+      - name: Install the Stripe CLI
+        run: |
+          curl -fsSL -o stripe.tar.gz \
+            "https://github.com/stripe/stripe-cli/releases/download/v${STRIPE_CLI_VERSION}/stripe_${STRIPE_CLI_VERSION}_linux_x86_64.tar.gz"
+          tar -xzf stripe.tar.gz stripe
+          sudo mv stripe /usr/local/bin/stripe
+          stripe version
+      - name: Forward Stripe's webhooks to the api
+        run: |
+          secret=$(stripe listen --api-key "$STRIPE_SECRET_KEY" --print-secret)
+          echo "::add-mask::$secret"
+          echo "STRIPE_WEBHOOK_SECRET=$secret" >> "$GITHUB_ENV"
+          nohup stripe listen --api-key "$STRIPE_SECRET_KEY" \
+            --forward-to localhost:8000/api/stripe/webhook > stripe-listen.log 2>&1 &
       - run: docker compose up --build -d --wait --wait-timeout 180
       - run: curl -fsS http://localhost:8080/api/health | grep '"status":"ok"'
       - run: curl -fsS http://localhost:8080/api/services | grep '"slug":"mot-test"'
@@ -58,6 +88,8 @@ jobs:
           curl -fsS "$url" | grep -F '"slots":[{'
       - name: Worker is running
         run: test "$(docker compose ps worker --format '{{.State}}')" = running
+      - name: The api takes payments through Stripe
+        run: curl -fsS http://localhost:8080/api/booking-policy | grep -F '"provider":"stripe"'
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -77,6 +109,7 @@ jobs:
           path: |
             e2e/playwright-report
             e2e/test-results
+            stripe-listen.log
           if-no-files-found: ignore
       - if: failure()
         run: docker compose logs

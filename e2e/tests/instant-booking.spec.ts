@@ -1,13 +1,35 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-// Flow 1 from docs/SPEC.md: a customer books an instant service, without payment.
-// MOT test uses the MOT bay, the only bay of its type, so once booked its start must
-// disappear from availability.
+// Flow 1 from docs/SPEC.md: a customer books an instant service and pays the £20 deposit
+// in Stripe's embedded form (test mode). MOT test uses the MOT bay, the only bay of its type,
+// so once booked its start must disappear from availability.
+//
+// It needs the stack running with Stripe test keys (docs/stripe-setup.md). It never falls
+// back to demo mode: a broken real payment must not pass as a working demo one.
 
 const SLOT = /^\d\d:\d\d – \d\d:\d\d$/
 
 type Slot = { start: string; end: string }
+type Policy = { payment: { provider: string; publishable_key?: string } }
+
+const TEST_CARD = '4242 4242 4242 4242'
+
+/** Stripe's own form, drawn in an iframe inside our page. */
+async function payInStripe(page: Page): Promise<void> {
+  const stripe = page.locator('.stripe-checkout iframe').first().contentFrame()
+  const card = stripe.getByPlaceholder('1234 1234 1234 1234')
+  await expect(card).toBeVisible({ timeout: 30_000 })
+  await card.fill(TEST_CARD)
+  await stripe.getByPlaceholder('MM / YY').fill('12 / 34')
+  await stripe.getByPlaceholder('CVC').fill('123')
+  // Stripe asks for these depending on the account's settings and the browser's country.
+  const name = stripe.getByLabel(/cardholder name|name on card/i)
+  if (await name.isVisible()) await name.fill('Sam Driver')
+  const postcode = stripe.getByLabel(/postal code|postcode|zip/i)
+  if (await postcode.isVisible()) await postcode.fill('AT1 2CD')
+  await stripe.getByRole('button', { name: /^pay/i }).click()
+}
 
 /** The date of the most recent availability request the page made. */
 function trackAvailabilityDate(page: Page): () => string | null {
@@ -19,7 +41,13 @@ function trackAvailabilityDate(page: Page): () => string | null {
   return () => date
 }
 
-test('flow 1: instant booking without payment', async ({ page, request }) => {
+test('flow 1: instant booking with a deposit', async ({ page, request }) => {
+  const policy = (await (await request.get('/api/booking-policy')).json()) as Policy
+  expect(
+    policy.payment.provider === 'stripe' && policy.payment.publishable_key?.startsWith('pk_test_'),
+    'Stripe test keys are not configured — see docs/stripe-setup.md',
+  ).toBe(true)
+
   const lastDate = trackAvailabilityDate(page)
 
   await page.goto('/')
@@ -55,9 +83,14 @@ test('flow 1: instant booking without payment', async ({ page, request }) => {
   await page.getByLabel('Registration').fill('ab12 cde')
   await page.getByLabel('Make').fill('Ford')
   await page.getByLabel('Model').fill('Focus')
-  await page.getByRole('button', { name: 'Confirm booking' }).click()
+  await page.getByRole('button', { name: 'Continue to payment' }).click()
 
-  await expect(page.getByRole('heading', { name: "You're booked" })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pay your deposit' })).toBeVisible()
+  await expect(page.getByText('Deposit £20, balance paid at the garage')).toBeVisible()
+  await payInStripe(page)
+
+  await expect(page.getByRole('heading', { name: "You're booked" })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('Deposit paid: £20')).toBeVisible()
   await expect(page.getByText(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/)).toBeVisible()
   await expect(page.getByText('AB12CDE · Ford Focus')).toBeVisible()
 

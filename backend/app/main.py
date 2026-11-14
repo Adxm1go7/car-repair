@@ -11,7 +11,8 @@ from app.config import AppConfig, get_config
 from app.db import make_engine
 from app.payments.stripe_provider import StripeProvider
 
-log = logging.getLogger("app")
+# uvicorn configures this logger; one of our own would print nothing under it.
+log = logging.getLogger("uvicorn.error")
 
 LOCATION_PARTS = {"body", "query", "path", "header", "cookie"}
 
