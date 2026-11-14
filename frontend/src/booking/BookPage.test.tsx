@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { App } from '../App.tsx'
 import type { OpeningDay } from '../catalogue/types.ts'
 import { GARAGE, HOURS, SERVICES } from '../testing/fixtures.ts'
-import type { Availability, Hold } from './types.ts'
+import type { Availability, BookingSummary, Hold, HoldStatus } from './types.ts'
 
 // Sunday 15 November, 10:00 in London. The garage is closed on Sundays here.
 const NOW = (): Date => new Date('2026-11-15T10:00:00Z')
@@ -37,17 +37,53 @@ const POLICY = {
   payment: { provider: 'demo' },
 }
 const CHECKOUT = { client_secret: null, demo_session: 'demo_abc', expires_in_seconds: 600, amount_pence: 2000 }
+const SUMMARY: BookingSummary = {
+  reference: 'ABCD-EFGH',
+  status: 'confirmed',
+  start: SLOTS[0].start,
+  end: SLOTS[0].end,
+  services: [],
+  registration: 'AB12CDE',
+  make: 'Ford',
+  model: 'Focus',
+  deposit_paid_pence: 2000,
+}
+const HELD: HoldStatus = { status: 'held', deposit_status: 'unpaid', summary: null }
+const RELEASED: HoldStatus = { status: 'expired', deposit_status: 'unpaid', summary: null }
+const CONFIRMED: HoldStatus = { status: 'confirmed', deposit_status: 'paid', summary: SUMMARY }
+const REFUNDED: HoldStatus = { status: 'expired', deposit_status: 'refund_pending', summary: null }
 
-/** checkoutStatus 0 means checkout never answers. */
-type Stub = { availability?: Partial<Availability>; holdStatus?: number; checkoutStatus?: number }
+/**
+ * checkoutStatus 0 means checkout never answers. `status` is what the status check says
+ * (after a release it says RELEASED unless told otherwise). `cancel` is the DELETE reply,
+ * or 'later' to answer it only when the test calls `releaseNow`.
+ */
+type Stub = {
+  availability?: Partial<Availability>
+  holdStatus?: number
+  checkoutStatus?: number
+  checkoutSeconds?: number
+  status?: HoldStatus
+  cancel?: number | 'later'
+}
+
+let releaseNow: () => void = () => {}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status })
 }
 
 /** A fake backend. Returns the fetch mock so tests can count calls. */
-function stubApi({ availability = {}, holdStatus = 201, checkoutStatus = 200 }: Stub = {}): ReturnType<typeof vi.fn> {
-  const fetchMock = vi.fn((url: string) => {
+function stubApi({
+  availability = {},
+  holdStatus = 201,
+  checkoutStatus = 200,
+  checkoutSeconds = 600,
+  status,
+  cancel = 204,
+}: Stub = {}): ReturnType<typeof vi.fn> {
+  let releasedAlready = false
+  const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     if (url === '/api/services') return Promise.resolve(json(SERVICES))
     if (url === '/api/opening-hours') return Promise.resolve(json(SUNDAY_CLOSED))
     if (url === '/api/garage') return Promise.resolve(json(GARAGE))
@@ -72,11 +108,24 @@ function stubApi({ availability = {}, holdStatus = 201, checkoutStatus = 200 }: 
         holdStatus === 201 ? json(HOLD, 201) : json({ detail: 'That time has just been taken' }, 409),
       )
     }
-    if (url === '/api/holds/ABCD-EFGH') return Promise.resolve(new Response(null, { status: 204 }))
+    if (url === '/api/holds/ABCD-EFGH' && init?.method === 'DELETE') {
+      const reply = (code: number): Response => {
+        releasedAlready = code !== 409
+        return code === 204 ? new Response(null, { status: 204 }) : json({ detail: 'x' }, code)
+      }
+      if (cancel === 'later') return new Promise<Response>((resolve) => (releaseNow = () => resolve(reply(204))))
+      return Promise.resolve(reply(cancel))
+    }
+    if (url === '/api/holds/ABCD-EFGH/status') {
+      return Promise.resolve(json(status ?? (releasedAlready ? RELEASED : HELD)))
+    }
+    if (url === '/api/demo/checkout/demo_abc') return Promise.resolve(json({ status: 'confirmed' }))
     if (url === '/api/holds/ABCD-EFGH/checkout') {
       if (checkoutStatus === 0) return new Promise<Response>(() => {}) // never answers
       return Promise.resolve(
-        checkoutStatus === 200 ? json(CHECKOUT) : json({ detail: 'Your hold has expired' }, checkoutStatus),
+        checkoutStatus === 200
+          ? json({ ...CHECKOUT, expires_in_seconds: checkoutSeconds })
+          : json({ detail: 'Your hold has expired' }, checkoutStatus),
       )
     }
     return Promise.resolve(json({}, 404))
@@ -218,17 +267,86 @@ it('goes back to the times after the hold runs out, keeping what was typed', asy
   expect(screen.getByLabelText('Model')).toHaveValue('Focus')
 })
 
-// Task 9 rewrites this for the payment step.
-it.skip('shows the booked page after confirming', async () => {
-  stubApi()
-  renderAt('/book?services=mot-test')
-  const user = userEvent.setup()
+/** Hold the first time, type the details and move on to the payment step. */
+async function toPayment(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
   await screen.findByRole('heading', { name: 'Your details' })
   await fillDetails(user)
   await user.click(screen.getByRole('button', { name: 'Continue to payment' }))
+  await screen.findByRole('heading', { name: 'Pay your deposit' })
+}
+
+it('continue to payment shows the payment step', async () => {
+  stubApi()
+  renderAt('/book?services=mot-test')
+  await toPayment(userEvent.setup())
+  expect(screen.getByText('Deposit £20, balance paid at the garage')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Pay £20 (demo)' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Change time' })).toBeEnabled()
+})
+
+it('shows the booked page after paying', async () => {
+  stubApi({ status: CONFIRMED })
+  renderAt('/book?services=mot-test')
+  const user = userEvent.setup()
+  await toPayment(user)
+  await user.click(screen.getByRole('button', { name: 'Pay £20 (demo)' }))
   expect(await screen.findByRole('heading', { level: 1, name: "You're booked" })).toBeInTheDocument()
   expect(screen.getByText('ABCD-EFGH')).toBeInTheDocument()
+  expect(screen.getByText('Deposit paid: £20')).toBeInTheDocument()
+})
+
+it('countdown end after a payment got in shows the booked page', async () => {
+  stubApi({ checkoutSeconds: 1, cancel: 409, status: CONFIRMED })
+  renderAt('/book?services=mot-test')
+  await toPayment(userEvent.setup())
+  expect(await screen.findByRole('heading', { level: 1, name: "You're booked" }, { timeout: 3000 })).toBeInTheDocument()
+  expect(screen.queryByText(/haven't been charged/)).not.toBeInTheDocument()
+})
+
+it('countdown end with nothing paid returns to the picker saying not charged', async () => {
+  const fetchMock = stubApi({ checkoutSeconds: 1 })
+  renderAt('/book?services=mot-test')
+  await toPayment(userEvent.setup())
+  expect(await screen.findByRole('alert', {}, { timeout: 3000 })).toHaveTextContent(
+    "Your time ran out, so we released it. You haven't been charged.",
+  )
+  expect(screen.getByRole('heading', { name: 'Choose a time' })).toBeInTheDocument()
+  expect(released(fetchMock)).toBeDefined()
+})
+
+it('a late refunded payment shows the refunded notice', async () => {
+  stubApi({ checkoutSeconds: 1, status: REFUNDED })
+  renderAt('/book?services=mot-test')
+  await toPayment(userEvent.setup())
+  expect(await screen.findByRole('alert', {}, { timeout: 3000 })).toHaveTextContent("We've refunded your deposit")
+})
+
+it('change time during payment waits for the release', async () => {
+  stubApi({ cancel: 'later' })
+  renderAt('/book?services=mot-test')
+  const user = userEvent.setup()
+  await toPayment(user)
+  await user.click(screen.getByRole('button', { name: 'Change time' }))
+  expect(screen.getByRole('heading', { name: 'Pay your deposit' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Change time' })).toBeDisabled()
+  releaseNow()
+  expect(await screen.findByRole('heading', { name: 'Choose a time' })).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument() // they chose to leave: no notice
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  expect(await screen.findByLabelText('Name')).toHaveValue('Sam Driver')
+})
+
+it('change services during payment releases before leaving', async () => {
+  const fetchMock = stubApi({ cancel: 'later' })
+  renderAt('/book?services=mot-test')
+  const user = userEvent.setup()
+  await toPayment(user)
+  await user.click(screen.getByRole('link', { name: '← Change services' }))
+  expect(screen.getByRole('heading', { name: 'Pay your deposit' })).toBeInTheDocument()
+  expect(released(fetchMock)).toBeDefined()
+  releaseNow()
+  expect(await screen.findByRole('checkbox', { name: 'MOT test' })).toBeChecked()
 })
 
 function released(fetchMock: ReturnType<typeof vi.fn>): RequestInit | undefined {
@@ -338,14 +456,22 @@ it('leaving before holding a time releases nothing', async () => {
   expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')).toBe(false)
 })
 
-// Task 9 rewrites this for the payment step.
-it.skip('a confirmed booking is never released', async () => {
+it('leaving during payment with Back releases the hold', async () => {
   const fetchMock = stubApi()
   renderWithHistory()
   const user = userEvent.setup()
-  await holdFirstTime(user)
-  await fillDetails(user)
-  await user.click(screen.getByRole('button', { name: 'Continue to payment' }))
+  await toPayment(user)
+  await user.click(screen.getByRole('button', { name: 'Browser back' }))
+  expect(await screen.findByRole('checkbox', { name: 'MOT test' })).toBeInTheDocument()
+  expect(released(fetchMock)?.keepalive).toBe(true)
+})
+
+it('a paid booking is never released', async () => {
+  const fetchMock = stubApi({ status: CONFIRMED })
+  renderWithHistory()
+  const user = userEvent.setup()
+  await toPayment(user)
+  await user.click(screen.getByRole('button', { name: 'Pay £20 (demo)' }))
   await screen.findByRole('heading', { level: 1, name: "You're booked" })
   window.dispatchEvent(new Event('pagehide'))
   expect(released(fetchMock)).toBeUndefined()

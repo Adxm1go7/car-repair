@@ -468,3 +468,39 @@ a {
   color: var(--muted);
   cursor: wait;
 }
+
+/* --- payment ----------------------------------------------------------------------- */
+
+.payment {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 560px;
+}
+
+.payment-summary p {
+  margin: 4px 0;
+}
+
+.payment-deposit {
+  font-weight: 600;
+}
+
+/* Stripe draws its own form inside this box; it sizes itself to the page width. */
+.stripe-checkout {
+  min-height: 320px;
+}
+
+.demo-payment {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px;
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+}
+
+.demo-payment p {
+  margin: 0;
+}
