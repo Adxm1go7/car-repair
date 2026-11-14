@@ -1,14 +1,16 @@
-"""A customer confirms just as the sweep expires their hold. One must win cleanly."""
+"""A customer moves to payment just as the sweep expires their hold. One must win cleanly."""
 
 import threading
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from alembic import command
 from conftest import alembic_config
 from factories import TEST_TOKEN, make_hold
+from fakes import FakeProvider
 from sqlalchemy.orm import Session
 
-from app.bookings.service import CustomerDetails, HoldExpired, confirm_hold
+from app.bookings.service import CustomerDetails, HoldExpired, start_checkout
 from app.db import make_engine
 from app.models import Booking
 from app.repositories.bookings import release_expired_holds
@@ -25,9 +27,10 @@ DETAILS = CustomerDetails(
     notes=None,
 )
 ROUNDS = 10
+PAYMENT_HOLD = timedelta(minutes=10)
 
 
-def test_confirm_and_sweep_never_mix(fresh_database_url: str) -> None:
+def test_checkout_and_sweep_never_mix(fresh_database_url: str) -> None:
     command.upgrade(alembic_config(fresh_database_url), "head")
     engine = make_engine(fresh_database_url)
     try:
@@ -55,8 +58,16 @@ def test_confirm_and_sweep_never_mix(fresh_database_url: str) -> None:
                     try:
                         barrier.wait(timeout=10)
                         # One second before expiry by the customer's request clock.
-                        confirm_hold(
-                            session, reference, TEST_TOKEN, DETAILS, EXPIRES - timedelta(seconds=1)
+                        start_checkout(
+                            session,
+                            FakeProvider(),
+                            reference,
+                            TEST_TOKEN,
+                            DETAILS,
+                            EXPIRES - timedelta(seconds=1),
+                            payment_hold_minutes=10,
+                            amount_pence=2000,
+                            zone=ZoneInfo("Europe/London"),
                         )
                         session.commit()
                     except HoldExpired:
@@ -82,7 +93,8 @@ def test_confirm_and_sweep_never_mix(fresh_database_url: str) -> None:
 
             with Session(engine) as session:
                 booking = session.query(Booking).filter_by(reference=reference).one()
-                state = (booking.status, booking.reservation.active)
-                assert state in {("confirmed", True), ("expired", False)}, state
+                moved_on = EXPIRES - timedelta(seconds=1) + PAYMENT_HOLD
+                state = (booking.status, booking.reservation.active, booking.hold_expires_at)
+                assert state in {("held", True, moved_on), ("expired", False, EXPIRES)}, state
     finally:
         engine.dispose()
