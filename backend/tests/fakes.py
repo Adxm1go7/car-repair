@@ -18,13 +18,14 @@ class FakeProvider:
     closed: set[str] = field(default_factory=set)
     refund_status: RefundStatus = "pending"
     fail: bool = False  # every call raises PaymentUnavailable while True
+    fail_calls: set[str] = field(default_factory=set)  # only these calls fail
     calls: list[tuple[str, dict[str, object]]] = field(default_factory=list)
     refunds: dict[str, RefundStatus] = field(default_factory=dict)
     _sessions: int = 0
 
     def _call(self, name: str, **args: object) -> None:
         self.calls.append((name, args))
-        if self.fail:
+        if self.fail or name in self.fail_calls:
             raise PaymentUnavailable("fake provider told to fail")
 
     def called(self, name: str) -> list[dict[str, object]]:

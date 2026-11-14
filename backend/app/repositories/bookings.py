@@ -72,3 +72,15 @@ def get_booking_for_update(session: Session, reference: str) -> Booking | None:
         .execution_options(populate_existing=True)
     )
     return session.scalars(statement).one_or_none()
+
+
+def get_booking_for_update_by_id(session: Session, booking_id: int) -> Booking | None:
+    """Like get_booking_for_update, by id: for code that starts from a payment row."""
+    statement = (
+        select(Booking)
+        .where(Booking.id == booking_id)
+        .options(selectinload(Booking.items), selectinload(Booking.reservation))
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return session.scalars(statement).one_or_none()

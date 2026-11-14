@@ -28,11 +28,12 @@ def make_hold(
     *,
     bay_slug: str = "mot-bay",
     status: str = "held",
+    details: bool = False,
 ) -> Booking:
     """A one-hour booking at `start` (aware, any zone) with its reservation, flushed.
 
     Its token is TEST_TOKEN. A "confirmed" booking gets customer details and a paid deposit,
-    so it's valid.
+    so it's valid. `details=True` gives any booking them, as if payment had started.
     """
     bay = session.scalars(select(Bay.id).where(Bay.slug == bay_slug)).one()
     end = start + timedelta(hours=1)
@@ -52,7 +53,7 @@ def make_hold(
         end_at=end,
         hold_expires_at=expires_at,
         hold_token_hash=hash_token(TEST_TOKEN),
-        **(CUSTOMER if status == "confirmed" else {}),
+        **(CUSTOMER if status == "confirmed" or details else {}),
         deposit_status="paid" if status == "confirmed" else "unpaid",
     )
     session.add(booking)
