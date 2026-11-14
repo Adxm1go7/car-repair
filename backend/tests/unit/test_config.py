@@ -44,3 +44,38 @@ def test_worker_interval_below_1_is_rejected(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("WORKER_INTERVAL_SECONDS", "0")
     with pytest.raises(ValidationError, match="worker_interval_seconds"):
         AppConfig()
+
+
+URL = "postgresql+psycopg://u:p@h:5432/d"
+FAKE_SECRET = "sk_test_x"  # noqa: S105 - not a real key
+
+
+def clear_stripe(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRET"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+
+
+def test_provider_is_demo_without_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    clear_stripe(monkeypatch)
+    assert AppConfig(database_url=URL).payment_provider == "demo"
+
+
+def test_provider_is_stripe_with_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    clear_stripe(monkeypatch)
+    config = AppConfig(
+        database_url=URL, stripe_secret_key=FAKE_SECRET, stripe_publishable_key="pk_test_x"
+    )
+    assert config.payment_provider == "stripe"
+
+
+def test_production_without_a_stripe_key_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    clear_stripe(monkeypatch)
+    with pytest.raises(ValidationError, match="STRIPE_SECRET_KEY"):
+        AppConfig(database_url=URL, environment="production")
+
+
+def test_stripe_key_needs_publishable_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    clear_stripe(monkeypatch)
+    with pytest.raises(ValidationError, match="STRIPE_PUBLISHABLE_KEY"):
+        AppConfig(database_url=URL, stripe_secret_key=FAKE_SECRET)

@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -8,6 +9,8 @@ from fastapi.responses import JSONResponse
 from app.api import availability, catalogue, health, holds
 from app.config import AppConfig, get_config
 from app.db import make_engine
+
+log = logging.getLogger("app")
 
 LOCATION_PARTS = {"body", "query", "path", "header", "cookie"}
 
@@ -33,11 +36,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+        log.info("payment provider: %s", config.payment_provider)  # never a key
         yield
         engine.dispose()
 
     app = FastAPI(title="Garage API", lifespan=lifespan)
     app.state.engine = engine
+    app.state.config = config
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(health.router, prefix="/api")
     app.include_router(catalogue.router, prefix="/api")

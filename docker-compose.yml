@@ -28,6 +28,9 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -43,10 +46,14 @@ services:
   worker:
     build: ./backend
     command: ["python", "-m", "app.worker"]
+    restart: unless-stopped  # it closes Stripe forms of released holds
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-garage}:${POSTGRES_PASSWORD:-garage}@db:5432/${POSTGRES_DB:-garage}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       WORKER_INTERVAL_SECONDS: ${WORKER_INTERVAL_SECONDS:-60}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     depends_on:
       api:
         condition: service_healthy  # the api runs the migrations on start
