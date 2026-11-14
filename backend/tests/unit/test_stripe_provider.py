@@ -152,3 +152,14 @@ def test_secret_key_is_not_in_the_repr() -> None:
     p, _ = provider()
     assert SECRET not in repr(p)
     assert SECRET not in str(vars(p))
+
+
+def test_unavailable_reason_names_the_error_and_code_but_not_the_message() -> None:
+    p, client = provider()
+    error = stripe.AuthenticationError(
+        f"Invalid API Key provided: {SECRET[:8]}****", code="api_key_invalid"
+    )
+    client.v1.checkout.sessions.create.side_effect = error
+    with pytest.raises(PaymentUnavailable) as raised:
+        start(p)
+    assert str(raised.value) == "AuthenticationError code=api_key_invalid"

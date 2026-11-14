@@ -1,5 +1,6 @@
 """Public booking: hold a slot while the customer types their details, then pay."""
 
+import logging
 from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated, Literal
@@ -46,6 +47,8 @@ from app.repositories.payments import paid_deposit
 from app.repositories.reservations import SlotUnavailable
 
 router = APIRouter()
+# uvicorn configures this logger, so these lines reach `docker compose logs api`.
+log = logging.getLogger("uvicorn.error")
 
 SessionDep = Annotated[Session, Depends(get_session)]
 NowDep = Annotated[datetime, Depends(utc_now)]
@@ -233,6 +236,7 @@ def checkout(
         raise HTTPException(status_code=409, detail="This booking is already paid") from error
     except PaymentUnavailable as error:
         session.rollback()  # nothing saved: the hold keeps its old expiry
+        log.warning("checkout for %s: payment provider failed: %s", reference, error)
         raise HTTPException(status_code=503, detail=UNAVAILABLE) from error
     session.commit()
     return CheckoutOut(**asdict(result))

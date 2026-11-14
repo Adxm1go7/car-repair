@@ -85,7 +85,11 @@ test('flow 1: instant booking with a deposit', async ({ page, request }) => {
   await page.getByLabel('Model').fill('Focus')
   await page.getByRole('button', { name: 'Continue to payment' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Pay your deposit' })).toBeVisible()
+  // If Stripe refuses to start the payment, the page shows why: fail with that, not a timeout.
+  const paying = page.getByRole('heading', { name: 'Pay your deposit' })
+  const problem = page.getByRole('alert')
+  await expect(paying.or(problem)).toBeVisible({ timeout: 15_000 })
+  if (await problem.isVisible()) throw new Error(`The payment step didn't start: ${await problem.textContent()}`)
   await expect(page.getByText('Deposit £20, balance paid at the garage')).toBeVisible()
   await payInStripe(page)
 

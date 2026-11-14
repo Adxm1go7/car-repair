@@ -1,5 +1,6 @@
 """POST /api/holds/{reference}/checkout and DELETE /api/holds/{reference}."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -298,3 +299,14 @@ def test_delete_confirmed_gives_409_and_changes_nothing(
     stored = booking(db_session, created["reference"])
     assert stored.status == "confirmed"
     assert stored.reservation.active
+
+
+def test_checkout_provider_failure_is_logged_with_its_reason(
+    client: TestClient, fake_provider: FakeProvider, caplog: pytest.LogCaptureFixture
+) -> None:
+    created = hold(client)
+    fake_provider.fail = True
+    with caplog.at_level(logging.WARNING):
+        assert checkout(client, created).status_code == 503
+    assert created["reference"] in caplog.text
+    assert "fake provider told to fail" in caplog.text  # the provider's reason, never a key

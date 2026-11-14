@@ -39,6 +39,19 @@ def _checkout_status(value: object) -> CheckoutStatus:
     return "open"
 
 
+def _unavailable(error: stripe.StripeError) -> PaymentUnavailable:
+    """Why Stripe refused, for the logs: the error kind, Stripe's code and the parameter.
+    Not Stripe's message, which can echo part of the key."""
+    parts = [type(error).__name__]
+    code = getattr(error, "code", None)
+    param = getattr(error, "param", None)
+    if code:
+        parts.append(f"code={code}")
+    if param:
+        parts.append(f"param={param}")
+    return PaymentUnavailable(" ".join(parts))
+
+
 class StripeProvider:
     name = "stripe"
 
@@ -95,14 +108,14 @@ class StripeProvider:
                 params=params, options={"idempotency_key": idempotency_key}
             )
         except stripe.StripeError as error:
-            raise PaymentUnavailable(type(error).__name__) from error
+            raise _unavailable(error) from error
         return CheckoutStarted(session_ref=session.id, client_secret=session.client_secret)
 
     def get_checkout(self, session_ref: str) -> CheckoutState:
         try:
             session = self._client.v1.checkout.sessions.retrieve(session_ref)
         except stripe.StripeError as error:
-            raise PaymentUnavailable(type(error).__name__) from error
+            raise _unavailable(error) from error
         intent = session.payment_intent
         return CheckoutState(
             status=_checkout_status(session.status),
@@ -119,7 +132,7 @@ class StripeProvider:
             # It isn't open any more: either it already expired, or the customer paid.
             return self.get_checkout(session_ref).status != "complete"
         except stripe.StripeError as error:
-            raise PaymentUnavailable(type(error).__name__) from error
+            raise _unavailable(error) from error
 
     def refund(
         self, *, payment_intent_ref: str, amount_pence: int, idempotency_key: str
@@ -130,12 +143,12 @@ class StripeProvider:
                 options={"idempotency_key": idempotency_key},
             )
         except stripe.StripeError as error:
-            raise PaymentUnavailable(type(error).__name__) from error
+            raise _unavailable(error) from error
         return RefundState(refund.id, _REFUND_STATUSES.get(refund.status or "", "pending"))
 
     def get_refund(self, refund_ref: str) -> RefundState:
         try:
             refund = self._client.v1.refunds.retrieve(refund_ref)
         except stripe.StripeError as error:
-            raise PaymentUnavailable(type(error).__name__) from error
+            raise _unavailable(error) from error
         return RefundState(refund.id, _REFUND_STATUSES.get(refund.status or "", "pending"))
