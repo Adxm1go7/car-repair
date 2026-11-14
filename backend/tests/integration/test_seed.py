@@ -42,6 +42,7 @@ def test_seed_inserts_default_settings(db_session: Session) -> None:
         "slot_hold_minutes": 5,
         "payment_hold_minutes": 10,
         "free_cancellation_hours": 24,
+        "reminder_hours_before": 48,
         "deposit_amount_pence": 2000,
         "garage_timezone": "Europe/London",
         "slot_grid_minutes": 30,
@@ -58,7 +59,7 @@ def test_seed_inserts_default_settings(db_session: Session) -> None:
 def test_seed_twice_creates_no_duplicate_settings(db_session: Session) -> None:
     seed(db_session)
     seed(db_session)
-    assert count(db_session, Setting) == 10
+    assert count(db_session, Setting) == 11
 
 
 def test_seed_keeps_admin_edited_value(db_session: Session) -> None:
@@ -82,7 +83,7 @@ def test_upgrade_head_on_seeded_database_keeps_data(fresh_database_url: str) -> 
         session.commit()
     command.upgrade(cfg, "head")
     with Session(make_engine(fresh_database_url)) as session:
-        assert count(session, Setting) == 10
+        assert count(session, Setting) == 11
         assert catalogue_counts(session) == DEMO_COUNTS
 
 

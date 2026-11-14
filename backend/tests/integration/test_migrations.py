@@ -135,3 +135,20 @@ def test_0006_waives_existing_confirmed_bookings(fresh_database_url: str) -> Non
     assert {"payments", "payment_events"}.isdisjoint(tables)
     columns = {c["name"] for c in inspect(make_engine(fresh_database_url)).get_columns("bookings")}
     assert "deposit_status" not in columns
+
+
+EMAIL_TABLES = {"email_log", "booking_links"}
+
+
+def test_upgrade_head_creates_email_tables(fresh_database_url: str) -> None:
+    command.upgrade(alembic_config(fresh_database_url), "head")
+    assert set(inspect(make_engine(fresh_database_url)).get_table_names()) >= EMAIL_TABLES
+
+
+def test_downgrade_to_0006_drops_email_tables(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "head")
+    command.downgrade(cfg, "0006")
+    tables = set(inspect(make_engine(fresh_database_url)).get_table_names())
+    assert tables.isdisjoint(EMAIL_TABLES)
+    assert "payments" in tables
