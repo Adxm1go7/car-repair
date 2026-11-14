@@ -128,7 +128,7 @@ def test_late_payment_time_taken_refunds_once(seeded: Session, provider: FakePro
     assert (refund.status, refund.amount_pence) == ("pending", 2000)
     (call,) = provider.called("refund")
     assert call["payment_intent_ref"] == f"pi_{REF}"
-    assert call["idempotency_key"] == f"refund-{refund.refund_of}-0"
+    assert call["idempotency_key"] == f"refund-{REF}-0"  # the provider's session id: unique
 
 
 def test_refund_failure_rolls_back(seeded: Session, provider: FakeProvider) -> None:

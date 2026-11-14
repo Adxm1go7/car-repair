@@ -92,7 +92,7 @@ Details can now be on a `held` booking (they're saved when payment starts). The 
 | `created_at`, `updated_at` | timestamptz | |
 
 - Partial unique index: at most one `open` deposit per booking.
-- Partial unique index: at most one refund per deposit that isn't `failed` (`refund_of` FK → `payments.id`, nullable, set on refunds), so no path can refund twice, and a staff retry after a failure (Milestone 7) stays possible. Refund idempotency keys are `refund-<deposit payment id>-<attempt>`, attempt counting previous refund rows for that deposit.
+- Partial unique index: at most one refund per deposit that isn't `failed` (`refund_of` FK → `payments.id`, nullable, set on refunds), so no path can refund twice, and a staff retry after a failure (Milestone 7) stays possible. Refund idempotency keys are `refund-<deposit session id>-<attempt>`, attempt counting previous refund rows for that deposit.
 
 **`payment_events`**: every webhook event processed.
 
@@ -131,7 +131,7 @@ The signatures are the shape, not the exact names: the builder may adjust them.
 **`StripeProvider`** uses the official `stripe` Python package (new backend dependency, pinned).
 
 - Checkout Session: `ui_mode` embedded, `mode` payment, one line item in GBP with the deposit amount and a description like "Deposit for booking 7K3Q-M2PX, Tue 18 Nov 08:30", `payment_method_types ["card"]`, `redirect_on_completion "never"` (the page listens for completion instead of being redirected), `customer_email`, `client_reference_id` and `metadata.reference` set to the booking reference, and `expires_at` 31 minutes ahead (Stripe's minimum is 30).
-- Every create call sends a Stripe idempotency key: `deposit-<booking id>-<n>` and `refund-<payment id>`. A retried call can't make a second session or a second refund.
+- Every create call sends a Stripe idempotency key: `deposit-<booking reference>-<n>` and `refund-<deposit session id>-<n>`. A retried call can't make a second session or a second refund. Keys must be unique across every database sharing the Stripe account (Stripe keeps them for 24 hours), so they use the random reference and Stripe's own session id, never row ids. (Corrected during the build: row ids made every fresh CI database send `deposit-1-0` and get an IdempotencyError.)
 - Network timeout of 10 seconds. Any Stripe error becomes a `PaymentUnavailable` exception.
 - The Stripe API version is pinned in code, so a Stripe-side default change can't alter behaviour.
 - Check the current Stripe docs when building: Stripe renames `ui_mode` values and event names now and then.

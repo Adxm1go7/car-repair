@@ -194,12 +194,15 @@ def start_checkout(
     booking.notes = details.notes
     booking.hold_expires_at = now + timedelta(minutes=payment_hold_minutes)
     when = booking.start_at.astimezone(zone).strftime("%a %d %b %H:%M")
+    attempt = count_payments(session, booking_id=booking.id)
     started = provider.start_checkout(
         reference=booking.reference,
         amount_pence=amount_pence,
         customer_email=details.email,
         description=f"Deposit for booking {booking.reference}, {when}",
-        idempotency_key=f"deposit-{booking.id}-{count_payments(session, booking_id=booking.id)}",
+        # Stripe remembers keys per account for 24 hours, so they must be unique across every
+        # database that shares the account: the random reference is, a row id isn't.
+        idempotency_key=f"deposit-{booking.reference}-{attempt}",
     )
     session.add(
         Payment(

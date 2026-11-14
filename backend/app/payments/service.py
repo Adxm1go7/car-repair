@@ -106,7 +106,8 @@ def refund_deposit(session: Session, provider: PaymentProvider, deposit: Payment
     state = provider.refund(
         payment_intent_ref=deposit.payment_intent_ref,
         amount_pence=deposit.amount_pence,
-        idempotency_key=f"refund-{deposit.id}-{attempt}",
+        # The provider's own session id: unique across databases (see start_checkout).
+        idempotency_key=f"refund-{deposit.provider_ref}-{attempt}",
     )
     refund = Payment(
         booking_id=deposit.booking_id,

@@ -17,7 +17,7 @@
 - Nothing reads the real clock except `app.clock.utc_now` and the worker's loop. Everything else takes `now`.
 - Settings, never hardcoded: `payment_hold_minutes` (1–25, default 10), `deposit_amount_pence` (30–100000, default 2000), `free_cancellation_hours` (0–8760, default 24), `slot_hold_minutes` as before. Missing or invalid → 503 where needed.
 - Only `complete_deposit` sets a booking `confirmed` or a deposit `paid`, and only after `provider.get_checkout` says paid.
-- Stripe idempotency keys: `deposit-<booking id>-<n>` (n = number of earlier deposit rows for the booking) and `refund-<deposit payment id>-<n>` (n = number of earlier refund rows for that deposit).
+- Stripe idempotency keys: `deposit-<booking reference>-<n>` (n = number of earlier deposit rows for the booking) and `refund-<deposit session id>-<n>` (n = number of earlier refund rows for that deposit). Not row ids: Stripe keeps keys per account for 24 hours, and a fresh database sharing the account (every CI run) would reuse `deposit-1-0` and be refused with an IdempotencyError.
 - The secret key and webhook secret never appear in responses, logs, fixtures, the frontend or the repository. Only the publishable key is sent to the page.
 - Only `app/payments/stripe_provider.py` imports `stripe` (plus the webhook signature check in `app/api/stripe_webhook.py`).
 - Every 422 body is `{"detail": "<string>"}`. Times in responses are garage-local ISO strings with an offset.

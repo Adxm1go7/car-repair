@@ -105,7 +105,10 @@ def test_checkout_sends_customer_email_and_amount(
     assert call["reference"] == created["reference"]
     assert call["amount_pence"] == 2000
     assert call["customer_email"] == "sam@example.com"
-    assert call["idempotency_key"] == f"deposit-{stored.id}-0"
+    # Unique across databases (the reference is random), not the row id: a fresh database
+    # sharing the Stripe account would reuse "deposit-1-0" and Stripe would refuse it.
+    assert call["idempotency_key"] == f"deposit-{created['reference']}-0"
+    assert stored.id is not None
     assert created["reference"] in str(call["description"])
     assert "Tue 10 Nov 08:00" in str(call["description"])
 
