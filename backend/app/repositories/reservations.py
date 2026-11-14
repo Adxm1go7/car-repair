@@ -6,13 +6,17 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import Range
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.models import Reservation, Service
 from app.repositories.availability import day_availability, load_policy
 
 EXCLUSION_VIOLATION = "23P01"
+# Two inserts racing for the same bay and time can each wait on the other's uncommitted row
+# while checking the exclusion constraint. PostgreSQL then aborts one with a deadlock error
+# instead of an exclusion violation. For the loser it means the same thing: the bay is taken.
+DEADLOCK_DETECTED = "40P01"
 
 
 class SlotUnavailable(Exception):
@@ -72,8 +76,11 @@ def reserve(
             with session.begin_nested():
                 session.add(reservation)
                 session.flush()
-        except IntegrityError as error:
-            if getattr(error.orig, "sqlstate", None) != EXCLUSION_VIOLATION:
+        except (IntegrityError, OperationalError) as error:
+            if getattr(error.orig, "sqlstate", None) not in (
+                EXCLUSION_VIOLATION,
+                DEADLOCK_DETECTED,
+            ):
                 raise
             continue  # someone else took this bay since the engine looked; try the next one
         return ReserveResult(reservation=reservation, start=slot.start, end=slot.end)

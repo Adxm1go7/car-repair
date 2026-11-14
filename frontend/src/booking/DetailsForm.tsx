@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, JSX } from 'react'
-import { confirmHold } from './api.ts'
+import { startCheckout } from './api.ts'
 import { formatLongDate, formatTimeRange } from './format.ts'
-import type { BookingSummary, CustomerDetails, Hold } from './types.ts'
+import type { Checkout, CustomerDetails, Hold } from './types.ts'
 import { formatCountdown, useCountdown } from './useCountdown.ts'
 import { validateDetails } from './validation.ts'
 import type { FieldErrors } from './validation.ts'
@@ -18,7 +18,9 @@ type Props = {
   onValuesChange: (values: CustomerDetails) => void
   onSubmittingChange: (submitting: boolean) => void
   onExpired: () => void
-  onBooked: (summary: BookingSummary) => void
+  onCheckout: (checkout: Checkout) => void
+  /** The server says it's already paid (a double tap after paying): the page checks status. */
+  onAlreadyPaid: () => void
 }
 
 type Field = {
@@ -40,8 +42,8 @@ const FIELDS: Field[] = [
 /** What a screen reader hears. It changes only at these moments, so it isn't read every second. */
 function announcement(remaining: number): string {
   if (remaining === 0) return 'Your hold has run out'
-  if (remaining <= 60) return '1 minute left to confirm'
-  if (remaining <= 300) return '5 minutes left to confirm'
+  if (remaining <= 60) return '1 minute left to continue'
+  if (remaining <= 300) return '5 minutes left to continue'
   return ''
 }
 
@@ -54,7 +56,7 @@ function fieldError(detail: string | null): FieldErrors | null {
 }
 
 export function DetailsForm(props: Props): JSX.Element {
-  const { hold, zone, values, onValuesChange, onSubmittingChange, onExpired, onBooked } = props
+  const { hold, zone, values, onValuesChange, onSubmittingChange, onExpired, onCheckout, onAlreadyPaid } = props
   const [errors, setErrors] = useState<FieldErrors>({})
   const [problem, setProblem] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -74,7 +76,7 @@ export function DetailsForm(props: Props): JSX.Element {
     onExpired()
   }
 
-  // While a confirm is in flight the server decides, not this page's countdown: the
+  // While a checkout is in flight the server decides, not this page's countdown: the
   // request may have reached the server in time even though the reply arrives after zero.
   const inFlight = useRef(false)
   const timeUp = useRef(false)
@@ -109,21 +111,26 @@ export function DetailsForm(props: Props): JSX.Element {
     }
 
     setSending(true)
-    const result = await confirmHold(hold.reference, hold.hold_token, values)
+    const result = await startCheckout(hold.reference, hold.hold_token, values)
     if (finished.current) return
     if (result.ok) {
       finished.current = true
-      onBooked(result.data)
+      onCheckout(result.data) // the server restarted the hold for payment
+      return
+    }
+    if (result.kind === 'paid') {
+      finished.current = true
+      onAlreadyPaid()
       return
     }
     setSending(false)
     if (result.kind === 'expired' || timeUp.current) {
-      expire() // the server said so, or the time ran out and the confirm didn't go through
+      expire() // the server said so, or the time ran out and the checkout didn't go through
       return
     }
     const forField = fieldError(result.detail)
     if (forField) setErrors(forField)
-    else setProblem(result.detail ?? "Sorry, we couldn't confirm your booking. Please try again.")
+    else setProblem(result.detail ?? "Sorry, we couldn't start the payment. Please try again.")
   }
 
   function describedBy(key: keyof CustomerDetails): string | undefined {
@@ -131,7 +138,13 @@ export function DetailsForm(props: Props): JSX.Element {
   }
 
   return (
-    <form className="details" noValidate onSubmit={(event) => void submit(event)}>
+    <form
+      className="details"
+      aria-label="Your details"
+      aria-busy={submitting || undefined}
+      noValidate
+      onSubmit={(event) => void submit(event)}
+    >
       <p className="hold-banner">
         {`We're holding ${formatLongDate(hold.start, zone)}, ${formatTimeRange(hold.start, hold.end, zone)} for `}
         <span role="timer" className="countdown">
@@ -188,7 +201,7 @@ export function DetailsForm(props: Props): JSX.Element {
       )}
 
       <button type="submit" className="button" disabled={submitting}>
-        Confirm booking
+        {submitting ? 'Starting payment…' : 'Continue to payment'}
       </button>
     </form>
   )

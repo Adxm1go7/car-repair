@@ -1,7 +1,9 @@
-"""Public booking: hold a slot while the customer types their details."""
+"""Public booking: hold a slot while the customer types their details, then pay."""
 
+import logging
+from dataclasses import asdict
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,25 +25,34 @@ from app.bookings.service import (
     HoldExpired,
     HoldNotFound,
     cancel_hold,
-    confirm_hold,
     create_hold,
+    hold_status,
+    start_checkout,
     summary_services,
 )
 from app.clock import utc_now
 from app.db import get_session
 from app.models import Booking
+from app.payments.deps import get_payment_provider
+from app.payments.provider import PaymentProvider, PaymentUnavailable
 from app.repositories.availability import (
     SettingsUnavailable,
     load_booking_window_days,
+    load_deposit_pence,
     load_hold_minutes,
+    load_payment_hold_minutes,
     load_policy,
 )
+from app.repositories.payments import get_open_deposit, paid_deposit
 from app.repositories.reservations import SlotUnavailable
 
 router = APIRouter()
+# uvicorn configures this logger, so these lines reach `docker compose logs api`.
+log = logging.getLogger("uvicorn.error")
 
 SessionDep = Annotated[Session, Depends(get_session)]
 NowDep = Annotated[datetime, Depends(utc_now)]
+ProviderDep = Annotated[PaymentProvider, Depends(get_payment_provider)]
 
 TAKEN = "That time has just been taken"
 
@@ -115,7 +126,7 @@ Token = Annotated[str, StringConstraints(min_length=1, max_length=100)]
 REFERENCE_LENGTH = 9  # XXXX-XXXX
 
 
-class ConfirmIn(BaseModel):
+class CheckoutIn(BaseModel):
     hold_token: Token
     name: Annotated[str, AfterValidator(clean_name)]
     phone: Annotated[str, AfterValidator(clean_phone)]
@@ -126,7 +137,7 @@ class ConfirmIn(BaseModel):
     notes: Annotated[str | None, AfterValidator(clean_notes)] = None
 
 
-class CancelIn(BaseModel):
+class TokenIn(BaseModel):
     hold_token: Token
 
 
@@ -139,6 +150,7 @@ class BookingSummaryOut(BaseModel):
     registration: str
     make: str
     model: str
+    deposit_paid_pence: int
 
 
 NOT_FOUND = HTTPException(status_code=404, detail="Booking not found")
@@ -150,7 +162,8 @@ def _check_reference(reference: str) -> None:
         raise NOT_FOUND
 
 
-def _summary(booking: Booking, zone: ZoneInfo) -> BookingSummaryOut:
+def _summary(session: Session, booking: Booking, zone: ZoneInfo) -> BookingSummaryOut:
+    deposit = paid_deposit(session, booking.id)
     return BookingSummaryOut(
         reference=booking.reference,
         status=booking.status,
@@ -160,17 +173,41 @@ def _summary(booking: Booking, zone: ZoneInfo) -> BookingSummaryOut:
         registration=booking.car_registration or "",
         make=booking.car_make or "",
         model=booking.car_model or "",
+        deposit_paid_pence=deposit.amount_pence if deposit is not None else 0,
     )
 
 
-@router.post("/holds/{reference}/confirm")
-def confirm(reference: str, body: ConfirmIn, session: SessionDep, now: NowDep) -> BookingSummaryOut:
-    """Attach the customer's details and confirm. A repeat with the same token is harmless."""
+UNAVAILABLE = "Payment is unavailable right now — please try again or call us"
+
+
+class CheckoutOut(BaseModel):
+    client_secret: str | None
+    demo_session: str | None
+    expires_in_seconds: int
+    amount_pence: int
+
+
+class StatusOut(BaseModel):
+    status: Literal["held", "confirmed", "expired"]
+    deposit_status: str
+    # A payment form is still open on our side (Stripe couldn't be told to close it yet), so
+    # a payment may still arrive: the page must not say "you haven't been charged".
+    payment_pending: bool
+    summary: BookingSummaryOut | None
+
+
+@router.post("/holds/{reference}/checkout")
+def checkout(
+    reference: str, body: CheckoutIn, session: SessionDep, now: NowDep, provider: ProviderDep
+) -> CheckoutOut:
+    """Save the details and open the deposit's payment form. A repeat returns the same form."""
     _check_reference(reference)
     try:
         zone = load_policy(session).zone
+        payment_hold_minutes = load_payment_hold_minutes(session)
+        amount_pence = load_deposit_pence(session)
     except SettingsUnavailable as error:
-        raise HTTPException(status_code=503, detail="Booking unavailable") from error
+        raise HTTPException(status_code=503, detail=UNAVAILABLE) from error
     details = CustomerDetails(
         name=body.name,
         phone=body.phone,
@@ -181,25 +218,76 @@ def confirm(reference: str, body: ConfirmIn, session: SessionDep, now: NowDep) -
         notes=body.notes,
     )
     try:
-        booking = confirm_hold(session, reference, body.hold_token, details, now)
+        result = start_checkout(
+            session,
+            provider,
+            reference,
+            body.hold_token,
+            details,
+            now,
+            payment_hold_minutes=payment_hold_minutes,
+            amount_pence=amount_pence,
+            zone=zone,
+        )
     except HoldNotFound as error:
         raise NOT_FOUND from error
     except HoldExpired as error:
-        session.commit()  # keep the release confirm_hold just made
+        session.commit()  # keep the release start_checkout just made
         raise HTTPException(status_code=410, detail="Your hold has expired") from error
-    response = _summary(booking, zone)
+    except AlreadyConfirmed as error:
+        session.commit()  # a payment that got in may have just been completed
+        raise HTTPException(status_code=409, detail="This booking is already paid") from error
+    except PaymentUnavailable as error:
+        session.rollback()  # nothing saved: the hold keeps its old expiry
+        log.warning("checkout for %s: payment provider failed: %s", reference, error)
+        raise HTTPException(status_code=503, detail=UNAVAILABLE) from error
     session.commit()
-    return response
+    return CheckoutOut(**asdict(result))
+
+
+@router.post("/holds/{reference}/status")
+def status(
+    reference: str, body: TokenIn, session: SessionDep, now: NowDep, provider: ProviderDep
+) -> StatusOut:
+    """Where the booking stands, for the page to poll after paying. Never fails on the provider."""
+    _check_reference(reference)
+    try:
+        zone = load_policy(session).zone
+    except SettingsUnavailable as error:
+        raise HTTPException(status_code=503, detail="Booking unavailable") from error
+    try:
+        booking = hold_status(session, provider, reference, body.hold_token, now)
+    except HoldNotFound as error:
+        raise NOT_FOUND from error
+    session.commit()
+    if booking.status == "confirmed":
+        summary = _summary(session, booking, zone)
+        return StatusOut(
+            status="confirmed",
+            deposit_status=booking.deposit_status,
+            payment_pending=False,
+            summary=summary,
+        )
+    state: Literal["held", "expired"] = "held" if booking.status == "held" else "expired"
+    return StatusOut(
+        status=state,
+        deposit_status=booking.deposit_status,
+        payment_pending=get_open_deposit(session, booking.id) is not None,
+        summary=None,
+    )
 
 
 @router.delete("/holds/{reference}", status_code=204)
-def cancel(reference: str, body: CancelIn, session: SessionDep) -> None:
-    """Give the slot back, for "Change time". Releasing an expired hold again is harmless."""
+def cancel(
+    reference: str, body: TokenIn, session: SessionDep, now: NowDep, provider: ProviderDep
+) -> None:
+    """Give the slot back and close its payment form. Releasing an expired hold is harmless."""
     _check_reference(reference)
     try:
-        cancel_hold(session, reference, body.hold_token)
+        cancel_hold(session, provider, reference, body.hold_token, now)
     except HoldNotFound as error:
         raise NOT_FOUND from error
     except AlreadyConfirmed as error:
+        session.commit()  # a payment that got in may have just confirmed it
         raise HTTPException(status_code=409, detail="This booking is already confirmed") from error
     session.commit()

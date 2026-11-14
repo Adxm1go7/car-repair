@@ -1,0 +1,15 @@
+{
+  "id": "evt_test_completed",
+  "object": "event",
+  "type": "checkout.session.completed",
+  "data": {
+    "object": {
+      "id": "cs_fake_1",
+      "object": "checkout.session",
+      "amount_total": 2000,
+      "currency": "gbp",
+      "payment_status": "paid",
+      "status": "complete"
+    }
+  }
+}

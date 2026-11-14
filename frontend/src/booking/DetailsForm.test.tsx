@@ -5,7 +5,7 @@ import type { JSX } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { DetailsForm } from './DetailsForm.tsx'
-import type { BookingSummary, CustomerDetails, Hold } from './types.ts'
+import type { Checkout, CustomerDetails, Hold } from './types.ts'
 
 const HOLD: Hold = {
   reference: 'ABCD-EFGH',
@@ -27,15 +27,11 @@ const DETAILS: CustomerDetails = {
   notes: '',
 }
 
-const SUMMARY: BookingSummary = {
-  reference: 'ABCD-EFGH',
-  status: 'confirmed',
-  start: HOLD.start,
-  end: HOLD.end,
-  services: [],
-  registration: 'AB12CDE',
-  make: 'Ford',
-  model: 'Focus',
+const CHECKOUT: Checkout = {
+  client_secret: 'cs_1_secret',
+  demo_session: null,
+  expires_in_seconds: 600,
+  amount_pence: 2000,
 }
 
 const EMPTY: CustomerDetails = {
@@ -50,7 +46,8 @@ const EMPTY: CustomerDetails = {
 
 type Handlers = {
   onExpired: Mock<() => void>
-  onBooked: Mock<(summary: BookingSummary) => void>
+  onCheckout: Mock<(checkout: Checkout) => void>
+  onAlreadyPaid: Mock<() => void>
   onSubmittingChange: Mock<(submitting: boolean) => void>
 }
 
@@ -63,7 +60,8 @@ function Harness({ initial, handlers }: { initial: CustomerDetails; handlers: Ha
 function renderForm(initial: CustomerDetails = EMPTY): Handlers {
   const handlers: Handlers = {
     onExpired: vi.fn<() => void>(),
-    onBooked: vi.fn<(summary: BookingSummary) => void>(),
+    onCheckout: vi.fn<(checkout: Checkout) => void>(),
+    onAlreadyPaid: vi.fn<() => void>(),
     onSubmittingChange: vi.fn<(submitting: boolean) => void>(),
   }
   render(<Harness initial={initial} handlers={handlers} />)
@@ -77,7 +75,7 @@ function answer(status: number, body: unknown = {}): ReturnType<typeof vi.fn> {
   return fetchMock
 }
 
-const confirmButton = (): HTMLElement => screen.getByRole('button', { name: 'Confirm booking' })
+const confirmButton = (): HTMLElement => screen.getByRole('button', { name: /^(Continue to payment|Starting payment…)$/ })
 
 afterEach(() => {
   vi.useRealTimers()
@@ -105,9 +103,9 @@ it('announces only at five minutes, one minute and expiry', () => {
   act(() => vi.advanceTimersByTime(299_000)) // 5:01 left
   expect(live).toBeEmptyDOMElement()
   act(() => vi.advanceTimersByTime(1_000)) // 5:00
-  expect(live).toHaveTextContent('5 minutes left to confirm')
+  expect(live).toHaveTextContent('5 minutes left to continue')
   act(() => vi.advanceTimersByTime(240_000)) // 1:00
-  expect(live).toHaveTextContent('1 minute left to confirm')
+  expect(live).toHaveTextContent('1 minute left to continue')
 })
 
 it('reports expiry once when the countdown reaches zero', () => {
@@ -129,27 +127,27 @@ function answerLater(): (status: number, body?: unknown) => void {
   return (status, body = {}) => send(new Response(JSON.stringify(body), { status }))
 }
 
-it('a confirm that lands after the countdown ends still counts as booked', async () => {
+it('a checkout that lands after the countdown ends still moves on to payment', async () => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date', 'performance'] })
   const reply = answerLater()
-  const { onBooked, onExpired } = renderForm(DETAILS)
+  const { onCheckout, onExpired } = renderForm(DETAILS)
   act(() => vi.advanceTimersByTime(597_000)) // 0:03 left
   await act(async () => fireEvent.click(confirmButton()))
   act(() => vi.advanceTimersByTime(5_000)) // the countdown passes zero mid-request
   expect(onExpired).not.toHaveBeenCalled()
 
   await act(async () => {
-    reply(200, SUMMARY)
+    reply(200, CHECKOUT)
     await Promise.resolve()
   })
-  expect(onBooked).toHaveBeenCalledWith(SUMMARY)
+  expect(onCheckout).toHaveBeenCalledWith(CHECKOUT)
   expect(onExpired).not.toHaveBeenCalled()
 })
 
 it('a 410 that lands after the countdown ends reports expiry once', async () => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date', 'performance'] })
   const reply = answerLater()
-  const { onBooked, onExpired } = renderForm(DETAILS)
+  const { onCheckout, onExpired } = renderForm(DETAILS)
   await act(async () => fireEvent.click(confirmButton()))
   act(() => vi.advanceTimersByTime(605_000))
   expect(onExpired).not.toHaveBeenCalled()
@@ -159,13 +157,13 @@ it('a 410 that lands after the countdown ends reports expiry once', async () => 
     await Promise.resolve()
   })
   expect(onExpired).toHaveBeenCalledTimes(1)
-  expect(onBooked).not.toHaveBeenCalled()
+  expect(onCheckout).not.toHaveBeenCalled()
 })
 
 // --- the form -----------------------------------------------------------------------
 
 it('moves focus to the first field with a problem', async () => {
-  answer(200, SUMMARY)
+  answer(200, CHECKOUT)
   renderForm({ ...DETAILS, email: 'sam', registration: 'A' })
   await userEvent.setup().click(confirmButton())
   expect(screen.getByLabelText('Email')).toHaveFocus()
@@ -179,7 +177,7 @@ it('labels every field', () => {
 })
 
 it('shows field errors and does not call the API when invalid', async () => {
-  const fetchMock = answer(200, SUMMARY)
+  const fetchMock = answer(200, CHECKOUT)
   renderForm()
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Phone'), '123')
@@ -191,30 +189,49 @@ it('shows field errors and does not call the API when invalid', async () => {
   expect(fetchMock).not.toHaveBeenCalled()
 })
 
-it('confirms with the typed details and hands back the summary', async () => {
-  const fetchMock = answer(200, SUMMARY)
-  const { onBooked } = renderForm(DETAILS)
+it('starts checkout with the typed details and hands the checkout to the page', async () => {
+  const fetchMock = answer(200, CHECKOUT)
+  const { onCheckout } = renderForm(DETAILS)
   await userEvent.setup().click(confirmButton())
-  await vi.waitFor(() => expect(onBooked).toHaveBeenCalledWith(SUMMARY))
+  await vi.waitFor(() => expect(onCheckout).toHaveBeenCalledWith(CHECKOUT))
   const [url, init] = fetchMock.mock.calls[0]
-  expect(url).toBe('/api/holds/ABCD-EFGH/confirm')
+  expect(url).toBe('/api/holds/ABCD-EFGH/checkout')
   expect(JSON.parse(String((init as RequestInit).body))).toEqual({ hold_token: 'token', ...DETAILS })
 })
 
-it('disables the confirm button while submitting, and says so', async () => {
+it('shows Starting payment… and aria-busy while waiting', async () => {
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {}))) // never answers
   const { onSubmittingChange } = renderForm(DETAILS)
+  expect(confirmButton()).toHaveTextContent('Continue to payment')
   await userEvent.setup().click(confirmButton())
   expect(confirmButton()).toBeDisabled()
+  expect(confirmButton()).toHaveTextContent('Starting payment…')
+  expect(screen.getByRole('form', { name: 'Your details' })).toHaveAttribute('aria-busy', 'true')
   expect(onSubmittingChange).toHaveBeenLastCalledWith(true)
 })
 
-it('a 410 from confirm calls onExpired', async () => {
+it('a 409 calls onAlreadyPaid', async () => {
+  answer(409, { detail: 'This booking is already paid' })
+  const { onAlreadyPaid, onCheckout } = renderForm(DETAILS)
+  await userEvent.setup().click(confirmButton())
+  await vi.waitFor(() => expect(onAlreadyPaid).toHaveBeenCalledTimes(1))
+  expect(onCheckout).not.toHaveBeenCalled()
+})
+
+it('shows the server message when payment is unavailable', async () => {
+  answer(503, { detail: 'Payment is unavailable right now — please try again or call us' })
+  renderForm(DETAILS)
+  await userEvent.setup().click(confirmButton())
+  expect(await screen.findByRole('alert')).toHaveTextContent('Payment is unavailable right now')
+  expect(confirmButton()).toBeEnabled()
+})
+
+it('a 410 from checkout calls onExpired', async () => {
   answer(410, { detail: 'Your hold has expired' })
-  const { onExpired, onBooked, onSubmittingChange } = renderForm(DETAILS)
+  const { onExpired, onCheckout, onSubmittingChange } = renderForm(DETAILS)
   await userEvent.setup().click(confirmButton())
   await vi.waitFor(() => expect(onExpired).toHaveBeenCalledTimes(1))
-  expect(onBooked).not.toHaveBeenCalled()
+  expect(onCheckout).not.toHaveBeenCalled()
   expect(onSubmittingChange).toHaveBeenLastCalledWith(false)
 })
 

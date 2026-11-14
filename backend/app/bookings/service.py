@@ -1,24 +1,33 @@
-"""Holding, confirming and releasing a slot. Routes call these; they call the repositories.
+"""Holding a slot, moving it on to payment, and releasing it.
+
+Routes call these; they call the repositories.
 
 Nothing here commits: the caller decides when the work is done.
 """
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.bookings.rules import hash_token, new_hold_token, new_reference, token_matches
-from app.models import Booking, BookingItem, Service
+from app.models import Booking, BookingItem, Payment, Service
+from app.payments.provider import PaymentProvider, PaymentUnavailable
+from app.payments.service import close_open_deposit, complete_deposit
 from app.repositories.bookings import (
     get_booking_for_update,
     hold_has_expired,
     release_expired_holds,
     release_hold,
 )
+from app.repositories.payments import count_payments, get_open_deposit
 from app.repositories.reservations import reserve
+
+log = logging.getLogger("app.bookings")
 
 REFERENCE_ATTEMPTS = 3
 REFERENCE_CONSTRAINT = "uq_bookings_reference"
@@ -90,7 +99,7 @@ class HoldExpired(Exception):
 
 
 class AlreadyConfirmed(Exception):
-    """The booking is past the hold stage, so a hold action can't change it."""
+    """The booking is confirmed (paid), so a hold action can't change it."""
 
 
 @dataclass(frozen=True)
@@ -113,22 +122,75 @@ def _locked(session: Session, reference: str, token: str) -> Booking:
     return booking
 
 
-def confirm_hold(
-    session: Session, reference: str, token: str, details: CustomerDetails, now: datetime
-) -> Booking:
-    """Confirm a live hold with the customer's details. Confirming twice changes nothing.
+def _seconds_left(booking: Booking, now: datetime) -> int:
+    expires = booking.hold_expires_at or now
+    return max(0, int((expires - now).total_seconds()))
 
-    The row lock means the expiry sweep and this can't both win: whichever reaches the
-    row first decides, and the other sees the result.
+
+def _close_quietly(
+    session: Session, provider: PaymentProvider, booking: Booking, now: datetime
+) -> Booking | None:
+    """Close the booking's open payment form, best effort. The worker retries a failed close.
+    Returns the booking when a payment had got in and confirmed it.
+
+    The savepoint matters: completing a late payment marks the deposit paid before it
+    refunds. If the refund call fails, everything it did must be undone, so the deposit
+    stays open for the worker or the webhook to retry. Otherwise the caller's commit would
+    keep "paid" with no booking and no refund, and nothing would ever try again."""
+    try:
+        with session.begin_nested():
+            return close_open_deposit(session, provider, booking, now)
+    except PaymentUnavailable:
+        log.warning("couldn't close the payment form for %s; the worker will", booking.reference)
+        return None
+
+
+@dataclass(frozen=True)
+class CheckoutResult:
+    client_secret: str | None  # for Stripe's embedded form
+    demo_session: str | None  # for the demo pay buttons
+    expires_in_seconds: int
+    amount_pence: int
+
+
+def start_checkout(
+    session: Session,
+    provider: PaymentProvider,
+    reference: str,
+    token: str,
+    details: CustomerDetails,
+    now: datetime,
+    *,
+    payment_hold_minutes: int,
+    amount_pence: int,
+    zone: ZoneInfo,
+) -> CheckoutResult:
+    """Save the details, restart the hold for payment, and open the deposit's payment form.
+
+    A repeat call while the form is open returns the same form, with the time left, and
+    changes nothing. PaymentUnavailable propagates: the caller must roll back.
     """
     booking = _locked(session, reference, token)
     if booking.status == "confirmed":
-        return booking
+        raise AlreadyConfirmed
     if hold_has_expired(booking, now):
         release_hold(session, booking)
+        if _close_quietly(session, provider, booking, now) is not None:
+            raise AlreadyConfirmed
         raise HoldExpired
     if booking.status != "held":
         raise HoldExpired
+
+    open_deposit = get_open_deposit(session, booking.id)
+    if open_deposit is not None:
+        state = provider.get_checkout(open_deposit.provider_ref)
+        return CheckoutResult(
+            client_secret=state.client_secret,
+            demo_session=open_deposit.provider_ref if provider.name == "demo" else None,
+            expires_in_seconds=_seconds_left(booking, now),
+            amount_pence=open_deposit.amount_pence,
+        )
+
     booking.customer_name = details.name
     booking.customer_phone = details.phone
     booking.customer_email = details.email
@@ -136,19 +198,69 @@ def confirm_hold(
     booking.car_make = details.make
     booking.car_model = details.model
     booking.notes = details.notes
-    booking.status = "confirmed"
-    booking.confirmed_at = now
+    booking.hold_expires_at = now + timedelta(minutes=payment_hold_minutes)
+    when = booking.start_at.astimezone(zone).strftime("%a %d %b %H:%M")
+    attempt = count_payments(session, booking_id=booking.id)
+    started = provider.start_checkout(
+        reference=booking.reference,
+        amount_pence=amount_pence,
+        customer_email=details.email,
+        description=f"Deposit for booking {booking.reference}, {when}",
+        # Stripe remembers keys per account for 24 hours, so they must be unique across every
+        # database that shares the account: the random reference is, a row id isn't.
+        idempotency_key=f"deposit-{booking.reference}-{attempt}",
+    )
+    session.add(
+        Payment(
+            booking_id=booking.id,
+            kind="deposit",
+            provider=provider.name,
+            provider_ref=started.session_ref,
+            amount_pence=amount_pence,
+            status="open",
+        )
+    )
     session.flush()
+    return CheckoutResult(
+        client_secret=started.client_secret,
+        demo_session=started.session_ref if provider.name == "demo" else None,
+        expires_in_seconds=payment_hold_minutes * 60,
+        amount_pence=amount_pence,
+    )
+
+
+def hold_status(
+    session: Session, provider: PaymentProvider, reference: str, token: str, now: datetime
+) -> Booking:
+    """Where the booking stands. A payment the provider already has is completed first, so
+    the page doesn't depend on the webhook arriving; a hold past its time is released."""
+    booking = _locked(session, reference, token)
+    open_deposit = get_open_deposit(session, booking.id)
+    if open_deposit is not None and booking.status in ("held", "expired"):
+        try:
+            with session.begin_nested():  # see _close_quietly: a failure must undo it all
+                complete_deposit(session, provider, open_deposit.provider_ref, now)
+        except PaymentUnavailable:
+            log.warning("couldn't ask the provider about %s; still waiting", booking.reference)
+    if hold_has_expired(booking, now):
+        release_hold(session, booking)
+        _close_quietly(session, provider, booking, now)
     return booking
 
 
-def cancel_hold(session: Session, reference: str, token: str) -> None:
-    """Give a held slot back. Releasing one already expired is fine; a confirmed one isn't."""
+def cancel_hold(
+    session: Session, provider: PaymentProvider, reference: str, token: str, now: datetime
+) -> None:
+    """Give a held slot back and close its payment form. Releasing one already expired is
+    fine. If a payment got in before the form closed, the booking is confirmed instead and
+    AlreadyConfirmed tells the caller (who must still commit)."""
     booking = _locked(session, reference, token)
+    if booking.status not in ("held", "expired"):
+        raise AlreadyConfirmed
+    if _close_quietly(session, provider, booking, now) is not None:
+        raise AlreadyConfirmed
     if booking.status == "held":
         release_hold(session, booking)
-    elif booking.status != "expired":
-        raise AlreadyConfirmed
 
 
 def summary_services(booking: Booking) -> list[dict[str, object]]:

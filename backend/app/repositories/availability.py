@@ -63,6 +63,20 @@ def load_hold_minutes(session: Session) -> int:
     return _int_setting(session, "slot_hold_minutes", 1, MINUTES_PER_DAY)
 
 
+def load_payment_hold_minutes(session: Session) -> int:
+    # At most 25, so the hold always ends before Stripe's own 31-minute expiry of the form.
+    return _int_setting(session, "payment_hold_minutes", 1, 25)
+
+
+def load_deposit_pence(session: Session) -> int:
+    # 30p is Stripe's smallest charge in GBP.
+    return _int_setting(session, "deposit_amount_pence", 30, 100_000)
+
+
+def load_free_cancellation_hours(session: Session) -> int:
+    return _int_setting(session, "free_cancellation_hours", 0, 365 * 24)
+
+
 def find_active_services(session: Session, slugs: Sequence[str]) -> list[Service]:
     """Active services with these slugs, in `slugs` order. Unknown or inactive ones are absent."""
     statement = select(Service).where(Service.slug.in_(slugs), Service.active.is_(True))

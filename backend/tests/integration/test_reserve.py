@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import Range
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.availability.engine import Policy
@@ -127,6 +128,44 @@ def test_reserve_raises_slot_unavailable_when_every_bay_rejects(
     monkeypatch.setattr("app.repositories.reservations.day_availability", lambda *_: stale)
     with pytest.raises(SlotUnavailable):
         reserve(seeded, [full_service.id], local(9), NOW)
+
+
+class _Deadlock(Exception):
+    sqlstate = "40P01"  # what psycopg reports for a deadlock
+
+
+def deadlock_first_flushes(session: Session, monkeypatch: pytest.MonkeyPatch, times: int) -> None:
+    """Make the next `times` flushes fail the way PostgreSQL reports two racing inserts
+    that each wait on the other's uncommitted reservation."""
+    real_flush = session.flush
+    left = [times]
+
+    def flush(*args: Any, **kwargs: Any) -> None:
+        inserting = any(isinstance(item, Reservation) for item in session.new)
+        if inserting and left[0] > 0:
+            left[0] -= 1
+            raise OperationalError("INSERT INTO reservations", {}, _Deadlock())
+        real_flush(*args, **kwargs)
+
+    monkeypatch.setattr(session, "flush", flush)
+
+
+def test_reserve_treats_a_deadlock_as_taken_and_tries_the_next_bay(
+    seeded: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    full_service = service(seeded, "full-service")
+    deadlock_first_flushes(seeded, monkeypatch, times=1)
+    result = reserve(seeded, [full_service.id], local(9), NOW)
+    assert result.reservation.bay_id == bay_id(seeded, "bay-2")
+
+
+def test_reserve_deadlock_on_the_only_bay_is_unavailable(
+    seeded: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mot = service(seeded, "mot-test")
+    deadlock_first_flushes(seeded, monkeypatch, times=1)
+    with pytest.raises(SlotUnavailable):
+        reserve(seeded, [mot.id], local(8), NOW)
 
 
 def test_inactive_reservations_do_not_block(seeded: Session) -> None:

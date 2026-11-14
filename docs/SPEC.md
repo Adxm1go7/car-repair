@@ -260,7 +260,7 @@ These are the items that usually come only with experience. Each should map to a
 
 - [ ] Double-booking blocked by a database constraint, not just application code.
 - [ ] Slot holds expire through a background job, and expiry is tested.
-- [ ] Payment webhooks are idempotent: a repeated or out-of-order event changes nothing twice.
+- [x] Payment webhooks are idempotent: a repeated or out-of-order event changes nothing twice.
 - [ ] Email sending is retried, logged, and never blocks a booking from completing.
 - [ ] All times stored in UTC, displayed in garage-local time, tested across clock changes.
 - [ ] Policies live in settings, with changes recorded in the audit log.

@@ -13,12 +13,20 @@ docker compose up --build
 
 This starts PostgreSQL, Mailpit, the API, the web app and a worker. On every start the API
 applies database migrations and seeds default settings and the demo garage (safe to re-run;
-existing values are kept). The worker releases slot holds that have run out, every 60 seconds
-(`WORKER_INTERVAL_SECONDS`).
+existing values are kept). Every 60 seconds (`WORKER_INTERVAL_SECONDS`) the worker releases
+slot holds that have run out and closes their payment forms.
 
 To book, open http://localhost:8080, tick one or more services, click **Choose a time**, pick
-a day and a time, then enter your details and confirm. The time is held for you for 5
-minutes while you type (the `slot_hold_minutes` setting). There is no payment step yet.
+a day and a time, enter your details and click **Continue to payment**, then pay the £20
+deposit. The time is held for 5 minutes while you type (`slot_hold_minutes`) and 10 more
+while you pay (`payment_hold_minutes`). The deposit is `deposit_amount_pence`.
+
+**Payments.** With no Stripe keys, the payment step runs in **demo mode**: a "Pay £20 (demo)"
+button instead of a card form, so a fresh clone books end to end with no setup. With Stripe
+test keys in `.env`, it shows Stripe's real payment form inside the page (test mode, so no
+money moves). See [docs/stripe-setup.md](docs/stripe-setup.md). Demo mode is refused in
+production and never used in CI.
+
 No `.env` file is needed. To override defaults, copy `.env.example` to `.env`.
 
 | What | URL |
@@ -104,8 +112,10 @@ npm run build
 
 ### End-to-end test (`e2e/`)
 
-A [Playwright](https://playwright.dev/) test books an MOT in a real browser, then checks the
-booked time is no longer offered. It runs against the Compose stack, so start that first:
+A [Playwright](https://playwright.dev/) test books an MOT in a real browser, pays the deposit
+in Stripe's form with a test card, then checks the booked time is no longer offered. It needs
+the stack running with Stripe test keys ([docs/stripe-setup.md](docs/stripe-setup.md)) and
+fails at once, with a clear message, in demo mode. Start the stack first:
 
 ```bash
 docker compose up --build -d --wait
@@ -118,7 +128,13 @@ npm test
 Each run makes a real booking in the local database. `docker compose down -v` clears them.
 Set `BASE_URL` to test another address.
 
+In CI the `compose` job runs the same test. It reads `STRIPE_SECRET_KEY` and
+`STRIPE_PUBLISHABLE_KEY` (test keys) from the repository's Actions secrets and fails if they're
+missing. GitHub doesn't pass secrets to pull requests from forks or to Dependabot, so that
+check fails there.
+
 ## Documentation
 
 - [Specification](docs/SPEC.md)
+- [Setting up Stripe (test mode)](docs/stripe-setup.md)
 - [Implementation plans](docs/superpowers/plans/)

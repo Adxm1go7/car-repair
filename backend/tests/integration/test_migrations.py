@@ -107,3 +107,31 @@ def test_0005_keeps_a_hold_length_someone_chose(fresh_database_url: str) -> None
     _set_hold_minutes(fresh_database_url, 15)
     command.upgrade(cfg, "0005")
     assert _hold_minutes(fresh_database_url) == 15
+
+
+def test_0006_waives_existing_confirmed_bookings(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "0005")
+    with make_engine(fresh_database_url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO bay_types (slug, name) VALUES ('t', 'T');"
+                "INSERT INTO bays (slug, name, bay_type_id) SELECT 'b', 'B', id FROM bay_types;"
+                "INSERT INTO reservations (bay_id, kind, during, active) SELECT id, 'booking',"
+                " tstzrange('2026-11-10 08:00+00', '2026-11-10 09:00+00'), true FROM bays;"
+                "INSERT INTO bookings (reference, reservation_id, status, start_at, end_at,"
+                " customer_name, customer_phone, customer_email, car_registration, car_make,"
+                " car_model) SELECT 'AAAA-AAAA', id, 'confirmed', '2026-11-10 08:00+00',"
+                " '2026-11-10 09:00+00', 'n', 'p', 'e', 'r', 'm', 'm' FROM reservations"
+            )
+        )
+    command.upgrade(cfg, "0006")
+    with make_engine(fresh_database_url).connect() as connection:
+        status = connection.execute(text("SELECT deposit_status FROM bookings")).scalar_one()
+    assert status == "waived"
+
+    command.downgrade(cfg, "0005")
+    tables = set(inspect(make_engine(fresh_database_url)).get_table_names())
+    assert {"payments", "payment_events"}.isdisjoint(tables)
+    columns = {c["name"] for c in inspect(make_engine(fresh_database_url)).get_columns("bookings")}
+    assert "deposit_status" not in columns

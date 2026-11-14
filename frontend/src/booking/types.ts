@@ -1,9 +1,15 @@
 // Shapes returned by the booking API (backend/app/api/holds.py, availability.py, catalogue.py).
 // Times are garage-local ISO strings with an offset, e.g. "2026-11-10T08:00:00+00:00".
 
+/** How the page takes the deposit: Stripe's embedded form, or demo buttons with no keys set. */
+export type PaymentConfig = { provider: 'stripe'; publishable_key: string } | { provider: 'demo' }
+
 export type BookingPolicy = {
   booking_window_days: number
   slot_hold_minutes: number
+  payment_hold_minutes: number
+  deposit_amount_pence: number
+  payment: PaymentConfig
 }
 
 export type AvailabilitySlot = {
@@ -46,7 +52,24 @@ export type BookingSummary = {
   registration: string
   make: string
   model: string
+  deposit_paid_pence: number
 }
+
+/** The deposit's payment form, from POST /api/holds/{reference}/checkout. */
+export type Checkout = {
+  client_secret: string | null
+  demo_session: string | null
+  expires_in_seconds: number
+  amount_pence: number
+}
+
+export type DepositStatus = 'unpaid' | 'paid' | 'refund_pending' | 'refunded' | 'refund_failed' | 'waived'
+
+/** Where a booking stands, from POST /api/holds/{reference}/status. */
+/** `payment_pending`: a payment form is still open on the server, so a payment may still land. */
+export type HoldStatus =
+  | { status: 'held' | 'expired'; deposit_status: DepositStatus; payment_pending: boolean; summary: null }
+  | { status: 'confirmed'; deposit_status: DepositStatus; payment_pending: boolean; summary: BookingSummary }
 
 export type CustomerDetails = {
   name: string
