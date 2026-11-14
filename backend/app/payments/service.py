@@ -175,3 +175,15 @@ def cancel_booking(
     deposit = paid_deposit(session, booking.id)
     if deposit is not None:
         refund_deposit(session, provider, deposit)
+
+
+def expire_open_deposit(session: Session, provider_name: str, session_ref: str) -> None:
+    """The provider closed this payment form unpaid. The booking is left to the hold rules."""
+    found = find_payment(session, provider_name, session_ref)
+    if found is None or found.kind != "deposit":
+        return
+    get_booking_for_update_by_id(session, found.booking_id)
+    deposit = get_payment_for_update(session, provider_name, session_ref)
+    if deposit is not None and deposit.status == "open":
+        deposit.status = "expired"
+        session.flush()

@@ -1,0 +1,14 @@
+{
+  "id": "evt_test_refund",
+  "object": "event",
+  "type": "refund.updated",
+  "data": {
+    "object": {
+      "id": "re_fake_1",
+      "object": "refund",
+      "amount": 2000,
+      "currency": "gbp",
+      "status": "succeeded"
+    }
+  }
+}

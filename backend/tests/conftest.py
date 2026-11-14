@@ -9,6 +9,7 @@ from fakes import FakeProvider
 from fastapi.testclient import TestClient
 from sqlalchemy import make_url, text
 from sqlalchemy.orm import Session
+from stripe_signing import WEBHOOK_SECRET
 from testcontainers.community.postgres import PostgresContainer
 
 from app.config import AppConfig
@@ -75,13 +76,10 @@ def fake_provider() -> FakeProvider:
     return FakeProvider()
 
 
-@pytest.fixture
-def api_client(
-    db_session: Session, migrated_url: str, fake_provider: FakeProvider
+def _client_for(
+    db_session: Session, config: AppConfig, fake_provider: FakeProvider
 ) -> Iterator[TestClient]:
-    """A client whose routes use the test's db_session, so test data is rolled back afterwards,
-    and whose payments go to `fake_provider`."""
-    app = create_app(AppConfig(database_url=migrated_url))
+    app = create_app(config)
 
     def use_test_session() -> Iterator[Session]:
         yield db_session
@@ -90,3 +88,21 @@ def api_client(
     app.dependency_overrides[get_payment_provider] = lambda: fake_provider
     with TestClient(app) as client:
         yield client
+
+
+@pytest.fixture
+def api_client(
+    db_session: Session, migrated_url: str, fake_provider: FakeProvider
+) -> Iterator[TestClient]:
+    """A client whose routes use the test's db_session, so test data is rolled back afterwards,
+    and whose payments go to `fake_provider`."""
+    yield from _client_for(db_session, AppConfig(database_url=migrated_url), fake_provider)
+
+
+@pytest.fixture
+def webhook_client(
+    db_session: Session, migrated_url: str, fake_provider: FakeProvider
+) -> Iterator[TestClient]:
+    """Like api_client, with a webhook secret so Stripe's signed messages are accepted."""
+    config = AppConfig(database_url=migrated_url, stripe_webhook_secret=WEBHOOK_SECRET)
+    yield from _client_for(db_session, config, fake_provider)
