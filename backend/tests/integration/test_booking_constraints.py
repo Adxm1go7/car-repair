@@ -81,12 +81,13 @@ def test_held_booking_needs_expiry_and_token_hash(seeded: Session, missing: str)
 
 
 def test_confirmed_booking_can_be_stored(seeded: Session) -> None:
-    flush(seeded, booking(seeded, status="confirmed", **DETAILS))
+    flush(seeded, booking(seeded, status="confirmed", deposit_status="paid", **DETAILS))
 
 
 @pytest.mark.parametrize("missing", list(DETAILS))
 def test_confirmed_booking_needs_customer_details(seeded: Session, missing: str) -> None:
-    rejected(seeded, booking(seeded, status="confirmed", **(DETAILS | {missing: None})))
+    details = DETAILS | {missing: None}
+    rejected(seeded, booking(seeded, status="confirmed", deposit_status="paid", **details))
 
 
 def test_unknown_status_is_rejected(seeded: Session) -> None:

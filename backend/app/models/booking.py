@@ -35,7 +35,18 @@ BOOKING_STATUSES: Final[tuple[str, ...]] = (
     "expired",
 )
 
+# "waived" is only for bookings confirmed before deposits existed (migration 0006).
+DEPOSIT_STATUSES: Final[tuple[str, ...]] = (
+    "unpaid",
+    "paid",
+    "refund_pending",
+    "refunded",
+    "refund_failed",
+    "waived",
+)
+
 _STATUS_LIST = ", ".join(f"'{status}'" for status in BOOKING_STATUSES)
+_DEPOSIT_LIST = ", ".join(f"'{status}'" for status in DEPOSIT_STATUSES)
 _DETAIL_COLUMNS = (
     "customer_name",
     "customer_phone",
@@ -59,6 +70,11 @@ class Booking(Base):
             + ")",
             name="confirmed_has_details",
         ),
+        CheckConstraint(f"deposit_status IN ({_DEPOSIT_LIST})", name="deposit_status_valid"),
+        CheckConstraint(
+            "status <> 'confirmed' OR deposit_status IN ('paid', 'waived')",
+            name="confirmed_has_deposit",
+        ),
         Index("ix_bookings_status_hold_expires_at", "status", "hold_expires_at"),
     )
 
@@ -79,6 +95,7 @@ class Booking(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deposit_status: Mapped[str] = mapped_column(String(20), server_default="unpaid")
 
     reservation: Mapped[Reservation] = relationship()
     items: Mapped[list["BookingItem"]] = relationship(

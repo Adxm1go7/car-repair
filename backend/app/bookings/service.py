@@ -137,6 +137,7 @@ def confirm_hold(
     booking.car_model = details.model
     booking.notes = details.notes
     booking.status = "confirmed"
+    booking.deposit_status = "waived"  # temporary: Task 5 replaces confirm with checkout
     booking.confirmed_at = now
     session.flush()
     return booking
