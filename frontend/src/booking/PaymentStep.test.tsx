@@ -50,9 +50,9 @@ const SUMMARY: BookingSummary = {
   model: 'Focus',
   deposit_paid_pence: 2000,
 }
-const HELD: HoldStatus = { status: 'held', deposit_status: 'unpaid', summary: null }
-const CONFIRMED: HoldStatus = { status: 'confirmed', deposit_status: 'paid', summary: SUMMARY }
-const REFUNDED: HoldStatus = { status: 'expired', deposit_status: 'refund_pending', summary: null }
+const HELD: HoldStatus = { status: 'held', deposit_status: 'unpaid', payment_pending: false, summary: null }
+const CONFIRMED: HoldStatus = { status: 'confirmed', deposit_status: 'paid', payment_pending: false, summary: SUMMARY }
+const REFUNDED: HoldStatus = { status: 'expired', deposit_status: 'refund_pending', payment_pending: false, summary: null }
 
 type Handlers = {
   onBooked: Mock<(summary: BookingSummary) => void>

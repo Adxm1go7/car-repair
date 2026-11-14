@@ -110,6 +110,11 @@ jobs:
       - name: End-to-end test
         run: npm test
         working-directory: e2e
+      - name: Hide the webhook secret in the listener's log
+        if: failure()
+        # `stripe listen` prints its signing secret on start. ::add-mask:: only covers this
+        # job's console output, not files uploaded as artifacts.
+        run: sed -i -E 's/whsec_[A-Za-z0-9]+/whsec_***/g' stripe-listen.log || true
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

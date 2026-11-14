@@ -48,10 +48,11 @@ const SUMMARY: BookingSummary = {
   model: 'Focus',
   deposit_paid_pence: 2000,
 }
-const HELD: HoldStatus = { status: 'held', deposit_status: 'unpaid', summary: null }
-const RELEASED: HoldStatus = { status: 'expired', deposit_status: 'unpaid', summary: null }
-const CONFIRMED: HoldStatus = { status: 'confirmed', deposit_status: 'paid', summary: SUMMARY }
-const REFUNDED: HoldStatus = { status: 'expired', deposit_status: 'refund_pending', summary: null }
+const HELD: HoldStatus = { status: 'held', deposit_status: 'unpaid', payment_pending: false, summary: null }
+const RELEASED: HoldStatus = { status: 'expired', deposit_status: 'unpaid', payment_pending: false, summary: null }
+const CONFIRMED: HoldStatus = { status: 'confirmed', deposit_status: 'paid', payment_pending: false, summary: SUMMARY }
+const PENDING: HoldStatus = { status: 'expired', deposit_status: 'unpaid', payment_pending: true, summary: null }
+const REFUNDED: HoldStatus = { status: 'expired', deposit_status: 'refund_pending', payment_pending: false, summary: null }
 
 /**
  * checkoutStatus 0 means checkout never answers. `status` is what the status check says
@@ -320,6 +321,18 @@ it('a late refunded payment shows the refunded notice', async () => {
   renderAt('/book?services=mot-test')
   await toPayment(userEvent.setup())
   expect(await screen.findByRole('alert', {}, { timeout: 3000 })).toHaveTextContent("We've refunded your deposit")
+})
+
+it('a payment that may still arrive is never called "not charged"', async () => {
+  // Released, but Stripe couldn't be told to close the form: a payment may still land.
+  stubApi({ checkoutSeconds: 1, status: PENDING })
+  renderAt('/book?services=mot-test')
+  await toPayment(userEvent.setup())
+  const notice = await screen.findByRole('alert', {}, { timeout: 3000 })
+  expect(notice).toHaveTextContent("We couldn't confirm whether your payment went through")
+  expect(notice).toHaveTextContent('ABCD-EFGH')
+  expect(notice).toHaveTextContent('01632 960123')
+  expect(notice).not.toHaveTextContent("haven't been charged")
 })
 
 it('change time during payment waits for the release', async () => {

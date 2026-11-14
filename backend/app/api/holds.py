@@ -43,7 +43,7 @@ from app.repositories.availability import (
     load_payment_hold_minutes,
     load_policy,
 )
-from app.repositories.payments import paid_deposit
+from app.repositories.payments import get_open_deposit, paid_deposit
 from app.repositories.reservations import SlotUnavailable
 
 router = APIRouter()
@@ -190,6 +190,9 @@ class CheckoutOut(BaseModel):
 class StatusOut(BaseModel):
     status: Literal["held", "confirmed", "expired"]
     deposit_status: str
+    # A payment form is still open on our side (Stripe couldn't be told to close it yet), so
+    # a payment may still arrive: the page must not say "you haven't been charged".
+    payment_pending: bool
     summary: BookingSummaryOut | None
 
 
@@ -259,9 +262,19 @@ def status(
     session.commit()
     if booking.status == "confirmed":
         summary = _summary(session, booking, zone)
-        return StatusOut(status="confirmed", deposit_status=booking.deposit_status, summary=summary)
+        return StatusOut(
+            status="confirmed",
+            deposit_status=booking.deposit_status,
+            payment_pending=False,
+            summary=summary,
+        )
     state: Literal["held", "expired"] = "held" if booking.status == "held" else "expired"
-    return StatusOut(status=state, deposit_status=booking.deposit_status, summary=None)
+    return StatusOut(
+        status=state,
+        deposit_status=booking.deposit_status,
+        payment_pending=get_open_deposit(session, booking.id) is not None,
+        summary=None,
+    )
 
 
 @router.delete("/holds/{reference}", status_code=204)

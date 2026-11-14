@@ -50,14 +50,24 @@ def _handle(
         raise RefundNotStoredYet
 
 
+async def raw_body(request: Request) -> bytes:
+    """The exact bytes Stripe signed. Read in an async dependency, so the handler itself can
+    be a plain `def` and run in FastAPI's thread pool: it waits on row locks and calls Stripe
+    synchronously, which would freeze every other request on the event loop."""
+    return await request.body()
+
+
 @router.post("/stripe/webhook")
-async def stripe_webhook(
-    request: Request, session: SessionDep, provider: ProviderDep, now: NowDep
+def stripe_webhook(
+    request: Request,
+    payload: Annotated[bytes, Depends(raw_body)],
+    session: SessionDep,
+    provider: ProviderDep,
+    now: NowDep,
 ) -> Response:
     config: AppConfig = request.app.state.config
     if not config.stripe_webhook_secret:
         raise HTTPException(status_code=503, detail="Webhooks are not configured")
-    payload = await request.body()
     try:
         stripe.WebhookSignature.verify_header(
             payload,

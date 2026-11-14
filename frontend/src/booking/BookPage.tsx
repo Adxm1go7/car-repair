@@ -101,10 +101,19 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
   }
 
   /** Where to go once the server says the hold is gone. `fallback` is for nothing paid. */
-  function afterRelease(status: HoldStatus | null, fallback: string | undefined): void {
+  function afterRelease(status: HoldStatus | null, fallback: string | undefined, reference: string): void {
     unreleased.current = null // the server has already let it go
     const deposit = status?.deposit_status
-    if (deposit === 'refund_pending' || deposit === 'refunded') {
+    if (status?.payment_pending) {
+      // The server couldn't close the payment form yet, so a payment may still arrive (it
+      // will end as a booking or a refund). Never tell the customer they weren't charged.
+      setStep({
+        kind: 'picking',
+        notice:
+          `We couldn't confirm whether your payment went through. Your booking reference is ${reference}. ` +
+          `Please call us on ${garage.phone} before booking again.`,
+      })
+    } else if (deposit === 'refund_pending' || deposit === 'refunded') {
       setStep({ kind: 'picking', notice: REFUNDED })
     } else if (deposit === 'refund_failed') {
       setStep({
@@ -139,7 +148,7 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
       void navigate(`/booked/${hold.reference}`)
       return false
     }
-    afterRelease(status.ok ? status.data : null, fallback)
+    afterRelease(status.ok ? status.data : null, fallback, hold.reference)
     return true
   }
 
@@ -248,7 +257,7 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
           garage={garage}
           details={details}
           onBooked={booked}
-          onSettled={(status) => afterRelease(status, NOT_CHARGED)}
+          onSettled={(status) => afterRelease(status, NOT_CHARGED, step.hold.reference)}
           onTimeUp={() => void settle(NOT_CHARGED)}
           onBusyChange={setBusy}
         />

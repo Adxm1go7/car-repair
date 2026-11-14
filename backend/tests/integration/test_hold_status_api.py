@@ -57,7 +57,12 @@ def status(client: TestClient, created: dict[str, Any], token: str | None = None
 def test_status_while_waiting_is_held(client: TestClient) -> None:
     response = status(client, paying(client))
     assert response.status_code == 200
-    assert response.json() == {"status": "held", "deposit_status": "unpaid", "summary": None}
+    assert response.json() == {
+        "status": "held",
+        "deposit_status": "unpaid",
+        "payment_pending": True,
+        "summary": None,
+    }
 
 
 def test_status_confirms_when_provider_says_paid(
@@ -85,6 +90,7 @@ def test_status_after_release_is_expired(client: TestClient) -> None:
     assert status(client, created).json() == {
         "status": "expired",
         "deposit_status": "unpaid",
+        "payment_pending": False,  # the form was closed: nothing can be charged now
         "summary": None,
     }
 
@@ -113,6 +119,7 @@ def test_status_shows_refund(
     assert response.json() == {
         "status": "expired",
         "deposit_status": "refund_pending",
+        "payment_pending": False,
         "summary": None,
     }
 
@@ -127,3 +134,21 @@ def test_status_provider_down_says_held(client: TestClient, fake_provider: FakeP
     fake_provider.mark_paid("cs_fake_1")
     fake_provider.fail = True
     assert status(client, created).json()["status"] == "held"
+
+
+def test_status_after_a_release_stripe_could_not_close_says_payment_pending(
+    client: TestClient, fake_provider: FakeProvider
+) -> None:
+    """Released while Stripe was unreachable: the form may still take a payment, so the page
+    must not tell the customer they haven't been charged."""
+    created = paying(client)
+    fake_provider.fail = True
+    client.request(
+        "DELETE", f"/api/holds/{created['reference']}", json={"hold_token": created["hold_token"]}
+    )
+    body = status(client, created).json()
+    assert (body["status"], body["deposit_status"], body["payment_pending"]) == (
+        "expired",
+        "unpaid",
+        True,
+    )

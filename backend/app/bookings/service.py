@@ -131,9 +131,15 @@ def _close_quietly(
     session: Session, provider: PaymentProvider, booking: Booking, now: datetime
 ) -> Booking | None:
     """Close the booking's open payment form, best effort. The worker retries a failed close.
-    Returns the booking when a payment had got in and confirmed it."""
+    Returns the booking when a payment had got in and confirmed it.
+
+    The savepoint matters: completing a late payment marks the deposit paid before it
+    refunds. If the refund call fails, everything it did must be undone, so the deposit
+    stays open for the worker or the webhook to retry. Otherwise the caller's commit would
+    keep "paid" with no booking and no refund, and nothing would ever try again."""
     try:
-        return close_open_deposit(session, provider, booking, now)
+        with session.begin_nested():
+            return close_open_deposit(session, provider, booking, now)
     except PaymentUnavailable:
         log.warning("couldn't close the payment form for %s; the worker will", booking.reference)
         return None
@@ -232,7 +238,8 @@ def hold_status(
     open_deposit = get_open_deposit(session, booking.id)
     if open_deposit is not None and booking.status in ("held", "expired"):
         try:
-            complete_deposit(session, provider, open_deposit.provider_ref, now)
+            with session.begin_nested():  # see _close_quietly: a failure must undo it all
+                complete_deposit(session, provider, open_deposit.provider_ref, now)
         except PaymentUnavailable:
             log.warning("couldn't ask the provider about %s; still waiting", booking.reference)
     if hold_has_expired(booking, now):

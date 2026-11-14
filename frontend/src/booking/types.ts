@@ -66,9 +66,10 @@ export type Checkout = {
 export type DepositStatus = 'unpaid' | 'paid' | 'refund_pending' | 'refunded' | 'refund_failed' | 'waived'
 
 /** Where a booking stands, from POST /api/holds/{reference}/status. */
+/** `payment_pending`: a payment form is still open on the server, so a payment may still land. */
 export type HoldStatus =
-  | { status: 'held' | 'expired'; deposit_status: DepositStatus; summary: null }
-  | { status: 'confirmed'; deposit_status: DepositStatus; summary: BookingSummary }
+  | { status: 'held' | 'expired'; deposit_status: DepositStatus; payment_pending: boolean; summary: null }
+  | { status: 'confirmed'; deposit_status: DepositStatus; payment_pending: boolean; summary: BookingSummary }
 
 export type CustomerDetails = {
   name: string

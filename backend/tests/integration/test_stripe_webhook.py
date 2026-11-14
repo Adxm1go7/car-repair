@@ -208,3 +208,13 @@ def test_old_timestamp_is_400(client: TestClient) -> None:
 def test_no_secret_configured_is_503(api_client: TestClient) -> None:
     body = event("checkout_session_completed")
     assert post(api_client, body).status_code == 503
+
+
+def test_the_handler_does_not_block_the_event_loop() -> None:
+    """It waits on row locks and calls Stripe synchronously (up to ~30s). As an `async def`
+    that would freeze every other request; a plain `def` runs in FastAPI's thread pool."""
+    import inspect
+
+    from app.api.stripe_webhook import stripe_webhook
+
+    assert not inspect.iscoroutinefunction(stripe_webhook)
