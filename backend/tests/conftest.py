@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from fakes import FakeProvider
 from fastapi.testclient import TestClient
 from sqlalchemy import make_url, text
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from testcontainers.community.postgres import PostgresContainer
 from app.config import AppConfig
 from app.db import get_session, make_engine
 from app.main import create_app
+from app.payments.deps import get_payment_provider
 
 ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
 
@@ -69,13 +71,22 @@ def client(postgres_url: str) -> Iterator[TestClient]:
 
 
 @pytest.fixture
-def api_client(db_session: Session, migrated_url: str) -> Iterator[TestClient]:
-    """A client whose routes use the test's db_session, so test data is rolled back afterwards."""
+def fake_provider() -> FakeProvider:
+    return FakeProvider()
+
+
+@pytest.fixture
+def api_client(
+    db_session: Session, migrated_url: str, fake_provider: FakeProvider
+) -> Iterator[TestClient]:
+    """A client whose routes use the test's db_session, so test data is rolled back afterwards,
+    and whose payments go to `fake_provider`."""
     app = create_app(AppConfig(database_url=migrated_url))
 
     def use_test_session() -> Iterator[Session]:
         yield db_session
 
     app.dependency_overrides[get_session] = use_test_session
+    app.dependency_overrides[get_payment_provider] = lambda: fake_provider
     with TestClient(app) as client:
         yield client
