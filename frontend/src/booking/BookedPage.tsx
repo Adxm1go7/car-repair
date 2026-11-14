@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
+import { formatPrice } from '../catalogue/format.ts'
 import type { Garage } from '../catalogue/types.ts'
 import { formatLongDate, formatTimeRange } from './format.ts'
 import type { BookingSummary } from './types.ts'
@@ -48,6 +49,9 @@ export function BookedPage({ garage }: { garage: Garage }): JSX.Element {
         ))}
       </ul>
       <p>{`${summary.registration} · ${summary.make} ${summary.model}`}</p>
+      {summary.deposit_paid_pence > 0 && (
+        <p className="booked-deposit">{`Deposit paid: ${formatPrice(summary.deposit_paid_pence, null)}`}</p>
+      )}
       <dl className="booked-reference">
         <dt>Reference</dt>
         <dd>{summary.reference}</dd>

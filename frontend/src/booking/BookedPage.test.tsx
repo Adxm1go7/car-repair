@@ -16,6 +16,7 @@ const SUMMARY: BookingSummary = {
   registration: 'AB12CDE',
   make: 'Ford',
   model: 'Focus',
+  deposit_paid_pence: 2000,
 }
 
 function renderAt(state: unknown): void {
@@ -36,6 +37,16 @@ it('shows the summary from navigation state', () => {
   expect(screen.getByText('AB12CDE · Ford Focus')).toBeInTheDocument()
   expect(screen.getByText('ABCD-EFGH')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: '01632 960123' })).toHaveAttribute('href', 'tel:01632960123')
+})
+
+it('shows the deposit paid', () => {
+  renderAt(SUMMARY)
+  expect(screen.getByText('Deposit paid: £20')).toBeInTheDocument()
+})
+
+it('hides the deposit line for a waived deposit', () => {
+  renderAt({ ...SUMMARY, deposit_paid_pence: 0 })
+  expect(screen.queryByText(/Deposit paid/)).not.toBeInTheDocument()
 })
 
 it('shows the reference and phone when opened directly', () => {

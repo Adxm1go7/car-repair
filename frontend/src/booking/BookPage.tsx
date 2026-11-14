@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { JSX, RefObject } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation } from 'react-router'
 import { formatDuration } from '../catalogue/format.ts'
 import type { Catalogue } from '../catalogue/types.ts'
 import { cancelHold, fetchBookingPolicy } from './api.ts'
@@ -44,7 +44,6 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
   // and a hold running out. Changing services leaves this page, which drops it.
   const [details, setDetails] = useState<CustomerDetails>(EMPTY_DETAILS)
   const [submitting, setSubmitting] = useState(false)
-  const navigate = useNavigate()
   // The hold this page should give back if the customer leaves. It is cleared once the
   // booking is confirmed, the hold has run out, or it has already been released.
   const unreleased = useRef<Hold | null>(null)
@@ -145,10 +144,9 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
             unreleased.current = null // the server has already let it go
             setStep({ kind: 'picking', notice: RAN_OUT })
           }}
-          onBooked={(summary) => {
-            unreleased.current = null // booked: never give it back
-            void navigate(`/booked/${summary.reference}`, { state: summary })
-          }}
+          // Task 9: the payment step replaces these placeholders.
+          onCheckout={() => {}}
+          onAlreadyPaid={() => {}}
         />
       )}
     </main>

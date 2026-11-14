@@ -29,21 +29,30 @@ const HOLD: Hold = {
   services: [],
 }
 
-/** confirmStatus 0 means confirm never answers. */
-type Stub = { availability?: Partial<Availability>; holdStatus?: number; confirmStatus?: number }
+const POLICY = {
+  booking_window_days: 60,
+  slot_hold_minutes: 10,
+  payment_hold_minutes: 10,
+  deposit_amount_pence: 2000,
+  payment: { provider: 'demo' },
+}
+const CHECKOUT = { client_secret: null, demo_session: 'demo_abc', expires_in_seconds: 600, amount_pence: 2000 }
+
+/** checkoutStatus 0 means checkout never answers. */
+type Stub = { availability?: Partial<Availability>; holdStatus?: number; checkoutStatus?: number }
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status })
 }
 
 /** A fake backend. Returns the fetch mock so tests can count calls. */
-function stubApi({ availability = {}, holdStatus = 201, confirmStatus = 200 }: Stub = {}): ReturnType<typeof vi.fn> {
+function stubApi({ availability = {}, holdStatus = 201, checkoutStatus = 200 }: Stub = {}): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn((url: string) => {
     if (url === '/api/services') return Promise.resolve(json(SERVICES))
     if (url === '/api/opening-hours') return Promise.resolve(json(SUNDAY_CLOSED))
     if (url === '/api/garage') return Promise.resolve(json(GARAGE))
     if (url === '/api/booking-policy') {
-      return Promise.resolve(json({ booking_window_days: 60, slot_hold_minutes: 10 }))
+      return Promise.resolve(json(POLICY))
     }
     if (url.startsWith('/api/availability')) {
       const date = new URLSearchParams(url.split('?')[1]).get('date') ?? ''
@@ -64,21 +73,10 @@ function stubApi({ availability = {}, holdStatus = 201, confirmStatus = 200 }: S
       )
     }
     if (url === '/api/holds/ABCD-EFGH') return Promise.resolve(new Response(null, { status: 204 }))
-    if (url === '/api/holds/ABCD-EFGH/confirm') {
-      if (confirmStatus === 0) return new Promise<Response>(() => {}) // never answers
+    if (url === '/api/holds/ABCD-EFGH/checkout') {
+      if (checkoutStatus === 0) return new Promise<Response>(() => {}) // never answers
       return Promise.resolve(
-        confirmStatus === 200
-          ? json({
-              reference: 'ABCD-EFGH',
-              status: 'confirmed',
-              start: SLOTS[0].start,
-              end: SLOTS[0].end,
-              services: [],
-              registration: 'AB12CDE',
-              make: 'Ford',
-              model: 'Focus',
-            })
-          : json({ detail: 'Your hold has expired' }, confirmStatus),
+        checkoutStatus === 200 ? json(CHECKOUT) : json({ detail: 'Your hold has expired' }, checkoutStatus),
       )
     }
     return Promise.resolve(json({}, 404))
@@ -205,13 +203,13 @@ async function fillDetails(user: ReturnType<typeof userEvent.setup>): Promise<vo
 }
 
 it('goes back to the times after the hold runs out, keeping what was typed', async () => {
-  stubApi({ confirmStatus: 410 })
+  stubApi({ checkoutStatus: 410 })
   renderAt('/book?services=mot-test')
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
   await screen.findByRole('heading', { name: 'Your details' })
   await fillDetails(user)
-  await user.click(screen.getByRole('button', { name: 'Confirm booking' }))
+  await user.click(screen.getByRole('button', { name: 'Continue to payment' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Your hold ran out, so we released that time.')
   expect(screen.getByRole('heading', { name: 'Choose a time' })).toBeInTheDocument()
@@ -220,14 +218,15 @@ it('goes back to the times after the hold runs out, keeping what was typed', asy
   expect(screen.getByLabelText('Model')).toHaveValue('Focus')
 })
 
-it('shows the booked page after confirming', async () => {
+// Task 9 rewrites this for the payment step.
+it.skip('shows the booked page after confirming', async () => {
   stubApi()
   renderAt('/book?services=mot-test')
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
   await screen.findByRole('heading', { name: 'Your details' })
   await fillDetails(user)
-  await user.click(screen.getByRole('button', { name: 'Confirm booking' }))
+  await user.click(screen.getByRole('button', { name: 'Continue to payment' }))
   expect(await screen.findByRole('heading', { level: 1, name: "You're booked" })).toBeInTheDocument()
   expect(screen.getByText('ABCD-EFGH')).toBeInTheDocument()
 })
@@ -257,8 +256,8 @@ it('change time releases the hold and keeps what was typed', async () => {
   expect(screen.getByLabelText('Model')).toHaveValue('Focus')
 })
 
-it('change time sits next to change services and is off while confirming', async () => {
-  stubApi({ confirmStatus: 0 })
+it('change time sits next to change services and is off while starting payment', async () => {
+  stubApi({ checkoutStatus: 0 })
   renderAt('/book?services=mot-test')
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
@@ -266,7 +265,7 @@ it('change time sits next to change services and is off while confirming', async
   expect(within(nav).getByRole('link', { name: '← Change services' })).toBeInTheDocument()
   expect(within(nav).getByRole('button', { name: 'Change time' })).toBeEnabled()
   await fillDetails(user)
-  await user.click(screen.getByRole('button', { name: 'Confirm booking' }))
+  await user.click(screen.getByRole('button', { name: 'Continue to payment' }))
   expect(within(nav).getByRole('button', { name: 'Change time' })).toBeDisabled()
 })
 
@@ -287,14 +286,14 @@ it('change services releases the hold and drops what was typed', async () => {
   expect(await screen.findByLabelText('Name')).toHaveValue('')
 })
 
-it('change services does nothing while confirming', async () => {
-  const fetchMock = stubApi({ confirmStatus: 0 })
+it('change services does nothing while starting payment', async () => {
+  const fetchMock = stubApi({ checkoutStatus: 0 })
   renderAt('/book?services=mot-test')
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
   await screen.findByRole('heading', { name: 'Your details' })
   await fillDetails(user)
-  await user.click(screen.getByRole('button', { name: 'Confirm booking' }))
+  await user.click(screen.getByRole('button', { name: 'Continue to payment' }))
 
   const changeServices = screen.getByRole('link', { name: '← Change services' })
   expect(changeServices).toHaveAttribute('aria-disabled', 'true')
@@ -339,13 +338,14 @@ it('leaving before holding a time releases nothing', async () => {
   expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')).toBe(false)
 })
 
-it('a confirmed booking is never released', async () => {
+// Task 9 rewrites this for the payment step.
+it.skip('a confirmed booking is never released', async () => {
   const fetchMock = stubApi()
   renderWithHistory()
   const user = userEvent.setup()
   await holdFirstTime(user)
   await fillDetails(user)
-  await user.click(screen.getByRole('button', { name: 'Confirm booking' }))
+  await user.click(screen.getByRole('button', { name: 'Continue to payment' }))
   await screen.findByRole('heading', { level: 1, name: "You're booked" })
   window.dispatchEvent(new Event('pagehide'))
   expect(released(fetchMock)).toBeUndefined()
