@@ -162,7 +162,7 @@ def _check_reference(reference: str) -> None:
         raise NOT_FOUND
 
 
-def _summary(session: Session, booking: Booking, zone: ZoneInfo) -> BookingSummaryOut:
+def booking_summary(session: Session, booking: Booking, zone: ZoneInfo) -> BookingSummaryOut:
     deposit = paid_deposit(session, booking.id)
     return BookingSummaryOut(
         reference=booking.reference,
@@ -261,7 +261,7 @@ def status(
         raise NOT_FOUND from error
     session.commit()
     if booking.status == "confirmed":
-        summary = _summary(session, booking, zone)
+        summary = booking_summary(session, booking, zone)
         return StatusOut(
             status="confirmed",
             deposit_status=booking.deposit_status,

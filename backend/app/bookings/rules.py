@@ -8,7 +8,10 @@ import hashlib
 import hmac
 import re
 import secrets
+from datetime import datetime
 from typing import Final
+
+from app.payments.rules import deposit_refundable
 
 # No 0/O or 1/I/L, so a reference read out over the phone can't be misheard.
 REFERENCE_ALPHABET: Final = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -25,6 +28,15 @@ def new_reference() -> str:
 
 def new_hold_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+def customer_can_cancel(
+    status: str, start_at: datetime, now: datetime, free_cancellation_hours: int
+) -> bool:
+    """A customer may cancel a confirmed booking only while the deposit would come back."""
+    return status == "confirmed" and deposit_refundable(
+        start_at, now, free_cancellation_hours, "customer"
+    )
 
 
 def hash_token(token: str) -> str:
