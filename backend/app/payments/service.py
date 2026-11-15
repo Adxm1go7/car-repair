@@ -13,6 +13,7 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
+from app.email.queue import queue_email
 from app.models import Booking, Payment
 from app.payments.provider import PaymentProvider, RefundStatus
 from app.payments.rules import CancelledBy, deposit_refundable
@@ -35,10 +36,11 @@ _DEPOSIT_STATUS_FOR_REFUND: dict[RefundStatus, str] = {
 }
 
 
-def _confirm(booking: Booking, now: datetime) -> None:
+def _confirm(session: Session, booking: Booking, now: datetime) -> None:
     booking.status = "confirmed"
     booking.deposit_status = "paid"
     booking.confirmed_at = now
+    queue_email(session, "confirmation", booking)
 
 
 def _take_time_back(session: Session, booking: Booking) -> bool:
@@ -81,10 +83,11 @@ def complete_deposit(
     deposit.payment_intent_ref = state.payment_intent_ref
 
     if booking.status == "held":
-        _confirm(booking, now)  # its reservation is still active: nobody else could take it
+        # Its reservation is still active: nobody else could take it.
+        _confirm(session, booking, now)
     elif booking.status == "expired":
         if _take_time_back(session, booking):
-            _confirm(booking, now)
+            _confirm(session, booking, now)
         else:
             log.info("late payment for %s: the time is taken, refunding", booking.reference)
             refund_deposit(session, provider, deposit)
