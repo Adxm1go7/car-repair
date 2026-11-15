@@ -1,0 +1,19 @@
+Hello {{ c.customer_name }},
+
+Your booking with {{ c.garage.name }} on {{ when }} has been cancelled.
+
+{% include "_booking.txt.j2" %}
+
+{% if c.deposit_status in ("refund_pending", "refunded") %}
+Your {{ deposit }} deposit is being refunded. It can take 5 to 10 working days to reach your account.
+
+{% elif c.deposit_status == "refund_failed" %}
+We'll be in touch about your refund.
+
+{% elif c.deposit_status == "paid" %}
+Your deposit has been kept, as the booking was cancelled less than {{ notice_hours }} hours before.
+
+{% endif %}
+To book again, please call us on {{ c.garage.phone }}.
+
+{% include "_footer.txt.j2" %}

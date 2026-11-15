@@ -1,7 +1,10 @@
-"""A payment provider for tests: records every call, and can be told what Stripe would say."""
+"""Fakes for tests: a payment provider that can be told what Stripe would say, and an email
+sender that records what it sent."""
 
 from dataclasses import dataclass, field
 
+from app.email.message import OutgoingEmail
+from app.email.sender import EmailUnavailable
 from app.payments.provider import (
     CheckoutStarted,
     CheckoutState,
@@ -86,3 +89,15 @@ class FakeProvider:
     def get_refund(self, refund_ref: str) -> RefundState:
         self._call("get_refund", refund_ref=refund_ref)
         return RefundState(refund_ref, self.refunds.get(refund_ref, self.refund_status))
+
+
+@dataclass
+class FakeSender:
+    sent: list[OutgoingEmail] = field(default_factory=list)
+    fail: bool = False  # every send raises EmailUnavailable while True
+    fail_for: set[str] = field(default_factory=set)  # sends to these recipients fail
+
+    def send(self, message: OutgoingEmail) -> None:
+        if self.fail or message.to in self.fail_for:
+            raise EmailUnavailable("fake sender told to fail")
+        self.sent.append(message)

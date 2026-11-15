@@ -1,0 +1,14 @@
+Hello {{ c.customer_name }},
+
+A reminder that we're expecting you on {{ when }}.
+
+{% include "_booking.txt.j2" %}
+
+{% if c.link_url %}
+View your booking:
+{{ c.link_url }}
+
+{% endif %}
+{% include "_call_rule.txt.j2" %}
+
+{% include "_footer.txt.j2" %}
