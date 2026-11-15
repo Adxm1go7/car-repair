@@ -1,14 +1,18 @@
-"""Background worker: releases expired holds, and closes the payment forms of released ones.
+"""Background worker: sends queued email, releases expired holds, and closes the payment
+forms of released ones.
 
 Availability already ignores expired holds, so releasing is housekeeping: it makes the
 database say what the rule already means. Closing the forms matters more: until it's done,
-a customer who left could still pay for a time that's been given back. Run with
-`python -m app.worker`.
+a customer who left could still pay for a time that's been given back.
+
+Email is checked every `email_interval_seconds`, holds every `worker_interval_seconds`.
+Run with `python -m app.worker`.
 """
 
 import logging
 import signal
 import threading
+import time
 from datetime import datetime
 from types import FrameType
 
@@ -17,6 +21,8 @@ from sqlalchemy.orm import Session
 from app.clock import utc_now
 from app.config import get_config
 from app.db import make_engine
+from app.email.outbox import send_due_emails
+from app.email.sender import SmtpSender
 from app.payments.deps import make_provider
 from app.payments.provider import PaymentProvider, PaymentUnavailable
 from app.payments.service import close_open_deposit
@@ -66,21 +72,37 @@ def main() -> None:
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
 
+    sender = SmtpSender(config.smtp_host, config.smtp_port, config.smtp_from)
     log.info(
-        "worker started, every %d seconds, payments: %s",
+        "worker started: email every %d seconds, holds every %d seconds, payments: %s",
+        config.email_interval_seconds,
         config.worker_interval_seconds,
         config.payment_provider,
     )
+    last_holds_run: float | None = None
     try:
         while not stop.is_set():
+            # Each step on its own, so a broken mail server never stops holds being released.
             try:
                 with Session(engine) as session:
-                    released = run_once(session, utc_now(), make_provider(config, session))
-                if released > 0:
-                    log.info("released %d expired holds", released)
+                    sent = send_due_emails(session, sender, utc_now(), config.public_base_url)
+                if sent > 0:
+                    log.info("sent %d emails", sent)
             except Exception:
-                log.exception("the worker's cycle failed; trying again next time")
-            stop.wait(config.worker_interval_seconds)
+                log.exception("sending email failed; trying again next time")
+            due = last_holds_run is None or (
+                time.monotonic() - last_holds_run >= config.worker_interval_seconds
+            )
+            if due:
+                last_holds_run = time.monotonic()
+                try:
+                    with Session(engine) as session:
+                        released = run_once(session, utc_now(), make_provider(config, session))
+                    if released > 0:
+                        log.info("released %d expired holds", released)
+                except Exception:
+                    log.exception("the worker's cycle failed; trying again next time")
+            stop.wait(config.email_interval_seconds)
     finally:
         engine.dispose()
         log.info("worker stopped")

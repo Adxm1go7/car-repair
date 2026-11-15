@@ -51,12 +51,19 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-garage}:${POSTGRES_PASSWORD:-garage}@db:5432/${POSTGRES_DB:-garage}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       WORKER_INTERVAL_SECONDS: ${WORKER_INTERVAL_SECONDS:-60}
+      EMAIL_INTERVAL_SECONDS: ${EMAIL_INTERVAL_SECONDS:-5}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_FROM: ${SMTP_FROM:-bookings@example.test}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     depends_on:
       api:
         condition: service_healthy  # the api runs the migrations on start
+      mailpit:
+        condition: service_started
 
   web:
     build: ./frontend
