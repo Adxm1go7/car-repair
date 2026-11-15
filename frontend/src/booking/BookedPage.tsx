@@ -56,6 +56,7 @@ export function BookedPage({ garage }: { garage: Garage }): JSX.Element {
         <dt>Reference</dt>
         <dd>{summary.reference}</dd>
       </dl>
+      <p>{"We've emailed you a link to view or cancel your booking."}</p>
       <p>
         {garage.address}. Need to change something? Call us on {phone}.
       </p>

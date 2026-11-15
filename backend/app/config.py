@@ -14,6 +14,13 @@ class AppConfig(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     # How often the worker releases expired holds.
     worker_interval_seconds: int = Field(default=60, ge=1)
+    # Email: the SMTP server the worker sends through, and how often it looks for due email.
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    smtp_from: str = "bookings@example.test"
+    email_interval_seconds: int = Field(default=5, ge=1)
+    # Where customers open the site: booking links in emails start with this.
+    public_base_url: str = "http://localhost:8080"
     # Stripe. With no secret key, payments run in demo mode (never allowed in production).
     stripe_secret_key: str = Field(default="", repr=False)
     stripe_publishable_key: str = ""

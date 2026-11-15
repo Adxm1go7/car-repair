@@ -1,0 +1,12 @@
+{% extends "_layout.html.j2" %}
+{% block content %}
+<p>Your booking with {{ c.garage.name }} is confirmed.</p>
+{% endblock %}
+{% block after %}
+{% if c.deposit_status == "paid" %}
+<p>Deposit paid: {{ deposit }}. The balance is paid at the garage.</p>
+{% endif %}
+{% set link_label = "View or cancel your booking" %}
+{% include "_link.html.j2" %}
+{% include "_call_rule.html.j2" %}
+{% endblock %}

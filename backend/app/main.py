@@ -6,7 +6,15 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.api import availability, catalogue, demo_payments, health, holds, stripe_webhook
+from app.api import (
+    availability,
+    catalogue,
+    demo_payments,
+    health,
+    holds,
+    my_booking,
+    stripe_webhook,
+)
 from app.config import AppConfig, get_config
 from app.db import make_engine
 from app.payments.stripe_provider import StripeProvider
@@ -55,6 +63,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(catalogue.router, prefix="/api")
     app.include_router(availability.router, prefix="/api")
     app.include_router(holds.router, prefix="/api")
+    app.include_router(my_booking.router, prefix="/api")
     app.include_router(stripe_webhook.router, prefix="/api")
     if config.payment_provider == "demo":  # never with Stripe keys, so never in production
         app.include_router(demo_payments.router, prefix="/api")

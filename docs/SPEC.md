@@ -28,7 +28,7 @@ These decisions are settled. Rows marked *proposed* are my defaults that you acc
 | Area | Decision |
 | --- | --- |
 | Audience | One garage, built as a demo and CV project; selling to other garages is a possible later step. |
-| Customers | No accounts. Guest booking with name, phone and email. A private token link in each email lets them view, cancel or reschedule. |
+| Customers | No accounts. Guest booking with name, phone and email. A private token link in each email lets them view or cancel one booking. To change the time, they phone the garage (decided Nov 14). |
 | Staff | Two roles, admin and staff. Everyone sees one shared schedule. |
 | Scheduling | Bays only, no per-mechanic calendars. Bays have types (for example MOT ramp, general bay); the detail comes later. |
 | Opening hours | Open all week, shorter hours on Saturday and Sunday. *Proposed*: Mon to Fri 08:00 to 17:30, Sat 09:00 to 14:00, Sun 10:00 to 13:00, all editable by the admin. |
@@ -36,7 +36,7 @@ These decisions are settled. Rows marked *proposed* are my defaults that you acc
 | Multi-service visits | Allowed. If any selected service needs approval, the whole booking goes to staff. |
 | Unknown issues | A separate enquiry flow with structured fields, notes and photos. Staff approve, decline or ask for more information. |
 | Deposit | Flat £20 per booking in Stripe test mode, balance paid in person. Refundable when cancelled 24 hours or more ahead. For approval bookings it is requested after approval. |
-| Notifications | Email only in v1: confirmation, reminder, cancellation, reschedule, "car ready". SMS can be added later behind the same interface. |
+| Notifications | Email only in v1: confirmation, reminder, cancellation, garage-initiated change, "car ready". SMS can be added later behind the same interface. |
 | Garage-initiated changes | If staff cancel or move a booking, the system emails the customer, refunds the deposit and offers a new slot. |
 | Policy settings | *Proposed*: booking window 60 days, cut-off 2 hours before a slot, slot hold 5 minutes (shortened from 10 in Milestone 4), free cancellation 24 hours. All stored as settings, not hardcoded. |
 | Stack | Python with FastAPI, React with TypeScript, PostgreSQL, Docker Compose, GitHub Actions. |
@@ -52,7 +52,7 @@ There are three kinds of user, and only two of them log in.
 
 | Role | Logs in? | Can do |
 | --- | --- | --- |
-| Customer | No | Browse services, book, send an enquiry, and use their emailed token link to view, cancel or reschedule one booking. |
+| Customer | No | Browse services, book, send an enquiry, and use their emailed token link to view or cancel one booking. |
 | Staff | Yes | See the shared schedule, confirm or decline pending bookings and enquiries, move or cancel bookings, block time, mark a job in progress, complete, or "car ready". |
 | Admin | Yes | Everything staff can do, plus edit services, prices, bays, opening hours, policy settings, and staff accounts. |
 
@@ -67,9 +67,9 @@ Version 1 is the complete demonstration. Everything in the second list is delibe
 - Public site: services page with prices, booking flow, issue-enquiry form, contact details.
 - Booking: pick one or more services, enter car details (registration, make, model, notes), choose an open slot, pay the deposit, receive a confirmation email.
 - Enquiry: structured fields (registration, make and model, symptoms, urgency), free-text notes and photo upload, with a staff approval queue.
-- Token self-service: view, cancel or reschedule from an emailed link, within the policy window.
+- Token self-service: view and cancel from an emailed link, cancelling only within the policy window. No customer rescheduling: they call the garage.
 - Back office: login, shared day and week schedule, booking and enquiry management, blocked time, service and price editing, opening hours, settings, "car ready" button.
-- Emails: confirmation, reminder, cancellation, reschedule, garage-initiated change, car ready.
+- Emails: confirmation, reminder, cancellation, garage-initiated change, car ready.
 - Operations: audit log of staff changes, seed data for a realistic demo garage, one-command local startup.
 
 **Later, not v1**
@@ -104,7 +104,7 @@ Six flows cover the whole product. Each should become at least one end-to-end te
 **4. Customer self-service through the token link**
 
 1. The email link opens that one booking, with no login.
-2. The customer can cancel or reschedule while inside the policy window. The deposit is refunded or forfeited by the rule in force.
+2. The customer can cancel while inside the policy window, and the deposit is refunded. They can't reschedule: for a different time, the page asks them to call.
 3. Outside the window the page shows the garage's phone number instead.
 
 **5. Staff schedule management**
@@ -136,7 +136,8 @@ This is the conceptual model, not yet a schema. Customer details live on the boo
 | Payment | booking, provider reference, amount, kind (deposit or refund), status | Webhook events are stored to make handling idempotent. |
 | StaffUser | name, email, password hash, role | Roles: admin, staff. |
 | Setting | key, value | Cancellation window, booking window, cut-off, hold time, deposit amount. |
-| EmailLog | recipient, template, related booking, sent at, status | Doubles as a test and debugging aid. |
+| BookingLink | booking, token hash, expires at, created at | One per email that carries a link. Only the hash is stored; it expires a week after the booking ends. |
+| EmailLog | recipient, template, related booking, status, attempts, next attempt at, last error, sent at | The send queue as well as the log. Doubles as a test and debugging aid. |
 | AuditEntry | staff user, action, entity, before, after, time | Written for every staff change. |
 
 **Booking statuses:** held, pending approval, confirmed, in progress, completed, cancelled, no show, expired.
@@ -261,7 +262,7 @@ These are the items that usually come only with experience. Each should map to a
 - [ ] Double-booking blocked by a database constraint, not just application code.
 - [ ] Slot holds expire through a background job, and expiry is tested.
 - [x] Payment webhooks are idempotent: a repeated or out-of-order event changes nothing twice.
-- [ ] Email sending is retried, logged, and never blocks a booking from completing.
+- [x] Email sending is retried, logged, and never blocks a booking from completing.
 - [ ] All times stored in UTC, displayed in garage-local time, tested across clock changes.
 - [ ] Policies live in settings, with changes recorded in the audit log.
 - [ ] Health check endpoint, structured logs, and clear error pages.
@@ -270,7 +271,7 @@ These are the items that usually come only with experience. Each should map to a
 
 - [ ] Staff passwords hashed with a modern algorithm, with login throttling and secure session or token handling.
 - [ ] Role check on every staff endpoint, tested for each role.
-- [ ] Token links are random, hashed in storage, expiring, and limited to one booking.
+- [x] Token links are random, hashed in storage, expiring, and limited to one booking.
 - [ ] Rate limiting and a honeypot or CAPTCHA on the booking and enquiry forms.
 - [ ] Photo uploads checked for type, size and content, stored outside the web root, and served safely.
 - [ ] Input validation on every field, with output escaping in emails and pages.
@@ -298,7 +299,7 @@ There is no deadline, so each milestone has a definition of done and the next on
 3. **Availability engine, test-first.** The pure engine, the edge-case test list, and the overlap constraint in the database. *Done when* every edge case in the engine section has a passing test and the concurrency test shows exactly one winner.
 4. **Booking flow with slot hold.** Service selection, slot picker, hold and expiry job, customer details. *Done when* flow 1 passes end to end without payment.
 5. **Deposit payments.** Stripe test mode, idempotent webhooks, refund on eligible cancellation. *Done when* success, failure and duplicate-webhook tests pass.
-6. **Email and token self-service.** Templates, send log, token links, customer cancel and reschedule within policy. *Done when* flow 4 passes end to end and expired tokens fail safely.
+6. **Email and token self-service.** Templates, send log, token links, customer cancel within policy (no customer rescheduling). *Done when* flow 4 passes end to end and expired tokens fail safely.
 7. **Staff back office.** Login, roles, shared day and week schedule, move, cancel, block time, job status, "car ready", audit log, mobile layout. *Done when* flow 5 and flow 6 pass and role checks are tested.
 8. **Approval bookings and enquiries.** Needs-approval services, the staff queue, enquiry form with photo upload, approve, decline and convert. *Done when* flows 2 and 3 pass end to end.
 9. **Hardening and polish.** Rate limiting, accessibility pass, error pages, load test of the availability endpoint, security scans, documentation. *Done when* the checklist section is fully ticked.
@@ -313,7 +314,7 @@ These are the gaps still to close. None blocks milestones 1 to 3, so building ca
 - [ ] **Opening hours.** Confirm or replace the proposed weekday and weekend hours, and any lunch break.
 - [ ] **Slot grid.** Should start times fall every 15, 30 or 60 minutes, and is a buffer needed between jobs?
 - [ ] **Needs-approval hold.** How long is a pending booking's slot held while staff decide?
-- [ ] **Reschedule rules.** Does a reschedule inside the free window keep the deposit, and can a booking be rescheduled more than once?
+- [x] **Reschedule rules.** No customer rescheduling: customers call the garage for a different time (Nov 14).
 - [ ] **No-shows.** Is the deposit forfeited, and who marks a no-show?
 - [ ] **Staff accounts.** How are they created and recovered (admin creates them, password reset by email)?
 - [ ] **Hosting.** Which free cloud tier to target when the time comes.

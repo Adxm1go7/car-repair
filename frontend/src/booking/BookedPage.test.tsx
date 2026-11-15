@@ -39,6 +39,11 @@ it('shows the summary from navigation state', () => {
   expect(screen.getByRole('link', { name: '01632 960123' })).toHaveAttribute('href', 'tel:01632960123')
 })
 
+it('says a link to view or cancel has been emailed', () => {
+  renderAt(SUMMARY)
+  expect(screen.getByText("We've emailed you a link to view or cancel your booking.")).toBeInTheDocument()
+})
+
 it('shows the deposit paid', () => {
   renderAt(SUMMARY)
   expect(screen.getByText('Deposit paid: £20')).toBeInTheDocument()

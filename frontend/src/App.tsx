@@ -9,6 +9,7 @@ import { fetchCatalogue } from './catalogue/api.ts'
 import { formatDuration, formatPrice } from './catalogue/format.ts'
 import { openTodayText } from './catalogue/openToday.ts'
 import type { Catalogue, Service } from './catalogue/types.ts'
+import { ManageBookingPage } from './manage/ManageBookingPage.tsx'
 
 type PageState =
   | { kind: 'loading' }
@@ -185,6 +186,7 @@ export function App({ now = () => new Date() }: { now?: () => Date }): JSX.Eleme
       <Route path="/" element={<CataloguePage catalogue={state.catalogue} now={now()} />} />
       <Route path="/book" element={<BookPage catalogue={state.catalogue} now={now} />} />
       <Route path="/booked/:reference" element={<BookedPage garage={state.catalogue.garage} />} />
+      <Route path="/booking/:reference" element={<ManageBookingPage garage={state.catalogue.garage} />} />
     </Routes>
   )
 }

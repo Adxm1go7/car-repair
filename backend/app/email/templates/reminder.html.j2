@@ -1,0 +1,9 @@
+{% extends "_layout.html.j2" %}
+{% block content %}
+<p>A reminder that we're expecting you on {{ when }}.</p>
+{% endblock %}
+{% block after %}
+{% set link_label = "View your booking" %}
+{% include "_link.html.j2" %}
+{% include "_call_rule.html.j2" %}
+{% endblock %}

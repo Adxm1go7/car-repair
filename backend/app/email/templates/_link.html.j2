@@ -1,0 +1,4 @@
+{% if c.link_url %}
+<p style="margin:16px 0;"><a href="{{ c.link_url }}" style="display:inline-block;padding:10px 16px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:6px;">{{ link_label }}</a></p>
+<p style="font-size:13px;color:#52525b;">Or copy this link: {{ c.link_url }}</p>
+{% endif %}

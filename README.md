@@ -14,7 +14,8 @@ docker compose up --build
 This starts PostgreSQL, Mailpit, the API, the web app and a worker. On every start the API
 applies database migrations and seeds default settings and the demo garage (safe to re-run;
 existing values are kept). Every 60 seconds (`WORKER_INTERVAL_SECONDS`) the worker releases
-slot holds that have run out and closes their payment forms.
+slot holds that have run out and closes their payment forms. Every 5 seconds
+(`EMAIL_INTERVAL_SECONDS`) it queues reminders and sends queued emails.
 
 To book, open http://localhost:8080, tick one or more services, click **Choose a time**, pick
 a day and a time, enter your details and click **Continue to payment**, then pay the £20
@@ -26,6 +27,15 @@ button instead of a card form, so a fresh clone books end to end with no setup. 
 test keys in `.env`, it shows Stripe's real payment form inside the page (test mode, so no
 money moves). See [docs/stripe-setup.md](docs/stripe-setup.md). Demo mode is refused in
 production and never used in CI.
+
+**Emails.** Every email goes to [Mailpit](http://localhost:8025), which catches it instead of
+delivering it. After paying, a confirmation arrives there with a private link to the booking
+(`/booking/<reference>#t=<token>`). The link lets the customer view the booking and cancel it
+more than 24 hours before the start (`free_cancellation_hours`), which refunds the deposit.
+Customers can't reschedule: the page asks them to call. A reminder is sent 48 hours before
+(`reminder_hours_before`), and a cancellation email after cancelling. Failed sends are retried
+after 1, 5, 15 and 60 minutes. `PUBLIC_BASE_URL` is the address the links point to, and
+`SMTP_FROM` is the sender.
 
 No `.env` file is needed. To override defaults, copy `.env.example` to `.env`.
 
@@ -112,10 +122,12 @@ npm run build
 
 ### End-to-end test (`e2e/`)
 
-A [Playwright](https://playwright.dev/) test books an MOT in a real browser, pays the deposit
-in Stripe's form with a test card, then checks the booked time is no longer offered. It needs
+[Playwright](https://playwright.dev/) tests book an MOT in a real browser, pay the deposit
+in Stripe's form with a test card, then check the booked time is no longer offered. Flow 4 then
+opens the link from the confirmation email in Mailpit, cancels, and checks the cancellation
+email and that the time is free again. A made-up link must show the safe message. They need
 the stack running with Stripe test keys ([docs/stripe-setup.md](docs/stripe-setup.md)) and
-fails at once, with a clear message, in demo mode. Start the stack first:
+fail at once, with a clear message, in demo mode. Start the stack first:
 
 ```bash
 docker compose up --build -d --wait

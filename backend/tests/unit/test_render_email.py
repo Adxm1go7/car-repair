@@ -1,0 +1,123 @@
+"""The three customer emails: what they say, in which time zone, and that they escape HTML."""
+
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
+
+import pytest
+
+from app.email.message import EmailTemplate
+from app.email.render import EmailContext, render_email
+
+LONDON = ZoneInfo("Europe/London")
+START = datetime(2026, 11, 20, 9, tzinfo=UTC)  # Fri 20 Nov, 09:00 in London (GMT)
+LINK = "http://localhost:8080/booking/ABCD-EFGH#t=secret-token"
+GARAGE = {
+    "name": "Test Garage",
+    "address": "1 Test Street, Testtown",
+    "phone": "000 111",
+    "email": "garage@example.test",
+}
+
+CONTEXT = EmailContext(
+    reference="ABCD-EFGH",
+    customer_name="Sam Driver",
+    start=START,
+    end=START + timedelta(hours=1),
+    zone=LONDON,
+    services=["MOT test"],
+    registration="AB12CDE",
+    make="Ford",
+    model="Focus",
+    deposit_status="paid",
+    deposit_pence=2000,
+    free_cancellation_until=START - timedelta(hours=24),
+    garage=GARAGE,
+    link_url=LINK,
+    now=START - timedelta(days=5),
+)
+
+
+def test_confirmation_has_link_and_free_cancellation_time() -> None:
+    message = render_email("confirmation", "sam@example.com", CONTEXT)
+    assert message.to == "sam@example.com"
+    assert message.subject == "Your booking is confirmed — ABCD-EFGH"
+    for body in (message.text, message.html):
+        assert LINK in body
+        assert "Fri 20 Nov, 09:00" in body
+        assert "You can cancel free of charge until Thu 19 Nov, 09:00" in body
+        assert "£20" in body
+
+
+def test_reminder_subject_names_the_day() -> None:
+    message = render_email("reminder", "sam@example.com", CONTEXT)
+    assert message.subject == "See you on Fri 20 Nov — ABCD-EFGH"
+    assert LINK in message.text
+
+
+def test_reminder_after_window_says_call() -> None:
+    late = replace(CONTEXT, now=START - timedelta(hours=20))
+    message = render_email("reminder", "sam@example.com", late)
+    assert "free of charge" not in message.text
+    assert "To change or cancel, please call us on 000 111" in message.text
+
+
+def test_html_escapes_customer_text() -> None:
+    tricky = replace(CONTEXT, customer_name="<b>Sam & Co</b>")
+    message = render_email("confirmation", "sam@example.com", tricky)
+    assert "&lt;b&gt;Sam &amp; Co&lt;/b&gt;" in message.html
+    assert "<b>Sam" not in message.html
+    assert "<b>Sam & Co</b>" in message.text
+
+
+def test_times_are_garage_local_across_clock_change() -> None:
+    # Clocks go forward at 01:00 UTC on Sun 28 Mar 2027: 08:00 UTC is 09:00 BST.
+    start = datetime(2027, 3, 28, 8, tzinfo=UTC)
+    spring = replace(
+        CONTEXT,
+        start=start,
+        end=start + timedelta(hours=1),
+        free_cancellation_until=start - timedelta(hours=24),
+        now=start - timedelta(days=5),
+    )
+    message = render_email("confirmation", "sam@example.com", spring)
+    assert "Sun 28 Mar, 09:00" in message.text
+    assert "until Sat 27 Mar, 08:00" in message.text  # 24 hours earlier, still GMT
+
+
+@pytest.mark.parametrize(
+    ("deposit_status", "expected"),
+    [
+        ("refund_pending", "Your £20 deposit is being refunded."),
+        ("refunded", "Your £20 deposit is being refunded."),
+        ("refund_failed", "We'll be in touch about your refund."),
+        ("paid", "Your deposit has been kept"),
+    ],
+)
+def test_cancellation_wording_per_deposit_status(deposit_status: str, expected: str) -> None:
+    cancelled = replace(CONTEXT, deposit_status=deposit_status, link_url=None)
+    message = render_email("cancellation", "sam@example.com", cancelled)
+    assert message.subject == "Your booking is cancelled — ABCD-EFGH"
+    assert expected in message.text
+    assert "To book again, please call us on 000 111." in message.text
+
+
+def test_cancellation_of_a_waived_booking_has_no_deposit_line() -> None:
+    cancelled = replace(CONTEXT, deposit_status="waived", deposit_pence=0, link_url=None)
+    message = render_email("cancellation", "sam@example.com", cancelled)
+    assert "deposit" not in message.text.lower()
+    assert "refund" not in message.text.lower()
+
+
+TEMPLATES: list[EmailTemplate] = ["confirmation", "reminder", "cancellation"]
+
+
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_garage_details_come_from_the_context(template: EmailTemplate) -> None:
+    message = render_email(template, "sam@example.com", CONTEXT)
+    for body in (message.text, message.html):
+        assert "Test Garage" in body
+        assert "1 Test Street, Testtown" in body
+        assert "000 111" in body
+        assert "Hillside" not in body
+    assert "reschedule" not in message.text.lower()

@@ -22,6 +22,7 @@ DEFAULT_SETTINGS: Final[dict[str, Any]] = {
     "slot_hold_minutes": 5,
     "payment_hold_minutes": 10,
     "free_cancellation_hours": 24,
+    "reminder_hours_before": 48,
     "deposit_amount_pence": 2000,
     "garage_timezone": "Europe/London",
     "slot_grid_minutes": 30,

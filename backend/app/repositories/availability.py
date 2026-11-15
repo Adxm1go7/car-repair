@@ -77,6 +77,10 @@ def load_free_cancellation_hours(session: Session) -> int:
     return _int_setting(session, "free_cancellation_hours", 0, 365 * 24)
 
 
+def load_reminder_hours_before(session: Session) -> int:
+    return _int_setting(session, "reminder_hours_before", 1, 365 * 24)
+
+
 def find_active_services(session: Session, slugs: Sequence[str]) -> list[Service]:
     """Active services with these slugs, in `slugs` order. Unknown or inactive ones are absent."""
     statement = select(Service).where(Service.slug.in_(slugs), Service.active.is_(True))

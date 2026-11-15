@@ -1,0 +1,255 @@
+import { useEffect, useRef, useState } from 'react'
+import type { JSX, KeyboardEvent } from 'react'
+import { useLocation, useParams } from 'react-router'
+import { formatLongDate, formatTime, formatTimeRange } from '../booking/format.ts'
+import { formatPrice } from '../catalogue/format.ts'
+import type { Garage } from '../catalogue/types.ts'
+import { cancelBooking, viewBooking } from './api.ts'
+import type { MyBooking } from './types.ts'
+
+// Customers can't reschedule: the garage wants a call for a different time. So nothing on
+// this page offers to move or rebook; it points to the phone instead.
+
+type PageState =
+  | { kind: 'loading' }
+  | { kind: 'invalid' }
+  | { kind: 'error' }
+  | { kind: 'ready'; booking: MyBooking }
+
+const CANCELLED_DEPOSIT: Record<string, string> = {
+  refund_pending: 'Your deposit refund is on its way',
+  refunded: 'Your deposit has been refunded',
+  refund_failed: "We'll be in touch about your refund",
+  paid: 'Your deposit was kept',
+}
+
+const OTHER_STATUS: Record<string, string> = {
+  in_progress: 'Your car is being worked on',
+  completed: 'This booking is complete',
+  no_show: 'This booking was missed',
+}
+
+function telHref(phone: string): string {
+  return `tel:${phone.replace(/\s+/g, '')}`
+}
+
+/** The token from "#t=…". Never in the path or query, so it isn't logged or sent on. */
+function tokenFrom(hash: string): string | null {
+  const token = new URLSearchParams(hash.slice(1)).get('t')
+  return token ? token : null
+}
+
+function Summary({ booking, zone }: { booking: MyBooking; zone: string }): JSX.Element {
+  const { summary } = booking
+  const showDeposit = summary.status !== 'cancelled' && booking.deposit_status === 'paid'
+  return (
+    <>
+      <dl className="booked-reference">
+        <dt>Reference</dt>
+        <dd>{summary.reference}</dd>
+      </dl>
+      <p className="booked-when">
+        {`${formatLongDate(summary.start, zone)}, ${formatTimeRange(summary.start, summary.end, zone)}`}
+      </p>
+      <ul className="booked-services">
+        {summary.services.map((service) => (
+          <li key={service.slug}>{service.name}</li>
+        ))}
+      </ul>
+      <p>{`${summary.registration} · ${summary.make} ${summary.model}`}</p>
+      {showDeposit && summary.deposit_paid_pence > 0 && (
+        <p className="booked-deposit">{`Deposit: ${formatPrice(summary.deposit_paid_pence, null)} paid`}</p>
+      )}
+    </>
+  )
+}
+
+type DialogProps = {
+  booking: MyBooking
+  zone: string
+  phone: JSX.Element
+  busy: boolean
+  onConfirm: () => void
+  onKeep: () => void
+}
+
+function ConfirmCancel({ booking, zone, phone, busy, onConfirm, onKeep }: DialogProps): JSX.Element {
+  const keepRef = useRef<HTMLButtonElement>(null)
+  const { summary } = booking
+
+  useEffect(() => {
+    keepRef.current?.focus()
+  }, [])
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (event.key === 'Escape' && !busy) onKeep()
+  }
+
+  return (
+    <div
+      role="alertdialog"
+      aria-labelledby="cancel-title"
+      aria-describedby="cancel-description"
+      className="confirm-cancel"
+      onKeyDown={onKeyDown}
+    >
+      <h2 id="cancel-title">
+        {`Cancel your booking on ${formatLongDate(summary.start, zone)} at ${formatTime(summary.start, zone)}?`}
+      </h2>
+      <div id="cancel-description">
+        {booking.refund_if_cancelled && summary.deposit_paid_pence > 0 && (
+          <p>{`You'll get your ${formatPrice(summary.deposit_paid_pence, null)} deposit back.`}</p>
+        )}
+        <p>If you just need a different time, please call us on {phone} instead and we can move it for you.</p>
+      </div>
+      <div className="confirm-actions">
+        <button type="button" className="button button-danger" onClick={onConfirm} disabled={busy}>
+          {busy ? 'Cancelling…' : 'Yes, cancel it'}
+        </button>
+        <button type="button" className="button button-secondary" ref={keepRef} onClick={onKeep} disabled={busy}>
+          Keep my booking
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function ManageBookingPage({ garage }: { garage: Garage }): JSX.Element {
+  const { reference = '' } = useParams()
+  const token = tokenFrom(useLocation().hash)
+  const [state, setState] = useState<PageState>(token === null ? { kind: 'invalid' } : { kind: 'loading' })
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [cancelFailed, setCancelFailed] = useState(false)
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
+  const returnFocus = useRef(false)
+  const zone = garage.timezone
+  const phone = <a href={telHref(garage.phone)}>{garage.phone}</a>
+
+  useEffect(() => {
+    if (token === null) return
+    let stale = false
+    void viewBooking(reference, token).then((result) => {
+      if (stale) return
+      if (result.ok) setState({ kind: 'ready', booking: result.data })
+      else setState({ kind: result.kind === 'invalid' ? 'invalid' : 'error' })
+    })
+    return () => {
+      stale = true
+    }
+  }, [reference, token])
+
+  // Back to "Cancel booking" when the dialog closes and the button is still there.
+  useEffect(() => {
+    if (!confirming && returnFocus.current) {
+      returnFocus.current = false
+      cancelButtonRef.current?.focus()
+    }
+  }, [confirming])
+
+  function closeDialog(): void {
+    returnFocus.current = true
+    setConfirming(false)
+  }
+
+  async function confirmCancel(booking: MyBooking): Promise<void> {
+    if (token === null) return
+    setBusy(true)
+    const result = await cancelBooking(reference, token)
+    setBusy(false)
+    if (result.ok) {
+      setState({ kind: 'ready', booking: result.data })
+      setConfirming(false)
+      return
+    }
+    if (result.kind === 'invalid') {
+      setState({ kind: 'invalid' })
+    } else if (result.kind === 'refused' && result.reason === 'too_late') {
+      setState({ kind: 'ready', booking: { ...booking, can_cancel: false, refund_if_cancelled: false } })
+      setConfirming(false)
+      return
+    } else if (result.kind === 'refused') {
+      // Already cancelled, perhaps in another tab: show how it stands now.
+      const fresh = await viewBooking(reference, token)
+      setState(fresh.ok ? { kind: 'ready', booking: fresh.data } : { kind: 'invalid' })
+    } else {
+      setCancelFailed(true)
+    }
+    closeDialog()
+  }
+
+  if (state.kind === 'loading') {
+    return (
+      <main className="page booked">
+        <p>Loading…</p>
+      </main>
+    )
+  }
+
+  if (state.kind === 'invalid' || state.kind === 'error') {
+    return (
+      <main className="page booked">
+        <h1 className="step-title">Your booking</h1>
+        <div role="alert" className="error">
+          {state.kind === 'invalid' ? (
+            <p>This link isn&apos;t valid any more. Please call us on {phone}.</p>
+          ) : (
+            <p>We couldn&apos;t load your booking just now. Please try again, or call us on {phone}.</p>
+          )}
+        </div>
+      </main>
+    )
+  }
+
+  const { booking } = state
+  const status = booking.summary.status
+  return (
+    <main className="page booked">
+      <h1 className="step-title">Your booking</h1>
+      {status === 'cancelled' && (
+        <div className="booking-state">
+          <p className="booking-cancelled">This booking is cancelled</p>
+          {CANCELLED_DEPOSIT[booking.deposit_status] && <p>{CANCELLED_DEPOSIT[booking.deposit_status]}</p>}
+        </div>
+      )}
+      {OTHER_STATUS[status] && <p className="booking-state">{OTHER_STATUS[status]}</p>}
+      <Summary booking={booking} zone={zone} />
+
+      {status === 'confirmed' && booking.can_cancel && (
+        <>
+          <p>Need a different time? Call us on {phone} and we&apos;ll sort it out.</p>
+          {cancelFailed && (
+            <p role="alert" className="error">
+              We couldn&apos;t cancel just now. Please try again, or call us on {phone}.
+            </p>
+          )}
+          {confirming ? (
+            <ConfirmCancel
+              booking={booking}
+              zone={zone}
+              phone={phone}
+              busy={busy}
+              onConfirm={() => void confirmCancel(booking)}
+              onKeep={closeDialog}
+            />
+          ) : (
+            <button
+              type="button"
+              className="button button-secondary"
+              ref={cancelButtonRef}
+              onClick={() => {
+                setCancelFailed(false)
+                setConfirming(true)
+              }}
+            >
+              Cancel booking
+            </button>
+          )}
+        </>
+      )}
+      {status === 'confirmed' && !booking.can_cancel && <p>To change or cancel, please call us on {phone}.</p>}
+      {status !== 'confirmed' && <p>Questions about your booking? Call us on {phone}.</p>}
+      <p>{garage.address}</p>
+    </main>
+  )
+}

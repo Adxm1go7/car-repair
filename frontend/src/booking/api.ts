@@ -20,7 +20,7 @@ async function detailOf(response: Response): Promise<string | null> {
 }
 
 /** Fetches and reads JSON. `special` maps a status to a result of its own, like 409 → taken. */
-async function request<T, S = never>(
+export async function request<T, S = never>(
   url: string,
   init?: RequestInit,
   special: Record<number, S> = {},
@@ -35,7 +35,7 @@ async function request<T, S = never>(
   }
 }
 
-function post(body: unknown, method = 'POST'): RequestInit {
+export function post(body: unknown, method = 'POST'): RequestInit {
   return { method, headers: JSON_HEADERS, body: JSON.stringify(body) }
 }
 

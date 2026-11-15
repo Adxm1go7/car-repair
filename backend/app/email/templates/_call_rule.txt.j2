@@ -1,0 +1,6 @@
+{% if can_cancel_free %}
+Need a different time? Call us on {{ c.garage.phone }} and we'll sort it out.
+You can cancel free of charge until {{ free_until }}. After that, please call us on {{ c.garage.phone }}.
+{% else %}
+To change or cancel, please call us on {{ c.garage.phone }}.
+{% endif %}
