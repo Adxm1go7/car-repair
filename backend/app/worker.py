@@ -1,5 +1,5 @@
-"""Background worker: sends queued email, releases expired holds, and closes the payment
-forms of released ones.
+"""Background worker: queues reminders and sends queued email, releases expired holds, and
+closes the payment forms of released ones.
 
 Availability already ignores expired holds, so releasing is housekeeping: it makes the
 database say what the rule already means. Closing the forms matters more: until it's done,
@@ -22,10 +22,12 @@ from app.clock import utc_now
 from app.config import get_config
 from app.db import make_engine
 from app.email.outbox import send_due_emails
+from app.email.reminders import queue_due_reminders
 from app.email.sender import SmtpSender
 from app.payments.deps import make_provider
 from app.payments.provider import PaymentProvider, PaymentUnavailable
 from app.payments.service import close_open_deposit
+from app.repositories.availability import load_reminder_hours_before
 from app.repositories.bookings import get_booking_for_update_by_id, release_expired_holds
 from app.repositories.payments import stale_open_deposits
 
@@ -83,6 +85,17 @@ def main() -> None:
     try:
         while not stop.is_set():
             # Each step on its own, so a broken mail server never stops holds being released.
+            try:
+                with Session(engine) as session:
+                    now = utc_now()
+                    reminders = queue_due_reminders(
+                        session, now, load_reminder_hours_before(session)
+                    )
+                    session.commit()
+                if reminders > 0:
+                    log.info("queued %d reminders", reminders)
+            except Exception:
+                log.exception("queueing reminders failed; trying again next time")
             try:
                 with Session(engine) as session:
                     sent = send_due_emails(session, sender, utc_now(), config.public_base_url)
