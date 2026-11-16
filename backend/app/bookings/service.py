@@ -6,7 +6,7 @@ Nothing here commits: the caller decides when the work is done.
 """
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -55,28 +55,42 @@ def create_hold(
     reserved = reserve(session, [service.id for service in services], start, now)
 
     token = new_hold_token()
-    for attempt in range(REFERENCE_ATTEMPTS):
-        items = [
-            BookingItem(
-                service_id=service.id,
-                service_name=service.name,
-                price_from_pence=service.price_from_pence,
-                price_to_pence=service.price_to_pence,
-                duration_minutes=service.duration_minutes,
-                position=position,
-            )
-            for position, service in enumerate(services)
-        ]
-        booking = Booking(
-            reference=new_reference(),
+    booking = insert_with_reference(
+        session,
+        lambda reference: Booking(
+            reference=reference,
             reservation=reserved.reservation,
             status="held",
             start_at=reserved.start,
             end_at=reserved.end,
             hold_expires_at=now + timedelta(minutes=hold_minutes),
             hold_token_hash=hash_token(token),
-            items=items,
+            items=snapshot_items(services),
+        ),
+    )
+    return HoldCreated(booking=booking, token=token)
+
+
+def snapshot_items(services: Sequence[Service]) -> list[BookingItem]:
+    """The booking's own copy of each service's name, price and duration, as they are now."""
+    return [
+        BookingItem(
+            service_id=service.id,
+            service_name=service.name,
+            price_from_pence=service.price_from_pence,
+            price_to_pence=service.price_to_pence,
+            duration_minutes=service.duration_minutes,
+            position=position,
         )
+        for position, service in enumerate(services)
+    ]
+
+
+def insert_with_reference(session: Session, make: Callable[[str], Booking]) -> Booking:
+    """Add the booking `make` builds for a new random reference, trying another reference if
+    that one is taken (very rare). Flushes, doesn't commit."""
+    for attempt in range(REFERENCE_ATTEMPTS):
+        booking = make(new_reference())
         try:
             with session.begin_nested():
                 session.add(booking)
@@ -85,8 +99,8 @@ def create_hold(
             constraint = getattr(getattr(error.orig, "diag", None), "constraint_name", None)
             if constraint != REFERENCE_CONSTRAINT or attempt == REFERENCE_ATTEMPTS - 1:
                 raise
-            continue  # the reference is taken (very rare): try another
-        return HoldCreated(booking=booking, token=token)
+            continue
+        return booking
     raise AssertionError("unreachable")  # pragma: no cover
 
 

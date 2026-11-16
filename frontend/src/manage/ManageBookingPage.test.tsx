@@ -223,3 +223,18 @@ it('no reschedule or book-again wording appears', async () => {
   await screen.findByText(sentence(INVALID))
   expectNoRebookWording()
 })
+
+it('shows no deposit line for a phone booking', async () => {
+  const phone: MyBooking = {
+    ...CAN_CANCEL,
+    summary: { ...SUMMARY, deposit_paid_pence: 0 },
+    deposit_status: 'not_required',
+    refund_if_cancelled: false,
+  }
+  stubApi({ status: 200, body: phone }, { status: 200, body: { ...phone, summary: { ...phone.summary, status: 'cancelled' } } })
+  renderPage()
+  await screen.findByText('MOT test')
+  expect(screen.queryByText(/deposit/i)).toBeNull()
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel booking' }))
+  expect(screen.queryByText(/deposit/i)).toBeNull()
+})

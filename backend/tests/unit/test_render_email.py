@@ -154,3 +154,12 @@ def test_reset_says_one_hour() -> None:
     assert message.subject == "Reset your password"
     assert "1 hour" in message.text
     assert "1 hour" in message.html
+
+
+@pytest.mark.parametrize("template", ["confirmation", "cancellation"])
+def test_no_deposit_line_for_not_required(template: EmailTemplate) -> None:
+    message = render_email(
+        template, "x@example.test", replace(CONTEXT, deposit_status="not_required")
+    )
+    for body in (message.text, message.html):
+        assert "deposit" not in body.lower()

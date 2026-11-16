@@ -43,6 +43,7 @@ def confirmed(session: Session, start: datetime = START, email: str | None = Non
 def queued(session: Session, booking: Booking, template: EmailTemplate = "confirmation") -> int:
     """Queue an email, due at NOW (the column's default is the database's real clock)."""
     email = queue_email(session, template, booking)
+    assert email is not None
     email.next_attempt_at = NOW
     session.commit()
     return email.id

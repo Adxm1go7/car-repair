@@ -7,10 +7,11 @@ from app.email.message import EmailTemplate, StaffTemplate
 from app.models import Booking, EmailLog, StaffUser
 
 
-def queue_email(session: Session, template: EmailTemplate, booking: Booking) -> EmailLog:
-    """Add a queued email for this booking. Flushes, doesn't commit."""
+def queue_email(session: Session, template: EmailTemplate, booking: Booking) -> EmailLog | None:
+    """Add a queued email for this booking. Flushes, doesn't commit. A booking with no email
+    (a phone booking can have none) gets nothing, and that's not an error."""
     if booking.customer_email is None:
-        raise ValueError(f"booking {booking.reference} has no customer email")
+        return None
     email = EmailLog(template=template, booking=booking, recipient=booking.customer_email)
     session.add(email)
     session.flush()
