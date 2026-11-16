@@ -43,17 +43,26 @@ DEPOSIT_STATUSES: Final[tuple[str, ...]] = (
     "refunded",
     "refund_failed",
     "waived",
+    "not_required",  # phone bookings: staff book them in with no deposit
 )
 
 _STATUS_LIST = ", ".join(f"'{status}'" for status in BOOKING_STATUSES)
 _DEPOSIT_LIST = ", ".join(f"'{status}'" for status in DEPOSIT_STATUSES)
+BOOKING_SOURCES: Final[tuple[str, ...]] = ("online", "phone")
+
+_SOURCE_LIST = ", ".join(f"'{source}'" for source in BOOKING_SOURCES)
+# A phone booking's email is optional; every other detail is always needed.
 _DETAIL_COLUMNS = (
     "customer_name",
     "customer_phone",
-    "customer_email",
     "car_registration",
     "car_make",
     "car_model",
+)
+CONFIRMED_HAS_DETAILS: Final = (
+    "status <> 'confirmed' OR ("
+    + " AND ".join(f"{column} IS NOT NULL" for column in _DETAIL_COLUMNS)
+    + " AND (customer_email IS NOT NULL OR source = 'phone'))"
 )
 
 
@@ -64,17 +73,17 @@ class Booking(Base):
         CheckConstraint("start_at < end_at", name="start_before_end"),
         CheckConstraint("status <> 'held' OR hold_expires_at IS NOT NULL", name="held_has_expiry"),
         CheckConstraint("status <> 'held' OR hold_token_hash IS NOT NULL", name="held_has_token"),
-        CheckConstraint(
-            "status <> 'confirmed' OR ("
-            + " AND ".join(f"{column} IS NOT NULL" for column in _DETAIL_COLUMNS)
-            + ")",
-            name="confirmed_has_details",
-        ),
+        CheckConstraint(CONFIRMED_HAS_DETAILS, name="confirmed_has_details"),
         CheckConstraint(f"deposit_status IN ({_DEPOSIT_LIST})", name="deposit_status_valid"),
         CheckConstraint(
-            "status <> 'confirmed' OR deposit_status IN ('paid', 'waived')",
+            "status <> 'confirmed' OR deposit_status IN ('paid', 'waived', 'not_required')",
             name="confirmed_has_deposit",
         ),
+        CheckConstraint(
+            "deposit_status <> 'not_required' OR source = 'phone'",
+            name="not_required_only_by_phone",
+        ),
+        CheckConstraint(f"source IN ({_SOURCE_LIST})", name="source_valid"),
         Index("ix_bookings_status_hold_expires_at", "status", "hold_expires_at"),
     )
 
@@ -96,6 +105,10 @@ class Booking(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deposit_status: Mapped[str] = mapped_column(String(20), server_default="unpaid")
+    source: Mapped[str] = mapped_column(String(10), server_default="online")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id"))
+    # When staff last changed the status: the 24-hour undo limit counts from here.
+    status_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     reservation: Mapped[Reservation] = relationship()
     items: Mapped[list["BookingItem"]] = relationship(

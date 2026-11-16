@@ -5,6 +5,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
+from factories import make_block_reservation
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.exc import OperationalError
@@ -46,12 +47,7 @@ def bay_id(session: Session, slug: str) -> int:
 def block(
     session: Session, bay_slug: str, start: datetime, end: datetime, active: bool = True
 ) -> None:
-    session.add(
-        Reservation(
-            bay_id=bay_id(session, bay_slug), kind="block", during=Range(start, end), active=active
-        )
-    )
-    session.flush()
+    make_block_reservation(session, bay_id(session, bay_slug), start, end, active=active)
 
 
 def active_count(session: Session) -> int:

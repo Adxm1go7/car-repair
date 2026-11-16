@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.orm import Session
 
 from app.bookings.rules import hash_token, new_reference
-from app.models import Bay, Booking, Payment, Reservation
+from app.models import Bay, Block, Booking, Payment, Reservation, StaffUser
 
 TEST_TOKEN = "t"  # noqa: S105 - a test hold token, not a password
 BUFFER = timedelta(minutes=15)
@@ -82,3 +82,27 @@ def make_deposit(
     session.add(payment)
     session.flush()
     return payment
+
+
+BLOCKER_EMAIL = "blocker@example.test"
+
+
+def make_block_reservation(
+    session: Session, bay_id: int, start: datetime, end: datetime, *, active: bool = True
+) -> Reservation:
+    """A block on one bay from `start` to `end`, with its reservation, flushed. The block is
+    made by a staff user created on first use."""
+    creator = session.scalars(select(StaffUser).where(StaffUser.email == BLOCKER_EMAIL)).first()
+    if creator is None:
+        creator = StaffUser(name="Block Maker", email=BLOCKER_EMAIL, role="staff")
+        session.add(creator)
+        session.flush()
+    block = Block(start_at=start, end_at=end, note="Blocked", created_by=creator.id)
+    session.add(block)
+    session.flush()
+    reservation = Reservation(
+        bay_id=bay_id, kind="block", block_id=block.id, during=Range(start, end), active=active
+    )
+    session.add(reservation)
+    session.flush()
+    return reservation

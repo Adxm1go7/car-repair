@@ -4,6 +4,7 @@ from datetime import UTC, datetime, time, timedelta
 from typing import Any, cast
 
 import pytest
+from factories import make_block_reservation
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -115,14 +116,7 @@ def test_buffer_past_midnight_respects_next_days_reservation(
     tuesday.open_time, tuesday.close_time = time(8, 20), time(23, 50)
     mot_bay = db_session.scalars(select(Bay.id).where(Bay.slug == "mot-bay")).one()
     midnight = datetime(2026, 11, 11, tzinfo=UTC)
-    db_session.add(
-        Reservation(
-            bay_id=mot_bay,
-            kind="block",
-            during=Range(midnight, midnight + timedelta(hours=1)),
-        )
-    )
-    db_session.flush()
+    make_block_reservation(db_session, mot_bay, midnight, midnight + timedelta(hours=1))
     result = starts(get(client, "mot-test").json())
     assert "22:20" in result
     assert "22:50" not in result
