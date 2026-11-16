@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
-from app.email.message import EmailTemplate, OutgoingEmail
+from app.email.message import EmailTemplate, OutgoingEmail, StaffTemplate
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,21 @@ class EmailContext:
     link_url: str | None
     now: datetime  # when the email is rendered: is free cancellation still open?
 
+
+@dataclass(frozen=True)
+class StaffEmailContext:
+    """Everything a staff account email says."""
+
+    name: str
+    garage: dict[str, str]  # the garage_contact setting
+    link_url: str  # the set-password link, with its token
+    valid_for: str  # "72 hours" or "1 hour"
+
+
+STAFF_SUBJECTS: dict[StaffTemplate, str] = {
+    "staff_invite": "You've been invited to {garage} bookings",
+    "password_reset": "Reset your password",
+}
 
 SUBJECTS: dict[EmailTemplate, str] = {
     "confirmation": "Your booking is confirmed — {reference}",
@@ -87,6 +102,18 @@ def render_email(template: EmailTemplate, to: str, context: EmailContext) -> Out
     return OutgoingEmail(
         to=to,
         subject=subject,
+        text=_environment.get_template(f"{template}.txt.j2").render(values),
+        html=_environment.get_template(f"{template}.html.j2").render(values),
+    )
+
+
+def render_staff_email(
+    template: StaffTemplate, to: str, context: StaffEmailContext
+) -> OutgoingEmail:
+    values = {"c": context}
+    return OutgoingEmail(
+        to=to,
+        subject=STAFF_SUBJECTS[template].format(garage=context.garage.get("name", "")),
         text=_environment.get_template(f"{template}.txt.j2").render(values),
         html=_environment.get_template(f"{template}.html.j2").render(values),
     )

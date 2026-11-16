@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.email.message import EmailTemplate
-from app.email.render import EmailContext, render_email
+from app.email.render import EmailContext, StaffEmailContext, render_email, render_staff_email
 
 LONDON = ZoneInfo("Europe/London")
 START = datetime(2026, 11, 20, 9, tzinfo=UTC)  # Fri 20 Nov, 09:00 in London (GMT)
@@ -121,3 +121,36 @@ def test_garage_details_come_from_the_context(template: EmailTemplate) -> None:
         assert "000 111" in body
         assert "Hillside" not in body
     assert "reschedule" not in message.text.lower()
+
+
+# --- staff emails ---------------------------------------------------------------
+
+STAFF_LINK = "http://localhost:8080/staff/set-password#t=secret-token"
+
+
+def staff_context(**changes: str) -> StaffEmailContext:
+    values = {"name": "Sam Staff", "link_url": STAFF_LINK, "valid_for": "72 hours", **changes}
+    return StaffEmailContext(garage=GARAGE, **values)
+
+
+def test_staff_invite_has_link_and_garage_name() -> None:
+    message = render_staff_email("staff_invite", "sam@example.test", staff_context())
+    assert message.subject == "You've been invited to Test Garage bookings"
+    assert STAFF_LINK in message.text
+    assert "72 hours" in message.text
+    assert STAFF_LINK in message.html
+
+
+def test_staff_invite_html_escapes_name() -> None:
+    message = render_staff_email("staff_invite", "x@example.test", staff_context(name="<b>Sam</b>"))
+    assert "&lt;b&gt;Sam&lt;/b&gt;" in message.html
+    assert "<b>Sam</b>" in message.text
+
+
+def test_reset_says_one_hour() -> None:
+    message = render_staff_email(
+        "password_reset", "x@example.test", staff_context(valid_for="1 hour")
+    )
+    assert message.subject == "Reset your password"
+    assert "1 hour" in message.text
+    assert "1 hour" in message.html

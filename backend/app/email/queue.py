@@ -3,8 +3,8 @@ email is queued if and only if the change it's about is committed."""
 
 from sqlalchemy.orm import Session
 
-from app.email.message import EmailTemplate
-from app.models import Booking, EmailLog
+from app.email.message import EmailTemplate, StaffTemplate
+from app.models import Booking, EmailLog, StaffUser
 
 
 def queue_email(session: Session, template: EmailTemplate, booking: Booking) -> EmailLog:
@@ -12,6 +12,15 @@ def queue_email(session: Session, template: EmailTemplate, booking: Booking) -> 
     if booking.customer_email is None:
         raise ValueError(f"booking {booking.reference} has no customer email")
     email = EmailLog(template=template, booking=booking, recipient=booking.customer_email)
+    session.add(email)
+    session.flush()
+    return email
+
+
+def queue_staff_email(session: Session, template: StaffTemplate, user: StaffUser) -> EmailLog:
+    """Add a queued account email for a staff member. Flushes, doesn't commit. The worker
+    makes the link's token when it sends it."""
+    email = EmailLog(template=template, staff_user=user, recipient=user.email)
     session.add(email)
     session.flush()
     return email
