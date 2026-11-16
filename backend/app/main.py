@@ -13,6 +13,7 @@ from app.api import (
     health,
     holds,
     my_booking,
+    staff_audit,
     staff_auth,
     staff_blocks,
     staff_bookings,
@@ -76,6 +77,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(staff_schedule.router, prefix="/api")
     app.include_router(staff_bookings.router, prefix="/api")
     app.include_router(staff_blocks.router, prefix="/api")
+    app.include_router(staff_audit.router, prefix="/api")
     if config.payment_provider == "demo":  # never with Stripe keys, so never in production
         app.include_router(demo_payments.router, prefix="/api")
     return app
