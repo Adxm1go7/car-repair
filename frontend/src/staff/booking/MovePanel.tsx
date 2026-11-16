@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { formatTime } from '../../booking/format.ts'
-import { conflictDetail, fetchBays, fetchMoveOptions, moveBooking } from '../api.ts'
+import { conflictDetail, fetchMoveOptions, moveBooking } from '../api.ts'
 import { FAILED, callFirst, localDate } from '../labels.ts'
 import { shortDay } from '../schedule/layout.ts'
 import { useStaff } from '../StaffContext.ts'
+import { useBays } from '../useBays.ts'
 import type { StaffAvailability, StaffBooking } from '../types.ts'
 import { TimePickerGrid } from './TimePickerGrid.tsx'
 import type { PickedSlot } from './TimePickerGrid.tsx'
@@ -22,22 +23,6 @@ type Props = {
 
 type Options = { date: string; options: StaffAvailability | null; failed: boolean }
 
-/** The bays' names, for the picker, from the booking's own day (bays don't change from
- * day to day). If this fails, the picker shows "Bay <id>". */
-function useBayNames(date: string): { id: number; name: string }[] {
-  const [bays, setBays] = useState<{ id: number; name: string }[]>([])
-  useEffect(() => {
-    let cancelled = false
-    void fetchBays(date).then((result) => {
-      if (!cancelled && result.ok) setBays(result.data.bays)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [date])
-  return bays
-}
-
 export function MovePanel({ booking, onMoved, onStale, onClose }: Props): JSX.Element {
   const [date, setDate] = useState(localDate(booking.start))
   const [loaded, setLoaded] = useState<Options | null>(null)
@@ -47,7 +32,8 @@ export function MovePanel({ booking, onMoved, onStale, onClose }: Props): JSX.El
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const bays = useBayNames(localDate(booking.start))
+  // If the names don't load, the picker shows "Bay <id>".
+  const bays = useBays(localDate(booking.start))
   const { garage } = useStaff()
 
   useEffect(() => {

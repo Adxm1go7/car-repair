@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { ScheduleBlock, ScheduleBooking, ScheduleDay } from '../types.ts'
-import { addDays, dayRange, mondayOf, placeItems } from './layout.ts'
+import { addDays, dayRange, mondayOf, placeItems, zonedIso } from './layout.ts'
 
 const ZONE = 'Europe/London'
 
@@ -82,4 +82,14 @@ it('mondayOf and addDays work on calendar dates', () => {
   expect(mondayOf('2026-11-16')).toBe('2026-11-16')
   expect(addDays('2026-10-24', 1)).toBe('2026-10-25')
   expect(addDays('2026-11-16', -1)).toBe('2026-11-15')
+})
+
+it('zonedIso turns a garage-local date and time into UTC', () => {
+  expect(zonedIso('2026-11-17', '08:00', ZONE)).toBe('2026-11-17T08:00:00.000Z')
+  expect(zonedIso('2026-06-17', '09:00', ZONE)).toBe('2026-06-17T08:00:00.000Z')
+  // The days the clocks change: before and after the change.
+  expect(zonedIso('2026-03-29', '00:30', ZONE)).toBe('2026-03-29T00:30:00.000Z')
+  expect(zonedIso('2026-03-29', '09:00', ZONE)).toBe('2026-03-29T08:00:00.000Z')
+  expect(zonedIso('2026-10-25', '09:00', ZONE)).toBe('2026-10-25T09:00:00.000Z')
+  expect(zonedIso('2026-07-01', '09:00', 'America/New_York')).toBe('2026-07-01T13:00:00.000Z')
 })

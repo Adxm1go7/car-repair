@@ -165,3 +165,35 @@ it('shows an error when the schedule fails to load', async () => {
   renderAt('/staff?date=2026-11-17')
   expect(await screen.findByRole('alert')).toHaveTextContent("couldn't load the schedule")
 })
+
+it('remove block asks to confirm and refreshes', async () => {
+  stubScreen(false)
+  const mock = stubDay({ 'DELETE /api/staff/blocks/9': { status: 204 } })
+  renderAt('/staff?date=2026-11-17')
+  const mot = await screen.findByRole('region', { name: 'MOT bay' })
+
+  const user = userEvent.setup()
+  await user.click(within(mot).getByRole('button', { name: /Lift repair/ }))
+  const panel = screen.getByRole('region', { name: 'Block' })
+  expect(within(panel).getByText('Blocked: Lift repair')).toBeInTheDocument()
+  expect(within(panel).getByText('Tue 17 Nov, 14:00–15:00 · MOT bay')).toBeInTheDocument()
+
+  await user.click(within(panel).getByRole('button', { name: 'Remove block' }))
+  expect(mock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
+  await user.click(within(panel).getByRole('button', { name: 'Yes, remove it' }))
+
+  await vi.waitFor(() => expect(scheduleCalls(mock)).toHaveLength(2))
+  expect(mock.mock.calls.some(([url, init]) => url === '/api/staff/blocks/9' && init?.method === 'DELETE')).toBe(true)
+  expect(screen.queryByRole('region', { name: 'Block' })).not.toBeInTheDocument()
+})
+
+it('closing the block panel keeps the block', async () => {
+  stubScreen(true)
+  const mock = stubDay()
+  renderAt('/staff?date=2026-11-17')
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: /Lift repair/ }))
+  await user.click(screen.getByRole('button', { name: 'Close' }))
+  expect(screen.queryByRole('region', { name: 'Block' })).not.toBeInTheDocument()
+  expect(mock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
+})

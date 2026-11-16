@@ -112,3 +112,46 @@ export function changeStatus(reference: string, action: StatusAction): Promise<S
 export function fetchBays(date: string): Promise<StaffResult<Schedule>> {
   return staffRequest<Schedule>(`/schedule?from=${date}&days=1`)
 }
+
+// --- phone bookings and blocks ---------------------------------------------------
+
+/** Free starts for these services on `date`, with the bays that can take each. */
+export function fetchStaffAvailability(services: string[], date: string): Promise<StaffResult<StaffAvailability>> {
+  const params = new URLSearchParams(services.map((slug) => ['services', slug]))
+  params.set('date', date)
+  return staffRequest<StaffAvailability>(`/availability?${params.toString()}`)
+}
+
+export type PhoneBookingIn = {
+  services: string[]
+  start: string
+  bay_id: number
+  name: string
+  phone: string
+  email: string | null
+  registration: string
+  make: string
+  model: string
+  notes: string | null
+}
+
+/** A 409 means the time was just taken; a 422's detail says what's wrong. */
+export function createPhoneBooking(booking: PhoneBookingIn): Promise<StaffResult<{ reference: string }>> {
+  return staffRequest<{ reference: string }>('/bookings', post(booking))
+}
+
+export type BlockIn = { bay_id: number | null; start: string; end: string; note: string }
+
+/** What a 409 lists as in the way of a new block. Booking starts are garage-local ISO. */
+export type BlockClashes = {
+  bookings: { reference: string; start: string; bay: string }[]
+  blocks: { id: number; note: string }[]
+}
+
+export function createBlock(block: BlockIn): Promise<StaffResult<{ id: number }>> {
+  return staffRequest<{ id: number }>('/blocks', post(block))
+}
+
+export function removeBlock(id: number): Promise<StaffResult<void>> {
+  return staffRequest<void>(`/blocks/${id}`, { method: 'DELETE' })
+}

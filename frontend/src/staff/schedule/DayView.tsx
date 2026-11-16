@@ -3,10 +3,10 @@ import type { JSX } from 'react'
 import { useSearchParams } from 'react-router'
 import { todayInZone } from '../../booking/days.ts'
 import { useStaff } from '../StaffContext.ts'
-import type { Schedule, ScheduleDay } from '../types.ts'
+import type { Schedule, ScheduleBlock, ScheduleDay } from '../types.ts'
 import { addDays, dayRange, placeItems, shortDay, validDate } from './layout.ts'
 import type { PlacedItem } from './layout.ts'
-import { ScheduleEntry, ScheduleHeader, ScheduleStatus } from './parts.tsx'
+import { BlockPanel, ScheduleEntry, ScheduleHeader, ScheduleStatus } from './parts.tsx'
 import { useSchedule } from './useSchedule.ts'
 
 const NARROW_QUERY = '(max-width: 699px)'
@@ -32,6 +32,13 @@ function hhmmMinutes(value: string): number {
   return hours * 60 + minutes
 }
 
+type ViewProps = {
+  schedule: Schedule
+  day: ScheduleDay
+  placed: PlacedItem[]
+  onSelectBlock: (block: ScheduleBlock) => void
+}
+
 function closedDay(date: string): ScheduleDay {
   return { date, open: null, close: null, breaks: [] }
 }
@@ -40,7 +47,7 @@ function px(minutes: number): string {
   return `${minutes * PX_PER_MINUTE}px`
 }
 
-function DayGrid({ schedule, day, placed }: { schedule: Schedule; day: ScheduleDay; placed: PlacedItem[] }): JSX.Element {
+function DayGrid({ schedule, day, placed, onSelectBlock }: ViewProps): JSX.Element {
   const range = dayRange(day)
   const height = px(range.endMinutes - range.startMinutes)
   const hours: number[] = []
@@ -78,6 +85,7 @@ function DayGrid({ schedule, day, placed }: { schedule: Schedule; day: ScheduleD
                   key={`${p.item.kind}-${p.item.start}-${p.item.bay_id}`}
                   item={p.item}
                   zone={schedule.timezone}
+                  onSelectBlock={onSelectBlock}
                   style={{ position: 'absolute', top: px(p.topMinutes), height: px(p.heightMinutes) }}
                 />
               ))}
@@ -90,7 +98,7 @@ function DayGrid({ schedule, day, placed }: { schedule: Schedule; day: ScheduleD
 
 type ListRow = { top: number; key: string; element: JSX.Element }
 
-function DayList({ schedule, day, placed }: { schedule: Schedule; day: ScheduleDay; placed: PlacedItem[] }): JSX.Element {
+function DayList({ schedule, day, placed, onSelectBlock }: ViewProps): JSX.Element {
   const [chosen, setChosen] = useState(0)
   const index = Math.min(chosen, schedule.bays.length - 1)
   const bay = schedule.bays[index]
@@ -103,7 +111,7 @@ function DayList({ schedule, day, placed }: { schedule: Schedule; day: ScheduleD
       .map((p) => ({
         top: p.topMinutes,
         key: `${p.item.kind}-${p.item.start}`,
-        element: <ScheduleEntry item={p.item} zone={schedule.timezone} />,
+        element: <ScheduleEntry item={p.item} zone={schedule.timezone} onSelectBlock={onSelectBlock} />,
       })),
     ...day.breaks.map((b) => ({
       top: hhmmMinutes(b.start) - range.startMinutes,
@@ -143,6 +151,7 @@ function DayList({ schedule, day, placed }: { schedule: Schedule; day: ScheduleD
 function DayContent({ date, today }: { date: string; today: string | null }): JSX.Element {
   const { state, reload } = useSchedule(date, 1)
   const narrow = useNarrow()
+  const [block, setBlock] = useState<ScheduleBlock | null>(null)
 
   let body: JSX.Element | null = null
   if (state.kind === 'ready') {
@@ -152,10 +161,23 @@ function DayContent({ date, today }: { date: string; today: string | null }): JS
     body = (
       <>
         {!day.open && <p className="schedule-closed">Closed all day</p>}
+        {block && (
+          <BlockPanel
+            key={`${block.block_id}-${block.bay_id}`}
+            block={block}
+            zone={schedule.timezone}
+            bayName={schedule.bays.find((b) => b.id === block.bay_id)?.name ?? `Bay ${block.bay_id}`}
+            onRemoved={() => {
+              setBlock(null)
+              reload()
+            }}
+            onClose={() => setBlock(null)}
+          />
+        )}
         {narrow ? (
-          <DayList schedule={schedule} day={day} placed={placed} />
+          <DayList schedule={schedule} day={day} placed={placed} onSelectBlock={setBlock} />
         ) : (
-          <DayGrid schedule={schedule} day={day} placed={placed} />
+          <DayGrid schedule={schedule} day={day} placed={placed} onSelectBlock={setBlock} />
         )}
       </>
     )

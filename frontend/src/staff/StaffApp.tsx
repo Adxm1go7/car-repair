@@ -7,6 +7,8 @@ import { ForgotPasswordPage } from './ForgotPasswordPage.tsx'
 import { LoginPage } from './LoginPage.tsx'
 import { SetPasswordPage } from './SetPasswordPage.tsx'
 import { BookingDetailPage } from './booking/BookingDetailPage.tsx'
+import { NewBlockPage } from './forms/NewBlockPage.tsx'
+import { NewBookingPage } from './forms/NewBookingPage.tsx'
 import { DayView } from './schedule/DayView.tsx'
 import { WeekView } from './schedule/WeekView.tsx'
 import { LOGIN_PATH, StaffContext, loginUrl, useGarage, useStaff } from './StaffContext.ts'
@@ -103,8 +105,8 @@ export function StaffApp(): JSX.Element {
       <Route element={<LoggedIn />}>
         <Route index element={<DayView />} />
         <Route path="week" element={<WeekView />} />
-        <Route path="bookings/new" element={<Placeholder title="New booking" />} />
-        <Route path="blocks/new" element={<Placeholder title="Block time" />} />
+        <Route path="bookings/new" element={<NewBookingPage />} />
+        <Route path="blocks/new" element={<NewBlockPage />} />
         <Route path="bookings/:reference" element={<BookingDetailPage />} />
         <Route
           path="team"

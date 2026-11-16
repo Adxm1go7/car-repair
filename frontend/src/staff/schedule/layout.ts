@@ -98,3 +98,19 @@ export function timeRange(start: string, end: string, zone: string): string {
   }
   return `${hhmm(start)}–${hhmm(end)}`
 }
+
+/** How far `zone` is ahead of UTC at an instant, in minutes. */
+function offsetMinutes(instant: number, zone: string): number {
+  const local = localParts(new Date(instant).toISOString(), zone)
+  const wall = calendarNoon(local.date).getTime() - 12 * 60 * 60 * 1000 + local.minutes * 60_000
+  return Math.round((wall - Math.floor(instant / 60_000) * 60_000) / 60_000)
+}
+
+/** The UTC ISO time of a garage-local date ("2026-11-17") and time ("09:30"). */
+export function zonedIso(date: string, time: string, zone: string): string {
+  const wall = calendarNoon(date).getTime() - 12 * 60 * 60 * 1000 + hhmmMinutes(time) * 60_000
+  // Guess with the offset at the wall time, then correct with the offset at the guess,
+  // which is right either side of a clock change.
+  const guess = wall - offsetMinutes(wall, zone) * 60_000
+  return new Date(wall - offsetMinutes(guess, zone) * 60_000).toISOString()
+}
