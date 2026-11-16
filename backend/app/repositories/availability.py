@@ -95,6 +95,21 @@ def day_availability(
     now: datetime,
     policy: Policy,
 ) -> DayAvailability:
+    infos = [ServiceInfo(s.id, s.duration_minutes, s.required_bay_type_id) for s in services]
+    return day_availability_for(session, infos, day, now, policy)
+
+
+def day_availability_for(
+    session: Session,
+    infos: Sequence[ServiceInfo],
+    day: date,
+    now: datetime,
+    policy: Policy,
+    *,
+    exclude_reservation_id: int | None = None,
+) -> DayAvailability:
+    """Free starts on `day` for jobs described by `infos`. `exclude_reservation_id` leaves
+    one reservation out of what's occupied, so a booking can move within its own time."""
     bays = session.scalars(select(Bay).where(Bay.active.is_(True)))
 
     row = session.scalars(
@@ -115,13 +130,14 @@ def day_availability(
     # A hold past its expiry time frees its slot straight away, even before the worker
     # (or the next hold) gets round to releasing it.
     expired = select(Booking.id).where(Booking.reservation_id == Reservation.id, expired_hold(now))
-    reservations = session.scalars(
-        select(Reservation).where(
-            Reservation.active.is_(True),
-            Reservation.during.overlaps(Range(day_start, search_end)),
-            ~expired.exists(),
-        )
-    )
+    conditions = [
+        Reservation.active.is_(True),
+        Reservation.during.overlaps(Range(day_start, search_end)),
+        ~expired.exists(),
+    ]
+    if exclude_reservation_id is not None:
+        conditions.append(Reservation.id != exclude_reservation_id)
+    reservations = session.scalars(select(Reservation).where(*conditions))
     occupied = [
         Occupied(bay_id=r.bay_id, start=r.during.lower, end=r.during.upper)
         for r in reservations
@@ -130,7 +146,7 @@ def day_availability(
 
     return find_slots(
         day,
-        [ServiceInfo(s.id, s.duration_minutes, s.required_bay_type_id) for s in services],
+        infos,
         [BayInfo(b.id, b.bay_type_id) for b in bays],
         hours,
         occupied,

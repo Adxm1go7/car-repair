@@ -38,11 +38,13 @@ def reserve(
     start: datetime,
     now: datetime,
     cutoff_minutes: int | None = None,
+    bay_id: int | None = None,
 ) -> ReserveResult:
     """Insert a booking reservation for `start` in the first bay that takes it.
 
     Doesn't check the booking window or past dates; callers do. Doesn't commit.
     `cutoff_minutes` replaces the setting when given, so staff tools can pass 0.
+    `bay_id` tries only that bay, which staff chose: SlotUnavailable if it can't take it.
     """
     if start.tzinfo is None or start.utcoffset() is None:
         raise ValueError("start must be timezone-aware")
@@ -70,8 +72,9 @@ def reserve(
     # Add the buffer in UTC: adding to a local time would follow the wall clock.
     occupied_until = slot.end.astimezone(UTC) + timedelta(minutes=policy.buffer_minutes)
     during = Range(slot.start.astimezone(UTC), occupied_until)
-    for bay_id in slot.bay_ids:
-        reservation = Reservation(bay_id=bay_id, kind="booking", during=during)
+    bays = slot.bay_ids if bay_id is None else tuple(b for b in slot.bay_ids if b == bay_id)
+    for bay in bays:
+        reservation = Reservation(bay_id=bay, kind="booking", during=during)
         try:
             with session.begin_nested():
                 session.add(reservation)

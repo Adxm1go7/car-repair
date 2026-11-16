@@ -103,6 +103,21 @@ def test_reserve_spreads_across_general_bays_then_runs_out(seeded: Session) -> N
         reserve(seeded, full_service, local(9), NOW)
 
 
+def test_reserve_in_a_chosen_bay(seeded: Session) -> None:
+    full_service = [service(seeded, "full-service").id]
+    result = reserve(seeded, full_service, local(9), NOW, bay_id=bay_id(seeded, "bay-3"))
+    assert result.reservation.bay_id == bay_id(seeded, "bay-3")
+
+
+def test_reserve_in_a_bay_the_slot_doesnt_have_is_unavailable(seeded: Session) -> None:
+    full_service = [service(seeded, "full-service").id]
+    reserve(seeded, full_service, local(9), NOW, bay_id=bay_id(seeded, "bay-2"))
+    with pytest.raises(SlotUnavailable):  # bay 2 is taken at 09:00 now
+        reserve(seeded, full_service, local(9), NOW, bay_id=bay_id(seeded, "bay-2"))
+    with pytest.raises(SlotUnavailable):  # the MOT bay can't take a full service at all
+        reserve(seeded, full_service, local(9), NOW, bay_id=bay_id(seeded, "mot-bay"))
+
+
 def test_reserve_falls_back_when_constraint_rejects(
     seeded: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
