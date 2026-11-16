@@ -1,18 +1,28 @@
 """Queue an email for the worker to send. The row is added in the caller's transaction, so an
 email is queued if and only if the change it's about is committed."""
 
+from typing import Any
+
 from sqlalchemy.orm import Session
 
 from app.email.message import EmailTemplate, StaffTemplate
 from app.models import Booking, EmailLog, StaffUser
 
 
-def queue_email(session: Session, template: EmailTemplate, booking: Booking) -> EmailLog | None:
+def queue_email(
+    session: Session,
+    template: EmailTemplate,
+    booking: Booking,
+    context: dict[str, Any] | None = None,
+) -> EmailLog | None:
     """Add a queued email for this booking. Flushes, doesn't commit. A booking with no email
-    (a phone booking can have none) gets nothing, and that's not an error."""
+    (a phone booking can have none) gets nothing, and that's not an error. `context` is
+    what the email needs that the booking won't say any more: never a token."""
     if booking.customer_email is None:
         return None
-    email = EmailLog(template=template, booking=booking, recipient=booking.customer_email)
+    email = EmailLog(
+        template=template, booking=booking, recipient=booking.customer_email, context=context
+    )
     session.add(email)
     session.flush()
     return email

@@ -151,4 +151,12 @@ def test_phone_booking_without_email_survives_move_cancel_and_reminders(
     booking.confirmed_at = NOW - timedelta(days=5)  # booked well before the reminder window
     db_session.flush()
     assert queue_due_reminders(db_session, booking.start_at - timedelta(hours=47), 48) == 0
+    moved = client.post(
+        f"/api/staff/bookings/{booking.reference}/move",
+        json={"start": "2026-11-10T14:00:00+00:00", "bay_id": bay(db_session, "mot-bay")},
+    )
+    assert moved.status_code == 200, moved.text
+    cancelled = client.post(f"/api/staff/bookings/{booking.reference}/cancel", json={})
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["deposit_status"] == "not_required"
     assert emails(db_session) == []

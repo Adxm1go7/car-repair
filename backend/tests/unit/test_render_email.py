@@ -163,3 +163,57 @@ def test_no_deposit_line_for_not_required(template: EmailTemplate) -> None:
     )
     for body in (message.text, message.html):
         assert "deposit" not in body.lower()
+
+
+# --- garage changes -----------------------------------------------------------
+
+MOVED = replace(
+    CONTEXT,
+    start=START + timedelta(hours=2),
+    end=START + timedelta(hours=3),
+    free_cancellation_until=START + timedelta(hours=2) - timedelta(hours=24),
+    reason="Lift broken",
+    previous_start=START,
+    previous_end=START + timedelta(hours=1),
+    previous_bay="MOT bay",
+)
+
+
+def test_moved_email_shows_old_and_new_time_and_reason() -> None:
+    message = render_email("moved", "x@example.test", MOVED)
+    assert message.subject == "Your booking has moved — ABCD-EFGH"
+    for body in (message.text, message.html):
+        assert "Fri 20 Nov, 09:00" in body  # was
+        assert "Fri 20 Nov, 11:00" in body  # now
+        assert "Lift broken" in body
+        assert "000 111" in body
+        assert LINK in body
+
+
+def test_moved_email_without_reason_has_no_reason_line() -> None:
+    message = render_email("moved", "x@example.test", replace(MOVED, reason=None))
+    assert "Reason" not in message.text
+    assert "Reason" not in message.html
+
+
+def test_garage_cancellation_says_refund_and_reason() -> None:
+    context = replace(CONTEXT, deposit_status="refund_pending", reason="Staff off sick")
+    message = render_email("garage_cancellation", "x@example.test", context)
+    assert message.subject == "We've had to cancel your booking — ABCD-EFGH"
+    for body in (message.text, message.html):
+        assert "Staff off sick" in body
+        assert "£20 deposit is being refunded" in body
+        assert "000 111" in body
+
+
+def test_garage_cancellation_without_reason_or_deposit() -> None:
+    context = replace(CONTEXT, deposit_status="not_required", reason=None)
+    message = render_email("garage_cancellation", "x@example.test", context)
+    assert "Reason" not in message.text
+    assert "deposit" not in message.text.lower()
+
+
+def test_reason_is_html_escaped() -> None:
+    message = render_email("moved", "x@example.test", replace(MOVED, reason="<i>oops</i>"))
+    assert "&lt;i&gt;oops&lt;/i&gt;" in message.html
+    assert "<i>oops</i>" in message.text

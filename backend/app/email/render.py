@@ -33,6 +33,11 @@ class EmailContext:
     garage: dict[str, str]  # name, address, phone, email: the garage_contact setting
     link_url: str | None
     now: datetime  # when the email is rendered: is free cancellation still open?
+    # Garage changes: why, and for a move, where and when it was before.
+    reason: str | None = None
+    previous_start: datetime | None = None
+    previous_end: datetime | None = None
+    previous_bay: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +59,8 @@ SUBJECTS: dict[EmailTemplate, str] = {
     "confirmation": "Your booking is confirmed — {reference}",
     "reminder": "See you on {day} — {reference}",
     "cancellation": "Your booking is cancelled — {reference}",
+    "moved": "Your booking has moved — {reference}",
+    "garage_cancellation": "We've had to cancel your booking — {reference}",
 }
 
 
@@ -95,6 +102,10 @@ def render_email(template: EmailTemplate, to: str, context: EmailContext) -> Out
         "deposit": format_pounds(context.deposit_pence),
         "notice_hours": round((context.start - context.free_cancellation_until).total_seconds())
         // 3600,
+        "was": format_moment(context.previous_start, zone) if context.previous_start else "",
+        "was_ends": f"{context.previous_end.astimezone(zone):%H:%M}"
+        if context.previous_end
+        else "",
     }
     subject = SUBJECTS[template].format(
         reference=context.reference, day=format_day(context.start, zone)

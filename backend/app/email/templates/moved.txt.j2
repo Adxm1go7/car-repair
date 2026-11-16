@@ -1,0 +1,21 @@
+Hello {{ c.customer_name }},
+
+We've had to move your booking with {{ c.garage.name }}, as we agreed with you on the phone.
+{% if c.reason %}
+Reason: {{ c.reason }}
+{% endif %}
+
+It was: {{ was }} – {{ was_ends }}
+It's now: {{ when }} – {{ ends }}
+
+{% include "_booking.txt.j2" %}
+
+{% if c.link_url %}
+View or cancel your booking:
+{{ c.link_url }}
+
+{% endif %}
+If the new time doesn't suit, please call us on {{ c.garage.phone }}.
+{% include "_call_rule.txt.j2" %}
+
+{% include "_footer.txt.j2" %}

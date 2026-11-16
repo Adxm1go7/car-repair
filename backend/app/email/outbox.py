@@ -8,7 +8,7 @@ rollback drops it too.
 
 import logging
 from datetime import datetime, timedelta
-from typing import Final
+from typing import Any, Final
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -37,8 +37,10 @@ _APPLIES_TO: Final[dict[EmailTemplate, str]] = {
     "confirmation": "confirmed",
     "reminder": "confirmed",
     "cancellation": "cancelled",
+    "moved": "confirmed",
+    "garage_cancellation": "cancelled",
 }
-_HAS_LINK: Final[frozenset[EmailTemplate]] = frozenset({"confirmation", "reminder"})
+_HAS_LINK: Final[frozenset[EmailTemplate]] = frozenset({"confirmation", "reminder", "moved"})
 _PURPOSE: Final[dict[StaffTemplate, Purpose]] = {
     "staff_invite": "invite",
     "password_reset": "reset",
@@ -59,7 +61,22 @@ def link_url(base_url: str, reference: str, token: str) -> str:
     return f"{base_url.rstrip('/')}/booking/{reference}#t={token}"
 
 
-def _context(session: Session, booking: Booking, url: str | None, now: datetime) -> EmailContext:
+def _when(saved: dict[str, Any], key: str) -> datetime | None:
+    value = saved.get(key)
+    return datetime.fromisoformat(value) if isinstance(value, str) else None
+
+
+def _context(
+    session: Session,
+    booking: Booking,
+    url: str | None,
+    now: datetime,
+    saved: dict[str, Any] | None = None,
+) -> EmailContext:
+    """`saved` is the email row's context: what a garage change said when it was queued."""
+    saved = saved or {}
+    reason = saved.get("reason")
+    previous_bay = saved.get("previous_bay")
     deposit = paid_deposit(session, booking.id)
     garage = get_setting(session, "garage_contact")
     return EmailContext(
@@ -79,6 +96,10 @@ def _context(session: Session, booking: Booking, url: str | None, now: datetime)
         garage=garage if isinstance(garage, dict) else {},
         link_url=url,
         now=now,
+        reason=reason if isinstance(reason, str) else None,
+        previous_start=_when(saved, "previous_start"),
+        previous_end=_when(saved, "previous_end"),
+        previous_bay=previous_bay if isinstance(previous_bay, str) else None,
     )
 
 
@@ -122,7 +143,8 @@ def _prepare(
     url = None
     if template in _HAS_LINK:
         url = link_url(base_url, booking.reference, create_link(session, booking))
-    return render_email(template, email.recipient, _context(session, booking, url, now))
+    context = _context(session, booking, url, now, email.context)
+    return render_email(template, email.recipient, context)
 
 
 def _prepare_staff(

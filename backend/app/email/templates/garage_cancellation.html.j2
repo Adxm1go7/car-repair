@@ -1,0 +1,15 @@
+{% extends "_layout.html.j2" %}
+{% block content %}
+<p>We're sorry: we've had to cancel your booking with {{ c.garage.name }} on {{ when }}.</p>
+{% if c.reason %}
+<p>Reason: {{ c.reason }}</p>
+{% endif %}
+{% endblock %}
+{% block after %}
+{% if c.deposit_status in ("refund_pending", "refunded") %}
+<p>Your {{ deposit }} deposit is being refunded. It can take 5 to 10 working days to reach your account.</p>
+{% elif c.deposit_status == "refund_failed" %}
+<p>We'll be in touch about your refund.</p>
+{% endif %}
+<p>To book another time, please call us on {{ c.garage.phone }}.</p>
+{% endblock %}
