@@ -1,5 +1,5 @@
 import { post } from '../booking/api.ts'
-import type { Message, StaffMe } from './types.ts'
+import type { Message, Schedule, StaffAvailability, StaffBooking, StaffMe, StatusAction } from './types.ts'
 
 /** Every call resolves, never throws. `detail` is the server's message when it sent one. */
 export type StaffResult<T> =
@@ -70,4 +70,45 @@ export function logout(): Promise<StaffResult<void>> {
 
 export function fetchMe(): Promise<StaffResult<StaffMe>> {
   return staffRequest<StaffMe>('/me')
+}
+
+// --- one booking ---------------------------------------------------------------------
+
+function bookingPath(reference: string, action = ''): string {
+  return `/bookings/${encodeURIComponent(reference)}${action}`
+}
+
+/** The `detail` of a 409 body: "taken", "not_allowed" or "no_change". */
+export function conflictDetail(body: unknown): string | null {
+  const detail = (body as { detail?: unknown } | null)?.detail
+  return typeof detail === 'string' ? detail : null
+}
+
+export function fetchStaffBooking(reference: string): Promise<StaffResult<StaffBooking>> {
+  return staffRequest<StaffBooking>(bookingPath(reference))
+}
+
+export function fetchMoveOptions(reference: string, date: string): Promise<StaffResult<StaffAvailability>> {
+  return staffRequest<StaffAvailability>(`${bookingPath(reference, '/move-options')}?date=${date}`)
+}
+
+export function moveBooking(
+  reference: string,
+  move: { start: string; bay_id: number; reason: string | null },
+): Promise<StaffResult<StaffBooking>> {
+  return staffRequest<StaffBooking>(bookingPath(reference, '/move'), post(move))
+}
+
+/** A 503 (error) means the refund couldn't start, and nothing changed. */
+export function cancelStaffBooking(reference: string, reason: string | null): Promise<StaffResult<StaffBooking>> {
+  return staffRequest<StaffBooking>(bookingPath(reference, '/cancel'), post({ reason }))
+}
+
+export function changeStatus(reference: string, action: StatusAction): Promise<StaffResult<StaffBooking>> {
+  return staffRequest<StaffBooking>(bookingPath(reference, '/status'), post({ action }))
+}
+
+/** The bays, with names, from a day's schedule. */
+export function fetchBays(date: string): Promise<StaffResult<Schedule>> {
+  return staffRequest<Schedule>(`/schedule?from=${date}&days=1`)
 }

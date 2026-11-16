@@ -318,3 +318,119 @@ a.staff-button {
     gap: 8px;
   }
 }
+
+/* --- booking detail, move and cancel -------------------------------------------- */
+
+.booking-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.booking-page h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  overflow-wrap: anywhere;
+}
+
+.booking-details p {
+  margin: 0 0 6px;
+}
+
+.booking-when {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.booking-customer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  overflow-wrap: anywhere;
+}
+
+.booking-customer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.staff-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.staff-button-danger {
+  background: #b03a2e;
+}
+
+.staff-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.staff-panel h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.staff-panel p {
+  margin: 0;
+}
+
+.staff-panel .field input,
+.staff-panel .field textarea {
+  min-height: 44px;
+}
+
+.time-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.time-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+
+.time-grid [aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.booking-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.booking-history li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.booking-history time {
+  min-width: 7.5em;
+  color: var(--muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .staff-button-danger {
+    background: #e0675a;
+    color: #111418;
+  }
+}

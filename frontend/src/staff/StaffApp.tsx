@@ -6,6 +6,7 @@ import type { StaffResult } from './api.ts'
 import { ForgotPasswordPage } from './ForgotPasswordPage.tsx'
 import { LoginPage } from './LoginPage.tsx'
 import { SetPasswordPage } from './SetPasswordPage.tsx'
+import { BookingDetailPage } from './booking/BookingDetailPage.tsx'
 import { DayView } from './schedule/DayView.tsx'
 import { WeekView } from './schedule/WeekView.tsx'
 import { LOGIN_PATH, StaffContext, loginUrl, useGarage, useStaff } from './StaffContext.ts'
@@ -104,7 +105,7 @@ export function StaffApp(): JSX.Element {
         <Route path="week" element={<WeekView />} />
         <Route path="bookings/new" element={<Placeholder title="New booking" />} />
         <Route path="blocks/new" element={<Placeholder title="Block time" />} />
-        <Route path="bookings/:reference" element={<Placeholder title="Booking" />} />
+        <Route path="bookings/:reference" element={<BookingDetailPage />} />
         <Route
           path="team"
           element={

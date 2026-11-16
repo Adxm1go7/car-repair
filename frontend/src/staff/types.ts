@@ -43,3 +43,50 @@ export type ScheduleItem = ScheduleBooking | ScheduleBlock
 
 /** GET /api/staff/schedule */
 export type Schedule = { timezone: string; bays: ScheduleBay[]; days: ScheduleDay[]; items: ScheduleItem[] }
+
+export type BookingAction =
+  | 'start'
+  | 'complete'
+  | 'no_show'
+  | 'undo_start'
+  | 'undo_complete'
+  | 'undo_no_show'
+  | 'move'
+  | 'cancel'
+
+export type StatusAction = Exclude<BookingAction, 'move' | 'cancel'>
+
+export type DepositStatus = 'unpaid' | 'paid' | 'refund_pending' | 'refunded' | 'refund_failed' | 'waived' | 'not_required'
+
+/** GET /api/staff/bookings/:reference. start, end and history times are garage-local ISO. */
+export type StaffBooking = {
+  reference: string
+  status: BookingStatus
+  source: 'online' | 'phone'
+  start: string
+  end: string
+  bay: { id: number; name: string }
+  services: string[]
+  registration: string | null
+  make: string | null
+  model: string | null
+  customer_name: string | null
+  customer_phone: string | null
+  customer_email: string | null
+  notes: string | null
+  deposit_status: DepositStatus
+  actions: BookingAction[]
+  starts_on_another_day: boolean
+  history: { at: string; text: string }[]
+}
+
+export type StaffSlot = { start: string; end: string; bay_ids: number[] }
+
+/** GET /api/staff/availability and /bookings/:reference/move-options. */
+export type StaffAvailability = {
+  date: string
+  timezone: string
+  duration_minutes: number
+  unavailable_reason: 'mixed_bay_types' | null
+  slots: StaffSlot[]
+}

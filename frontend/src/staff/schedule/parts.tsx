@@ -1,19 +1,9 @@
 import type { CSSProperties, JSX } from 'react'
 import { Link } from 'react-router'
-import type { BookingStatus, ScheduleItem } from '../types.ts'
+import { DEPOSIT_LABEL, NO_EMAIL, STATUS_LABEL } from '../labels.ts'
+import type { ScheduleItem } from '../types.ts'
 import { timeRange } from './layout.ts'
 import type { ScheduleState } from './useSchedule.ts'
-
-const STATUS_LABEL: Record<BookingStatus, string> = {
-  held: 'Being booked',
-  pending_approval: 'Waiting for approval',
-  confirmed: 'Confirmed',
-  in_progress: 'In progress',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-  no_show: 'No show',
-  expired: 'Expired',
-}
 
 type EntryProps = { item: ScheduleItem; zone: string; bayName?: string; style?: CSSProperties }
 
@@ -45,8 +35,8 @@ export function ScheduleEntry({ item, zone, bayName, style }: EntryProps): JSX.E
       <span className="entry-time">{`${time} · ${item.registration}`}</span>
       <span>{item.services.join(', ')}</span>
       <span className="entry-status">{STATUS_LABEL[item.status]}</span>
-      {item.source === 'phone' && <span className="entry-note">Phone booking · no deposit</span>}
-      {!item.has_email && <span className="entry-note">No email, phone only</span>}
+      {item.source === 'phone' && <span className="entry-note">{DEPOSIT_LABEL.not_required}</span>}
+      {!item.has_email && <span className="entry-note">{NO_EMAIL}</span>}
       {bay}
     </Link>
   )
