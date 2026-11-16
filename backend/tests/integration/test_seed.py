@@ -4,8 +4,19 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import make_engine
-from app.models import Base, Bay, BayType, OpeningHours, OpeningHoursBreak, Service, Setting
+from app.demo_data import DEMO_STAFF
+from app.models import (
+    Base,
+    Bay,
+    BayType,
+    OpeningHours,
+    OpeningHoursBreak,
+    Service,
+    Setting,
+    StaffUser,
+)
 from app.seed import DEFAULT_SETTINGS, seed
+from app.staff.passwords import password_matches
 
 CATALOGUE_MODELS: tuple[type[Base], ...] = (
     BayType,
@@ -148,3 +159,30 @@ def test_seed_does_not_recreate_deleted_break(db_session: Session) -> None:
     assert monday is not None
     assert monday.breaks == []
     assert count(db_session, OpeningHoursBreak) == 4
+
+
+# --- sample staff accounts --------------------------------------------------------
+
+
+def test_seed_adds_sample_accounts(db_session: Session) -> None:
+    seed(db_session, sample_accounts=True)
+    accounts = {u.email: u.role for u in db_session.scalars(select(StaffUser))}
+    assert accounts == {"admin@example.test": "admin", "staff@example.test": "staff"}
+
+
+def test_seed_without_sample_accounts_adds_none(db_session: Session) -> None:
+    seed(db_session)
+    assert count(db_session, StaffUser) == 0
+
+
+def test_seed_twice_keeps_one_of_each_account(db_session: Session) -> None:
+    seed(db_session, sample_accounts=True)
+    seed(db_session, sample_accounts=True)
+    assert count(db_session, StaffUser) == 2
+
+
+def test_sample_password_logs_in(db_session: Session) -> None:
+    seed(db_session, sample_accounts=True)
+    by_email = {u.email: u for u in db_session.scalars(select(StaffUser))}
+    for demo in DEMO_STAFF:
+        assert password_matches(demo.password, by_email[demo.email].password_hash)

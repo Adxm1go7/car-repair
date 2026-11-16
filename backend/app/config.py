@@ -27,6 +27,15 @@ class AppConfig(BaseSettings):
     stripe_webhook_secret: str = Field(default="", repr=False)
 
     @property
+    def allowed_origins(self) -> frozenset[str]:
+        """Where a staff write may come from: the site itself, plus the Vite dev server when
+        developing (it proxies /api, but the browser still sends its own origin)."""
+        origins = {self.public_base_url.rstrip("/")}
+        if self.environment == "development":
+            origins.add("http://localhost:5173")
+        return frozenset(origins)
+
+    @property
     def payment_provider(self) -> Literal["stripe", "demo"]:
         return "stripe" if self.stripe_secret_key else "demo"
 
