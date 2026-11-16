@@ -43,3 +43,7 @@ export function renderAt(entry: string): void {
     </MemoryRouter>,
   )
 }
+
+/** The day view's and week view's page headings, e.g. "Tue 17 Nov" and "Week of 16 Nov". */
+export const DAY_HEADING = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2} [A-Z][a-z]{2}$/
+export const WEEK_HEADING = /^Week of /

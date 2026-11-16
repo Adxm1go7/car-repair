@@ -1,32 +1,13 @@
-import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
-import type { Garage } from '../catalogue/types.ts'
 import { logout } from './api.ts'
 import { LOGIN_PATH, useStaff } from './StaffContext.ts'
 
-/** The garage's name for the top bar. Best effort: the bar says "Staff" until it loads. */
-function useGarageName(): string | null {
-  const [name, setName] = useState<string | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    void fetch('/api/garage')
-      .then((response) => (response.ok ? (response.json() as Promise<Garage>) : null))
-      .then((garage) => {
-        if (!cancelled && garage) setName(garage.name)
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [])
-  return name
-}
-
 export function StaffLayout(): JSX.Element {
-  const { me } = useStaff()
+  const { me, garage } = useStaff()
   const navigate = useNavigate()
-  const garageName = useGarageName()
+  // The bar says "Staff" until the garage's name loads.
+  const garageName = garage?.name ?? null
   const isAdmin = me.role === 'admin'
 
   async function logOut(): Promise<void> {

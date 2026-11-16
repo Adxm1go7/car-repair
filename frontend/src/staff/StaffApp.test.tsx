@@ -1,7 +1,7 @@
 import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
-import { ADMIN_ME, STAFF_ME, renderAt, stubFetch } from '../testing/staffApi.tsx'
+import { ADMIN_ME, STAFF_ME, WEEK_HEADING, renderAt, stubFetch } from '../testing/staffApi.tsx'
 import { staffRequest } from './api.ts'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -25,7 +25,7 @@ it('redirects to login on a 401 from any call', async () => {
     'GET /api/staff/schedule': { status: 401, body: { detail: 'Please log in' } },
   })
   renderAt('/staff/week')
-  expect(await screen.findByRole('heading', { level: 1, name: 'Week' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { level: 1, name: WEEK_HEADING })).toBeInTheDocument()
 
   await act(async () => {
     await staffRequest('/schedule')
@@ -37,7 +37,7 @@ it('redirects to login on a 401 from any call', async () => {
   await user.type(screen.getByLabelText('Email'), 'sam@example.com')
   await user.type(screen.getByLabelText('Password'), 'correct horse')
   await user.click(screen.getByRole('button', { name: 'Log in' }))
-  expect(await screen.findByRole('heading', { level: 1, name: 'Week' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { level: 1, name: WEEK_HEADING })).toBeInTheDocument()
 })
 
 it('staff see no Team or Audit links', async () => {

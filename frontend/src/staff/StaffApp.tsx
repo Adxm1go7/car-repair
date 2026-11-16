@@ -6,7 +6,9 @@ import type { StaffResult } from './api.ts'
 import { ForgotPasswordPage } from './ForgotPasswordPage.tsx'
 import { LoginPage } from './LoginPage.tsx'
 import { SetPasswordPage } from './SetPasswordPage.tsx'
-import { LOGIN_PATH, StaffContext, loginUrl, useStaff } from './StaffContext.ts'
+import { DayView } from './schedule/DayView.tsx'
+import { WeekView } from './schedule/WeekView.tsx'
+import { LOGIN_PATH, StaffContext, loginUrl, useGarage, useStaff } from './StaffContext.ts'
 import { StaffLayout } from './StaffLayout.tsx'
 import type { StaffMe } from './types.ts'
 import './staff.css'
@@ -38,8 +40,9 @@ function LoggedIn(): JSX.Element {
   const refresh = useCallback(async (): Promise<void> => {
     setState(meState(await fetchMe()))
   }, [])
+  const garage = useGarage()
   const me = state.kind === 'in' ? state.me : null
-  const value = useMemo(() => (me ? { me, refresh } : null), [me, refresh])
+  const value = useMemo(() => (me ? { me, refresh, garage } : null), [me, refresh, garage])
 
   if (state.kind === 'out') return <Navigate to={loginUrl(location.pathname + location.search)} replace />
   if (state.kind === 'failed') {
@@ -97,9 +100,10 @@ export function StaffApp(): JSX.Element {
       <Route path="forgot-password" element={<ForgotPasswordPage />} />
       <Route path="set-password" element={<SetPasswordPage />} />
       <Route element={<LoggedIn />}>
-        <Route index element={<Placeholder title="Day" />} />
-        <Route path="week" element={<Placeholder title="Week" />} />
+        <Route index element={<DayView />} />
+        <Route path="week" element={<WeekView />} />
         <Route path="bookings/new" element={<Placeholder title="New booking" />} />
+        <Route path="blocks/new" element={<Placeholder title="Block time" />} />
         <Route path="bookings/:reference" element={<Placeholder title="Booking" />} />
         <Route
           path="team"

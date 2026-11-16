@@ -1,7 +1,27 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
+import type { Garage } from '../catalogue/types.ts'
 import type { StaffMe } from './types.ts'
 
-export type StaffContextValue = { me: StaffMe; refresh: () => Promise<void> }
+/** `garage` is null until the public garage details load (its name and time zone). */
+export type StaffContextValue = { me: StaffMe; refresh: () => Promise<void>; garage: Garage | null }
+
+/** The public garage details. Best effort: stays null if they don't load. */
+export function useGarage(): Garage | null {
+  const [garage, setGarage] = useState<Garage | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/api/garage')
+      .then((response) => (response.ok ? (response.json() as Promise<Garage>) : null))
+      .then((loaded) => {
+        if (!cancelled && loaded) setGarage(loaded)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return garage
+}
 
 export const StaffContext = createContext<StaffContextValue | null>(null)
 

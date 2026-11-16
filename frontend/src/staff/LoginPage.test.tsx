@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
-import { STAFF_ME, renderAt, sentBody, stubFetch } from '../testing/staffApi.tsx'
+import { DAY_HEADING, STAFF_ME, WEEK_HEADING, renderAt, sentBody, stubFetch } from '../testing/staffApi.tsx'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -17,7 +17,7 @@ it('logs in and returns to next', async () => {
   await user.type(screen.getByLabelText('Password'), 'correct horse')
   await user.click(screen.getByRole('button', { name: 'Log in' }))
 
-  expect(await screen.findByRole('heading', { level: 1, name: 'Week' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { level: 1, name: WEEK_HEADING })).toBeInTheDocument()
   expect(sentBody(mock, '/api/staff/login')).toEqual({ email: 'sam@example.com', password: 'correct horse' })
 })
 
@@ -33,7 +33,7 @@ it('goes to the day view when next is missing or points elsewhere', async () => 
   await user.type(screen.getByLabelText('Password'), 'correct horse')
   await user.click(screen.getByRole('button', { name: 'Log in' }))
 
-  expect(await screen.findByRole('heading', { level: 1, name: 'Day' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { level: 1, name: DAY_HEADING })).toBeInTheDocument()
 })
 
 it('shows one error for a wrong login', async () => {
