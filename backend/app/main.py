@@ -14,6 +14,7 @@ from app.api import (
     holds,
     my_booking,
     staff_auth,
+    staff_team,
     stripe_webhook,
 )
 from app.config import AppConfig, get_config
@@ -68,6 +69,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(stripe_webhook.router, prefix="/api")
     app.include_router(staff_auth.public_router, prefix="/api")
     app.include_router(staff_auth.router, prefix="/api")
+    app.include_router(staff_team.router, prefix="/api")
     if config.payment_provider == "demo":  # never with Stripe keys, so never in production
         app.include_router(demo_payments.router, prefix="/api")
     return app

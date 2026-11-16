@@ -53,8 +53,7 @@ def test_every_staff_route_needs_a_session(api_client: TestClient) -> None:
 
 def test_staff_get_403_on_every_admin_route(staff_client: TestClient) -> None:
     admin = [(m, p) for m, p in staff_routes(staff_client) if p.startswith(ADMIN_STAFF_PREFIXES)]
-    if not admin:
-        pytest.skip("no admin routes yet (Task 5 adds them)")
+    assert admin  # the team routes at least: the walk can't pass by finding nothing
     for method, path in admin:
         assert call(staff_client, method, path) == 403, (method, path)
 
