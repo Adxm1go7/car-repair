@@ -1,0 +1,120 @@
+/* Staff pages: phone first (360px up), every button at least 44px tall. */
+
+.staff-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.staff-garage {
+  font-weight: 700;
+}
+
+.staff-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  order: 3;
+  width: 100%;
+}
+
+.staff-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.staff-nav a.active {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.staff-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+@media (min-width: 700px) {
+  .staff-nav {
+    order: 0;
+    width: auto;
+  }
+}
+
+.staff-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.staff-auth {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 32px 16px;
+}
+
+.staff-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.staff-form .field input {
+  min-height: 44px;
+}
+
+.staff-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.staff-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.staff-button-quiet {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.staff-alert {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #c0392b;
+  border-radius: 8px;
+  color: #c0392b;
+}
+
+.staff-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .staff-alert {
+    border-color: #ff8a7a;
+    color: #ff8a7a;
+  }
+}
