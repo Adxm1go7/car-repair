@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.bookings.rules import hash_token, new_reference
 from app.models import Bay, Block, Booking, Payment, Reservation, StaffUser
+from app.staff.passwords import hash_password
 
 TEST_TOKEN = "t"  # noqa: S105 - a test hold token, not a password
 BUFFER = timedelta(minutes=15)
@@ -106,3 +107,25 @@ def make_block_reservation(
     session.add(reservation)
     session.flush()
     return reservation
+
+
+def make_staff(
+    session: Session,
+    *,
+    role: str = "staff",
+    email: str = "sam.staff@example.com",
+    password: str | None = "correct horse",  # noqa: S107 - a test password
+    active: bool = True,
+    name: str = "Sam Staff",
+) -> StaffUser:
+    """A staff account, flushed. `password=None` leaves it waiting for a set-password link."""
+    user = StaffUser(
+        name=name,
+        email=email,
+        role=role,
+        active=active,
+        password_hash=hash_password(password) if password is not None else None,
+    )
+    session.add(user)
+    session.flush()
+    return user
