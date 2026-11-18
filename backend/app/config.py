@@ -21,10 +21,23 @@ class AppConfig(BaseSettings):
     email_interval_seconds: int = Field(default=5, ge=1)
     # Where customers open the site: booking links in emails start with this.
     public_base_url: str = "http://localhost:8080"
+    # Proxies whose X-Forwarded-For is believed (comma-separated IPs or networks), so the
+    # login lockout counts the visitor's address rather than the proxy's. Compose sets the
+    # nginx container's fixed address; anyone else's header is ignored.
+    trusted_proxies: str = "127.0.0.1"
     # Stripe. With no secret key, payments run in demo mode (never allowed in production).
     stripe_secret_key: str = Field(default="", repr=False)
     stripe_publishable_key: str = ""
     stripe_webhook_secret: str = Field(default="", repr=False)
+
+    @property
+    def allowed_origins(self) -> frozenset[str]:
+        """Where a staff write may come from: the site itself, plus the Vite dev server when
+        developing (it proxies /api, but the browser still sends its own origin)."""
+        origins = {self.public_base_url.rstrip("/")}
+        if self.environment == "development":
+            origins.add("http://localhost:5173")
+        return frozenset(origins)
 
     @property
     def payment_provider(self) -> Literal["stripe", "demo"]:

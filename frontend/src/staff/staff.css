@@ -1,0 +1,646 @@
+/* Staff pages: phone first (360px up), every button at least 44px tall. */
+
+.staff-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.staff-garage {
+  font-weight: 700;
+}
+
+.staff-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  order: 3;
+  width: 100%;
+}
+
+.staff-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.staff-nav a.active {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.staff-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+@media (min-width: 700px) {
+  .staff-nav {
+    order: 0;
+    width: auto;
+  }
+}
+
+.staff-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.staff-auth {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 32px 16px;
+}
+
+.staff-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.staff-form .field input {
+  min-height: 44px;
+}
+
+.staff-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.staff-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.staff-button-quiet {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.staff-alert {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #c0392b;
+  border-radius: 8px;
+  color: #c0392b;
+}
+
+.staff-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .staff-alert {
+    border-color: #ff8a7a;
+    color: #ff8a7a;
+  }
+}
+
+/* --- schedule ------------------------------------------------------------------- */
+
+.staff {
+  --entry-bg: #e7effa;
+  --entry-border: #1f5fae;
+  --entry-progress: #fff1d6;
+  --entry-done: #e3f3e6;
+  --entry-block: #eceef1;
+  --closed-bg: repeating-linear-gradient(45deg, #eceef1 0 6px, #f6f7f9 6px 12px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .staff {
+    --entry-bg: #18283b;
+    --entry-border: #7fb2f0;
+    --entry-progress: #3a2b0f;
+    --entry-done: #16331d;
+    --entry-block: #262c33;
+    --closed-bg: repeating-linear-gradient(45deg, #262c33 0 6px, #1a1f25 6px 12px);
+  }
+}
+
+.schedule-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.schedule-nav,
+.schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.schedule-nav h1 {
+  margin: 0;
+  min-width: 7.5em;
+  font-size: 1.35rem;
+  text-align: center;
+}
+
+a.staff-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.schedule-closed {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.day-grid {
+  display: grid;
+  gap: 0 8px;
+  overflow-x: auto;
+}
+
+.day-times {
+  position: relative;
+  margin-top: 40px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.day-times span {
+  position: absolute;
+  transform: translateY(-50%);
+}
+
+.day-bay h2 {
+  height: 40px;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 40px;
+}
+
+.day-bay-body {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.day-break {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--closed-bg);
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* Grid entries are exactly as tall as their time, so short ones never overlap the next. */
+.day-bay-body .entry {
+  left: 4px;
+  right: 4px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-left: 4px solid var(--entry-border);
+  border-radius: 6px;
+  background: var(--entry-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.entry-time {
+  font-weight: 700;
+}
+
+.entry-status {
+  font-weight: 600;
+}
+
+.entry-note,
+.entry-bay {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.entry-in_progress {
+  background: var(--entry-progress);
+}
+
+.entry-completed {
+  background: var(--entry-done);
+}
+
+.entry-no_show,
+.entry-held {
+  opacity: 0.65;
+  border-left-style: dashed;
+}
+
+.entry-block {
+  border-left-color: var(--muted);
+  background: var(--entry-block);
+}
+
+.entry-closed {
+  border-left-color: var(--border);
+  background: var(--closed-bg);
+  color: var(--muted);
+}
+
+.bay-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.bay-tabs [aria-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.week-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.week-day h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+@media (min-width: 700px) {
+  .week-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
+/* --- booking detail, move and cancel -------------------------------------------- */
+
+.booking-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.booking-page h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  overflow-wrap: anywhere;
+}
+
+.booking-details p {
+  margin: 0 0 6px;
+}
+
+.booking-when {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.booking-customer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  overflow-wrap: anywhere;
+}
+
+.booking-customer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.staff-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.staff-button-danger {
+  background: #b03a2e;
+}
+
+.staff-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.staff-panel h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.staff-panel p {
+  margin: 0;
+}
+
+.staff-panel .field input,
+.staff-panel .field textarea {
+  min-height: 44px;
+}
+
+.time-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.time-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+
+.time-grid [aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.booking-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.booking-history li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.booking-history time {
+  min-width: 7.5em;
+  color: var(--muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .staff-button-danger {
+    background: #e0675a;
+    color: #111418;
+  }
+}
+
+/* --- phone booking and block forms ----------------------------------------------- */
+
+button.entry {
+  width: 100%;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.day-bay-body button.entry {
+  width: auto;
+}
+
+.booking-form {
+  max-width: 640px;
+}
+
+.booking-form h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.booking-form fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.booking-form legend {
+  padding: 0 4px;
+  font-weight: 700;
+}
+
+.booking-form .field input,
+.booking-form .field select,
+.booking-form .field textarea {
+  min-height: 44px;
+}
+
+.booking-form .field select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.service-picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.service-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.service-pick input {
+  width: 22px;
+  height: 22px;
+}
+
+.field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.clash-list {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.clash-list a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* --- team and audit ------------------------------------------------------------- */
+
+.team-page,
+.audit-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.team-page h1,
+.audit-page h1 {
+  margin: 0;
+}
+
+.team-notice:empty {
+  display: none;
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-member {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.team-who {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.team-who h3,
+.team-email,
+.team-state {
+  margin: 0;
+}
+
+.team-email {
+  overflow-wrap: anywhere;
+}
+
+.team-state {
+  color: var(--muted);
+}
+
+.team-invite {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.team-invite h2 {
+  margin: 0;
+}
+
+.team-invite select,
+.audit-filters input,
+.audit-filters select {
+  min-height: 44px;
+}
+
+.audit-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.audit-entry time {
+  min-width: 10em;
+  color: var(--muted);
+}
+
+.audit-who {
+  font-weight: 600;
+}
+
+.audit-reason {
+  flex-basis: 100%;
+  color: var(--muted);
+}
+
+.audit-pages {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

@@ -86,7 +86,7 @@ def test_rolled_back_confirm_leaves_no_email(seeded: Session, provider: FakeProv
     assert emails(seeded) == []
 
 
-def test_queue_email_needs_a_recipient(seeded: Session) -> None:
-    booking = make_hold(seeded, START, NOW + timedelta(minutes=10))  # no customer details yet
-    with pytest.raises(ValueError, match="email"):
-        queue_email(seeded, "confirmation", booking)
+def test_queue_email_without_recipient_queues_nothing(seeded: Session) -> None:
+    booking = make_hold(seeded, START, NOW + timedelta(minutes=10))  # no customer email
+    assert queue_email(seeded, "confirmation", booking) is None
+    assert emails(seeded) == []

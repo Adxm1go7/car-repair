@@ -152,3 +152,47 @@ def test_downgrade_to_0006_drops_email_tables(fresh_database_url: str) -> None:
     tables = set(inspect(make_engine(fresh_database_url)).get_table_names())
     assert tables.isdisjoint(EMAIL_TABLES)
     assert "payments" in tables
+
+
+STAFF_TABLES = {
+    "staff_users",
+    "staff_sessions",
+    "password_tokens",
+    "login_attempts",
+    "blocks",
+    "audit_entries",
+}
+
+
+def test_downgrade_to_0007_drops_staff_tables(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "head")
+    assert set(inspect(make_engine(fresh_database_url)).get_table_names()) >= STAFF_TABLES
+    command.downgrade(cfg, "0007")
+    tables = set(inspect(make_engine(fresh_database_url)).get_table_names())
+    assert tables.isdisjoint(STAFF_TABLES)
+    columns = {c["name"] for c in inspect(make_engine(fresh_database_url)).get_columns("bookings")}
+    assert "source" not in columns
+
+
+def test_existing_bookings_become_online(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "0007")
+    with make_engine(fresh_database_url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO bay_types (slug, name) VALUES ('t', 'T');"
+                "INSERT INTO bays (slug, name, bay_type_id) SELECT 'b', 'B', id FROM bay_types;"
+                "INSERT INTO reservations (bay_id, kind, during, active) SELECT id, 'booking',"
+                " tstzrange('2026-11-10 08:00+00', '2026-11-10 09:00+00'), true FROM bays;"
+                "INSERT INTO bookings (reference, reservation_id, status, start_at, end_at,"
+                " customer_name, customer_phone, customer_email, car_registration, car_make,"
+                " car_model, deposit_status) SELECT 'AAAA-AAAA', id, 'confirmed',"
+                " '2026-11-10 08:00+00', '2026-11-10 09:00+00', 'n', 'p', 'e', 'r', 'm', 'm',"
+                " 'paid' FROM reservations"
+            )
+        )
+    command.upgrade(cfg, "head")
+    with make_engine(fresh_database_url).connect() as connection:
+        source = connection.execute(text("SELECT source FROM bookings")).scalar_one()
+    assert source == "online"

@@ -5,6 +5,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
+from factories import make_block_reservation
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.exc import OperationalError
@@ -46,12 +47,7 @@ def bay_id(session: Session, slug: str) -> int:
 def block(
     session: Session, bay_slug: str, start: datetime, end: datetime, active: bool = True
 ) -> None:
-    session.add(
-        Reservation(
-            bay_id=bay_id(session, bay_slug), kind="block", during=Range(start, end), active=active
-        )
-    )
-    session.flush()
+    make_block_reservation(session, bay_id(session, bay_slug), start, end, active=active)
 
 
 def active_count(session: Session) -> int:
@@ -105,6 +101,21 @@ def test_reserve_spreads_across_general_bays_then_runs_out(seeded: Session) -> N
     assert bays == [bay_id(seeded, slug) for slug in ("bay-1", "bay-2", "bay-3")]
     with pytest.raises(SlotUnavailable):
         reserve(seeded, full_service, local(9), NOW)
+
+
+def test_reserve_in_a_chosen_bay(seeded: Session) -> None:
+    full_service = [service(seeded, "full-service").id]
+    result = reserve(seeded, full_service, local(9), NOW, bay_id=bay_id(seeded, "bay-3"))
+    assert result.reservation.bay_id == bay_id(seeded, "bay-3")
+
+
+def test_reserve_in_a_bay_the_slot_doesnt_have_is_unavailable(seeded: Session) -> None:
+    full_service = [service(seeded, "full-service").id]
+    reserve(seeded, full_service, local(9), NOW, bay_id=bay_id(seeded, "bay-2"))
+    with pytest.raises(SlotUnavailable):  # bay 2 is taken at 09:00 now
+        reserve(seeded, full_service, local(9), NOW, bay_id=bay_id(seeded, "bay-2"))
+    with pytest.raises(SlotUnavailable):  # the MOT bay can't take a full service at all
+        reserve(seeded, full_service, local(9), NOW, bay_id=bay_id(seeded, "mot-bay"))
 
 
 def test_reserve_falls_back_when_constraint_rejects(

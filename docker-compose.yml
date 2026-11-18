@@ -28,6 +28,10 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
+      # The staff Origin check and the cookie's Secure flag read it, as the worker's links do.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      # Only nginx (web, below) may say who the visitor is, via X-Forwarded-For.
+      TRUSTED_PROXIES: 172.28.0.10
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
@@ -69,9 +73,19 @@ services:
     build: ./frontend
     ports:
       - "8080:80"
+    networks:
+      default:
+        ipv4_address: 172.28.0.10  # fixed, so the api can trust it as the proxy
     depends_on:
       api:
         condition: service_healthy
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+          ip_range: 172.28.0.128/25  # other containers get addresses from here, never web's
 
 volumes:
   pgdata:

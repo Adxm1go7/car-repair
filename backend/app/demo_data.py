@@ -23,6 +23,21 @@ class DemoService:
     approval_mode: str
 
 
+@dataclass(frozen=True)
+class DemoStaff:
+    name: str
+    email: str
+    role: str
+    password: str
+
+
+# Sample logins for trying the demo, listed in the README. The seed adds them everywhere
+# except production.
+DEMO_STAFF: Final[tuple[DemoStaff, ...]] = (
+    DemoStaff("Alex Admin", "admin@example.test", "admin", "demo-admin-pass"),
+    DemoStaff("Sam Staff", "staff@example.test", "staff", "demo-staff-pass"),
+)
+
 DEMO_GARAGE_CONTACT: Final[dict[str, str]] = {
     "name": "Hillside Motors",
     "address": "12 Station Road, Anytown, AT1 2CD",

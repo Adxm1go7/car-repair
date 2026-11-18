@@ -1,0 +1,14 @@
+{% extends "_layout.html.j2" %}
+{% block content %}
+<p>We've had to move your booking with {{ c.garage.name }}, as we agreed with you on the phone.</p>
+{% if c.reason %}
+<p>Reason: {{ c.reason }}</p>
+{% endif %}
+<p>It was: <s>{{ was }} – {{ was_ends }}</s><br>It's now: <strong>{{ when }} – {{ ends }}</strong></p>
+{% endblock %}
+{% block after %}
+{% set link_label = "View or cancel your booking" %}
+{% include "_link.html.j2" %}
+<p>If the new time doesn't suit, please call us on {{ c.garage.phone }}.</p>
+{% include "_call_rule.html.j2" %}
+{% endblock %}

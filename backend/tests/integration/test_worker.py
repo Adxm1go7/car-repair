@@ -4,14 +4,16 @@ from datetime import UTC, datetime, timedelta
 
 from alembic import command
 from conftest import alembic_config
-from factories import make_deposit, make_hold
+from factories import make_deposit, make_hold, make_staff
 from fakes import FakeProvider
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from app.db import make_engine
-from app.models import Booking, Payment
+from app.models import Booking, LoginAttempt, Payment, StaffSession
 from app.seed import seed
+from app.staff.sessions import create_session, find_session_user
+from app.staff.throttle import record_attempt
 from app.worker import run_once
 
 NOW = datetime(2026, 11, 9, 9, tzinfo=UTC)
@@ -135,5 +137,26 @@ def test_worker_completes_a_deposit_that_got_in(fresh_database_url: str) -> None
             run_once(session, NOW, provider)
         # Released, then the close found the payment: the time was still free, so it's booked.
         assert state(engine, reference) == ("confirmed", "paid", "paid")
+    finally:
+        engine.dispose()
+
+
+def test_run_once_clears_expired_sessions_and_old_attempts(fresh_database_url: str) -> None:
+    command.upgrade(alembic_config(fresh_database_url), "head")
+    engine = make_engine(fresh_database_url)
+    try:
+        with Session(engine) as session:
+            user = make_staff(session)
+            create_session(session, user, NOW - timedelta(days=8))
+            live = create_session(session, user, NOW)
+            record_attempt(session, "a@example.com", "1.2.3.4", False, NOW - timedelta(days=2))
+            record_attempt(session, "a@example.com", "1.2.3.4", False, NOW)
+            session.commit()
+        with Session(engine) as session:
+            run_once(session, NOW, FakeProvider())
+        with Session(engine) as session:
+            assert session.scalar(select(func.count()).select_from(StaffSession)) == 1
+            assert session.scalar(select(func.count()).select_from(LoginAttempt)) == 1
+            assert find_session_user(session, live, NOW) is not None
     finally:
         engine.dispose()

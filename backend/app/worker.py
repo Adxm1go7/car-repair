@@ -30,6 +30,8 @@ from app.payments.service import close_open_deposit
 from app.repositories.availability import load_reminder_hours_before
 from app.repositories.bookings import get_booking_for_update_by_id, release_expired_holds
 from app.repositories.payments import stale_open_deposits
+from app.staff.sessions import delete_expired_sessions
+from app.staff.throttle import delete_old_attempts
 
 log = logging.getLogger("app.worker")
 
@@ -54,9 +56,12 @@ def close_stale_checkouts(session: Session, provider: PaymentProvider, now: date
 
 
 def run_once(session: Session, now: datetime, provider: PaymentProvider) -> int:
-    """Release every hold expired at `now`, commit, then close their payment forms.
-    Returns how many holds were released."""
+    """Release every hold expired at `now`, commit, then close their payment forms. Also
+    clears out expired staff sessions and old login attempts. Returns how many holds were
+    released."""
     released = release_expired_holds(session, now)
+    delete_expired_sessions(session, now)
+    delete_old_attempts(session, now)
     session.commit()
     close_stale_checkouts(session, provider, now)
     return released

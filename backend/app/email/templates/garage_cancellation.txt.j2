@@ -1,0 +1,19 @@
+Hello {{ c.customer_name }},
+
+We're sorry: we've had to cancel your booking with {{ c.garage.name }} on {{ when }}.
+{% if c.reason %}
+Reason: {{ c.reason }}
+{% endif %}
+
+{% include "_booking.txt.j2" %}
+
+{% if c.deposit_status in ("refund_pending", "refunded") %}
+Your {{ deposit }} deposit is being refunded. It can take 5 to 10 working days to reach your account.
+
+{% elif c.deposit_status == "refund_failed" %}
+We'll be in touch about your refund.
+
+{% endif %}
+To book another time, please call us on {{ c.garage.phone }}.
+
+{% include "_footer.txt.j2" %}

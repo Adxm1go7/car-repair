@@ -1,10 +1,12 @@
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
 import pytest
 from alembic import command
 from alembic.config import Config
+from factories import make_staff
 from fakes import FakeProvider
 from fastapi.testclient import TestClient
 from sqlalchemy import make_url, text
@@ -106,3 +108,41 @@ def webhook_client(
     """Like api_client, with a webhook secret so Stripe's signed messages are accepted."""
     config = AppConfig(database_url=migrated_url, stripe_webhook_secret=WEBHOOK_SECRET)
     yield from _client_for(db_session, config, fake_provider)
+
+
+ORIGIN = "http://localhost:8080"  # the default PUBLIC_BASE_URL, so staff writes are allowed
+STAFF_PASSWORD = "correct horse"  # noqa: S105 - make_staff's test password
+ClientFor = Callable[[AppConfig], AbstractContextManager[TestClient]]
+
+
+@pytest.fixture
+def client_for(db_session: Session, migrated_url: str, fake_provider: FakeProvider) -> ClientFor:
+    """Make an api_client with a config of the test's own, e.g. `client_for(AppConfig(...))`."""
+
+    @contextmanager
+    def make(config: AppConfig) -> Iterator[TestClient]:
+        yield from _client_for(db_session, config, fake_provider)
+
+    return make
+
+
+def logged_in(client: TestClient, email: str) -> TestClient:
+    """Log `client` in as the make_staff user with this email. Writes carry ORIGIN."""
+    client.headers["Origin"] = ORIGIN
+    response = client.post("/api/staff/login", json={"email": email, "password": STAFF_PASSWORD})
+    assert response.status_code == 200, response.text
+    return client
+
+
+@pytest.fixture
+def staff_client(api_client: TestClient, db_session: Session) -> TestClient:
+    """An api_client logged in as a staff member (sam.staff@example.com)."""
+    make_staff(db_session)
+    return logged_in(api_client, "sam.staff@example.com")
+
+
+@pytest.fixture
+def admin_client(api_client: TestClient, db_session: Session) -> TestClient:
+    """An api_client logged in as an admin (alex.admin@example.com)."""
+    make_staff(db_session, role="admin", email="alex.admin@example.com", name="Alex Admin")
+    return logged_in(api_client, "alex.admin@example.com")

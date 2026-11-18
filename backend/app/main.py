@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import (
     availability,
@@ -13,6 +14,12 @@ from app.api import (
     health,
     holds,
     my_booking,
+    staff_audit,
+    staff_auth,
+    staff_blocks,
+    staff_bookings,
+    staff_schedule,
+    staff_team,
     stripe_webhook,
 )
 from app.config import AppConfig, get_config
@@ -58,6 +65,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.state.stripe_provider = (
         StripeProvider(config.stripe_secret_key) if config.payment_provider == "stripe" else None
     )
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=config.trusted_proxies)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(health.router, prefix="/api")
     app.include_router(catalogue.router, prefix="/api")
@@ -65,6 +73,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(holds.router, prefix="/api")
     app.include_router(my_booking.router, prefix="/api")
     app.include_router(stripe_webhook.router, prefix="/api")
+    app.include_router(staff_auth.public_router, prefix="/api")
+    app.include_router(staff_auth.router, prefix="/api")
+    app.include_router(staff_team.router, prefix="/api")
+    app.include_router(staff_schedule.router, prefix="/api")
+    app.include_router(staff_bookings.router, prefix="/api")
+    app.include_router(staff_blocks.router, prefix="/api")
+    app.include_router(staff_audit.router, prefix="/api")
     if config.payment_provider == "demo":  # never with Stripe keys, so never in production
         app.include_router(demo_payments.router, prefix="/api")
     return app

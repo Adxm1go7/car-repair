@@ -10,6 +10,7 @@ import { formatDuration, formatPrice } from './catalogue/format.ts'
 import { openTodayText } from './catalogue/openToday.ts'
 import type { Catalogue, Service } from './catalogue/types.ts'
 import { ManageBookingPage } from './manage/ManageBookingPage.tsx'
+import { StaffApp } from './staff/StaffApp.tsx'
 
 type PageState =
   | { kind: 'loading' }
@@ -144,7 +145,17 @@ function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }):
   )
 }
 
+/** Staff pages first, so they never wait for the catalogue the customer pages load. */
 export function App({ now = () => new Date() }: { now?: () => Date }): JSX.Element {
+  return (
+    <Routes>
+      <Route path="/staff/*" element={<StaffApp />} />
+      <Route path="*" element={<CustomerApp now={now} />} />
+    </Routes>
+  )
+}
+
+function CustomerApp({ now }: { now: () => Date }): JSX.Element {
   const [state, setState] = useState<PageState>({ kind: 'loading' })
 
   useEffect(() => {

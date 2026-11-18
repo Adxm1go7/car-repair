@@ -6,15 +6,25 @@ booking impossible, whatever the code does.
 """
 
 from datetime import datetime
-from typing import Final
+from typing import Any, Final
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, func, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 from app.models.booking import Booking
+from app.models.staff import StaffUser
 
-EMAIL_TEMPLATES: Final[tuple[str, ...]] = ("confirmation", "reminder", "cancellation")
+EMAIL_TEMPLATES: Final[tuple[str, ...]] = (
+    "confirmation",
+    "reminder",
+    "cancellation",
+    "moved",
+    "garage_cancellation",
+    "staff_invite",
+    "password_reset",
+)
 # skipped: the booking changed before it went out (a reminder for a cancelled booking).
 EMAIL_STATUSES: Final[tuple[str, ...]] = ("queued", "sent", "failed", "skipped")
 
@@ -29,6 +39,8 @@ class EmailLog(Base):
         CheckConstraint(f"template IN ({_quoted(EMAIL_TEMPLATES)})", name="template_valid"),
         CheckConstraint(f"status IN ({_quoted(EMAIL_STATUSES)})", name="status_valid"),
         CheckConstraint("attempts >= 0", name="attempts_non_negative"),
+        # A customer email is about a booking; a staff email (invite, reset) is about a person.
+        CheckConstraint("(booking_id IS NULL) <> (staff_user_id IS NULL)", name="has_one_subject"),
         Index("ix_email_log_status_next_attempt_at", "status", "next_attempt_at"),
         Index(
             "ux_email_log_one_reminder",
@@ -39,8 +51,12 @@ class EmailLog(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    template: Mapped[str] = mapped_column(String(20))
+    template: Mapped[str] = mapped_column(String(30))
     booking_id: Mapped[int | None] = mapped_column(ForeignKey("bookings.id"))
+    staff_user_id: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id"))
+    # What the email needs that the booking no longer says (a move's reason and old time).
+    # Never a token.
+    context: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     recipient: Mapped[str] = mapped_column(String(254))
     status: Mapped[str] = mapped_column(String(10), server_default="queued")
     attempts: Mapped[int] = mapped_column(Integer, server_default="0")
@@ -52,3 +68,4 @@ class EmailLog(Base):
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     booking: Mapped[Booking | None] = relationship()
+    staff_user: Mapped[StaffUser | None] = relationship()

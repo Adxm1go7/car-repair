@@ -17,6 +17,7 @@ from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+from app.models.block import Block
 from app.models.catalogue import Bay
 
 
@@ -29,6 +30,7 @@ class Reservation(Base):
     __tablename__ = "reservations"
     __table_args__ = (
         CheckConstraint("kind IN ('booking', 'block')", name="kind_valid"),
+        CheckConstraint("kind <> 'block' OR block_id IS NOT NULL", name="block_has_block"),
         CheckConstraint(
             "NOT isempty(during) AND NOT lower_inf(during) AND NOT upper_inf(during)",
             name="during_bounded",
@@ -49,5 +51,7 @@ class Reservation(Base):
     active: Mapped[bool] = mapped_column(Boolean, server_default=true())
     note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    block_id: Mapped[int | None] = mapped_column(ForeignKey("blocks.id"))
 
     bay: Mapped[Bay] = relationship()
+    block: Mapped[Block | None] = relationship(back_populates="reservations")

@@ -28,6 +28,7 @@ def queue_due_reminders(session: Session, now: datetime, hours_before: int) -> i
         select(Booking)
         .where(
             Booking.status == "confirmed",
+            Booking.customer_email.is_not(None),
             Booking.start_at <= now + window,
             Booking.start_at > now,
             Booking.confirmed_at < Booking.start_at - window,

@@ -13,8 +13,10 @@ from app.demo_data import (
     DEMO_GARAGE_CONTACT,
     DEMO_OPENING_HOURS,
     DEMO_SERVICES,
+    DEMO_STAFF,
 )
-from app.models import Bay, BayType, OpeningHours, OpeningHoursBreak, Service, Setting
+from app.models import Bay, BayType, OpeningHours, OpeningHoursBreak, Service, Setting, StaffUser
+from app.staff.passwords import hash_password
 
 DEFAULT_SETTINGS: Final[dict[str, Any]] = {
     "booking_window_days": 60,
@@ -31,10 +33,30 @@ DEFAULT_SETTINGS: Final[dict[str, Any]] = {
 }
 
 
-def seed(session: Session) -> None:
-    """Insert whatever is missing, never overwriting or re-creating data. The caller commits."""
+def seed(session: Session, *, sample_accounts: bool = False) -> None:
+    """Insert whatever is missing, never overwriting or re-creating data. The caller commits.
+
+    `sample_accounts` adds the demo logins: never in production."""
     _seed_settings(session)
     _seed_catalogue(session)
+    if sample_accounts:
+        _seed_sample_accounts(session)
+
+
+def _seed_sample_accounts(session: Session) -> None:
+    existing = set(session.scalars(select(StaffUser.email)))
+    for demo in DEMO_STAFF:
+        if demo.email not in existing:  # checked first: hashing is deliberately slow
+            session.execute(
+                insert(StaffUser)
+                .values(
+                    name=demo.name,
+                    email=demo.email,
+                    role=demo.role,
+                    password_hash=hash_password(demo.password),
+                )
+                .on_conflict_do_nothing(index_elements=["email"])
+            )
 
 
 def _seed_settings(session: Session) -> None:
@@ -114,9 +136,10 @@ def _seed_catalogue(session: Session) -> None:
 
 
 def main() -> None:
-    engine = make_engine(get_config().database_url)
+    config = get_config()
+    engine = make_engine(config.database_url)
     with Session(engine) as session:
-        seed(session)
+        seed(session, sample_accounts=config.environment != "production")
         session.commit()
     engine.dispose()
     print("Seed complete")

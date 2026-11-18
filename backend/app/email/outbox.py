@@ -1,25 +1,27 @@
 """The outbox: the worker sends queued emails from email_log, one row at a time.
 
 Each row is locked with SKIP LOCKED, so two workers never send the same email, and each is
-committed on its own, so one bad address never holds up the rest. A booking link is made
-in the same transaction as the send; if the send fails, the rollback drops the link too.
+committed on its own, so one bad address never holds up the rest. A booking link or a
+set-password token is made in the same transaction as the send; if the send fails, the
+rollback drops it too.
 """
 
 import logging
 from datetime import datetime, timedelta
-from typing import Final
+from typing import Any, Final
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.bookings.links import create_link
-from app.email.message import EmailTemplate
-from app.email.render import EmailContext, render_email
+from app.email.message import EmailTemplate, OutgoingEmail, StaffTemplate
+from app.email.render import EmailContext, StaffEmailContext, render_email, render_staff_email
 from app.email.sender import EmailSender, EmailUnavailable
-from app.models import Booking, EmailLog
+from app.models import Booking, EmailLog, StaffUser
 from app.repositories.availability import load_free_cancellation_hours, load_policy
 from app.repositories.catalogue import get_setting
 from app.repositories.payments import paid_deposit
+from app.staff.links import VALID_FOR, Purpose, issue_password_token, set_password_url
 
 log = logging.getLogger("app.email")
 
@@ -35,8 +37,14 @@ _APPLIES_TO: Final[dict[EmailTemplate, str]] = {
     "confirmation": "confirmed",
     "reminder": "confirmed",
     "cancellation": "cancelled",
+    "moved": "confirmed",
+    "garage_cancellation": "cancelled",
 }
-_HAS_LINK: Final[frozenset[EmailTemplate]] = frozenset({"confirmation", "reminder"})
+_HAS_LINK: Final[frozenset[EmailTemplate]] = frozenset({"confirmation", "reminder", "moved"})
+_PURPOSE: Final[dict[StaffTemplate, Purpose]] = {
+    "staff_invite": "invite",
+    "password_reset": "reset",
+}
 
 
 def next_attempt_delay(attempts: int) -> timedelta:
@@ -53,7 +61,22 @@ def link_url(base_url: str, reference: str, token: str) -> str:
     return f"{base_url.rstrip('/')}/booking/{reference}#t={token}"
 
 
-def _context(session: Session, booking: Booking, url: str | None, now: datetime) -> EmailContext:
+def _when(saved: dict[str, Any], key: str) -> datetime | None:
+    value = saved.get(key)
+    return datetime.fromisoformat(value) if isinstance(value, str) else None
+
+
+def _context(
+    session: Session,
+    booking: Booking,
+    url: str | None,
+    now: datetime,
+    saved: dict[str, Any] | None = None,
+) -> EmailContext:
+    """`saved` is the email row's context: what a garage change said when it was queued."""
+    saved = saved or {}
+    reason = saved.get("reason")
+    previous_bay = saved.get("previous_bay")
     deposit = paid_deposit(session, booking.id)
     garage = get_setting(session, "garage_contact")
     return EmailContext(
@@ -73,6 +96,10 @@ def _context(session: Session, booking: Booking, url: str | None, now: datetime)
         garage=garage if isinstance(garage, dict) else {},
         link_url=url,
         now=now,
+        reason=reason if isinstance(reason, str) else None,
+        previous_start=_when(saved, "previous_start"),
+        previous_end=_when(saved, "previous_end"),
+        previous_bay=previous_bay if isinstance(previous_bay, str) else None,
     )
 
 
@@ -102,6 +129,43 @@ def _record_failure(session: Session, email_id: int, error: Exception, now: date
     session.commit()
 
 
+def _prepare(
+    session: Session, email: EmailLog, now: datetime, base_url: str
+) -> OutgoingEmail | None:
+    """Render a due email, making its link's token if it has one. None: it no longer applies
+    (the booking moved on, or the staff member was removed) and must not be sent."""
+    if email.staff_user_id is not None:
+        return _prepare_staff(session, email, now, base_url)
+    template: EmailTemplate = email.template  # type: ignore[assignment]  # checked in the DB
+    booking = email.booking
+    if booking is None or not email_still_applies(template, booking.status):
+        return None
+    url = None
+    if template in _HAS_LINK:
+        url = link_url(base_url, booking.reference, create_link(session, booking))
+    context = _context(session, booking, url, now, email.context)
+    return render_email(template, email.recipient, context)
+
+
+def _prepare_staff(
+    session: Session, email: EmailLog, now: datetime, base_url: str
+) -> OutgoingEmail | None:
+    template: StaffTemplate = email.template  # type: ignore[assignment]  # checked in the DB
+    user: StaffUser | None = email.staff_user
+    if user is None or not user.active:
+        return None
+    purpose = _PURPOSE[template]
+    token = issue_password_token(session, user, purpose, now)
+    garage = get_setting(session, "garage_contact")
+    context = StaffEmailContext(
+        name=user.name,
+        garage=garage if isinstance(garage, dict) else {},
+        link_url=set_password_url(base_url, token),
+        valid_for=VALID_FOR[purpose],
+    )
+    return render_staff_email(template, email.recipient, context)
+
+
 def send_due_emails(
     session: Session, sender: EmailSender, now: datetime, base_url: str, batch: int = 20
 ) -> int:
@@ -112,16 +176,11 @@ def send_due_emails(
         if email is None:
             break
         email_id = email.id
-        template: EmailTemplate = email.template  # type: ignore[assignment]  # checked in the DB
-        booking = email.booking
-        if booking is None or not email_still_applies(template, booking.status):
+        message = _prepare(session, email, now, base_url)
+        if message is None:
             email.status = "skipped"
             session.commit()
             continue
-        url = None
-        if template in _HAS_LINK:
-            url = link_url(base_url, booking.reference, create_link(session, booking))
-        message = render_email(template, email.recipient, _context(session, booking, url, now))
         try:
             sender.send(message)
         except EmailUnavailable as error:
