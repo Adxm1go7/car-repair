@@ -1,3 +1,4 @@
+import pytest
 from alembic import command
 from conftest import alembic_config
 from sqlalchemy import inspect, text
@@ -196,3 +197,78 @@ def test_existing_bookings_become_online(fresh_database_url: str) -> None:
     with make_engine(fresh_database_url).connect() as connection:
         source = connection.execute(text("SELECT source FROM bookings")).scalar_one()
     assert source == "online"
+
+
+# --- 0009: opening hours timetables ---------------------------------------------------
+
+
+def _hours_at_0008(url: str) -> None:
+    """Monday 08:00–17:30 with a 12:30–13:00 break, and a closed Sunday, as 0008 stores them."""
+    with make_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO opening_hours (weekday, open_time, close_time)"
+                " VALUES (0, '08:00', '17:30'), (6, NULL, NULL)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO opening_hours_breaks (weekday, start_time, end_time)"
+                " VALUES (0, '12:30', '13:00')"
+            )
+        )
+
+
+def test_upgrade_moves_hours_into_first_timetable(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "0008")
+    _hours_at_0008(fresh_database_url)
+    command.upgrade(cfg, "0009")
+    with make_engine(fresh_database_url).connect() as connection:
+        timetables = connection.execute(text("SELECT id, starts_on FROM timetables")).all()
+        assert [str(t.starts_on) for t in timetables] == ["2000-01-01"]
+        first = timetables[0].id
+        days = connection.execute(
+            text(
+                "SELECT timetable_id, weekday, open_time, close_time FROM opening_hours"
+                " ORDER BY weekday"
+            )
+        ).all()
+        assert [(d.timetable_id, d.weekday, str(d.open_time), str(d.close_time)) for d in days] == [
+            (first, 0, "08:00:00", "17:30:00"),
+            (first, 6, "None", "None"),
+        ]
+        breaks = connection.execute(
+            text("SELECT timetable_id, weekday, start_time FROM opening_hours_breaks")
+        ).all()
+        assert [(b.timetable_id, b.weekday, str(b.start_time)) for b in breaks] == [
+            (first, 0, "12:30:00")
+        ]
+
+
+def test_downgrade_with_one_timetable_restores_hours(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "0008")
+    _hours_at_0008(fresh_database_url)
+    command.upgrade(cfg, "head")
+    command.downgrade(cfg, "0008")
+    engine = make_engine(fresh_database_url)
+    assert "timetables" not in inspect(engine).get_table_names()
+    with engine.connect() as connection:
+        days = connection.execute(text("SELECT weekday FROM opening_hours ORDER BY weekday")).all()
+        assert [d.weekday for d in days] == [0, 6]
+        breaks = connection.execute(
+            text("SELECT weekday, start_time FROM opening_hours_breaks")
+        ).all()
+        assert [(b.weekday, str(b.start_time)) for b in breaks] == [(0, "12:30:00")]
+
+
+def test_downgrade_refuses_with_two_timetables(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "head")
+    with make_engine(fresh_database_url).begin() as connection:
+        connection.execute(
+            text("INSERT INTO timetables (starts_on) VALUES ('2000-01-01'), ('2030-01-01')")
+        )
+    with pytest.raises(RuntimeError, match="more than one timetable"):
+        command.downgrade(cfg, "0008")

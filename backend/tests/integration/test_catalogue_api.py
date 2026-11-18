@@ -1,10 +1,11 @@
 from unittest.mock import ANY
 
+from factories import first_day
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import OpeningHours, Service, Setting
+from app.models import Service, Setting
 from app.seed import seed
 
 # --- /api/services --------------------------------------------------------------
@@ -66,7 +67,7 @@ def test_opening_hours_shows_missing_day_as_closed(
     api_client: TestClient, db_session: Session
 ) -> None:
     seed(db_session)
-    wednesday = db_session.get(OpeningHours, 2)
+    wednesday = first_day(db_session, 2)
     assert wednesday is not None
     db_session.delete(wednesday)
     db_session.flush()

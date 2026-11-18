@@ -3,11 +3,11 @@
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
-from factories import make_block_reservation, make_hold
+from factories import first_day, make_block_reservation, make_hold
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Bay, BookingItem, OpeningHours, Service
+from app.models import Bay, BookingItem, Service
 from app.schedule.availability import (
     infos_for_booking,
     infos_for_services,
@@ -94,7 +94,7 @@ def test_blocks_and_breaks_still_apply(seeded: Session) -> None:
 
 def test_closed_day_has_no_times(seeded: Session) -> None:
     # Sunday is open 10:00-13:00 in the demo; close it.
-    sunday = seeded.get(OpeningHours, 6)
+    sunday = first_day(seeded, 6)
     assert sunday is not None
     sunday.open_time = sunday.close_time = None
     seeded.flush()

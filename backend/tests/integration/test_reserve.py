@@ -5,14 +5,14 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
-from factories import make_block_reservation
+from factories import first_day, make_block_reservation
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.availability.engine import Policy
-from app.models import Bay, OpeningHours, Reservation, Service, Setting
+from app.models import Bay, Reservation, Service, Setting
 from app.repositories.availability import (
     SettingsUnavailable,
     day_availability,
@@ -193,7 +193,7 @@ def test_cutoff_override_allows_a_start_inside_the_cutoff(seeded: Session) -> No
 
 def test_reserve_second_occurrence_of_repeated_hour_is_not_the_first(seeded: Session) -> None:
     # 2026-10-25 (a Sunday): 01:00-01:59 happens twice. Open 00:00-03:00 for this test.
-    sunday = seeded.get(OpeningHours, 6)
+    sunday = first_day(seeded, 6)
     assert sunday is not None
     sunday.open_time, sunday.close_time = time(0), time(3)
     seeded.flush()

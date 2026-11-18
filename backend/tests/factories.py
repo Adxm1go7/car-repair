@@ -1,13 +1,25 @@
 """Test data builders shared by several test files."""
 
-from datetime import datetime, timedelta
+from collections.abc import Mapping, Sequence
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.orm import Session
 
 from app.bookings.rules import hash_token, new_reference
-from app.models import Bay, Block, Booking, Payment, Reservation, StaffUser
+from app.models import (
+    Bay,
+    Block,
+    Booking,
+    OpeningHours,
+    OpeningHoursBreak,
+    Payment,
+    Reservation,
+    StaffUser,
+    Timetable,
+)
+from app.models.catalogue import FIRST_TIMETABLE_STARTS
 from app.staff.passwords import hash_password
 
 TEST_TOKEN = "t"  # noqa: S105 - a test hold token, not a password
@@ -129,3 +141,44 @@ def make_staff(
     session.add(user)
     session.flush()
     return user
+
+
+def make_timetable(
+    session: Session,
+    starts_on: date,
+    days: Mapping[int, tuple[time, time] | None],
+    breaks: Mapping[int, Sequence[tuple[time, time]]] | None = None,
+) -> Timetable:
+    """A timetable from `starts_on`, with a row for each weekday in `days` (None = closed)."""
+    timetable = Timetable(starts_on=starts_on)
+    session.add(timetable)
+    session.flush()
+    for weekday, hours in days.items():
+        session.add(
+            OpeningHours(
+                timetable_id=timetable.id,
+                weekday=weekday,
+                open_time=hours[0] if hours else None,
+                close_time=hours[1] if hours else None,
+            )
+        )
+    session.flush()
+    for weekday, spans in (breaks or {}).items():
+        for start, end in spans:
+            session.add(
+                OpeningHoursBreak(
+                    timetable_id=timetable.id, weekday=weekday, start_time=start, end_time=end
+                )
+            )
+    session.flush()
+    return timetable
+
+
+def first_day(session: Session, weekday: int) -> OpeningHours:
+    """The first timetable's (the seed's) row for `weekday`."""
+    row = session.scalars(
+        select(OpeningHours)
+        .join(Timetable)
+        .where(Timetable.starts_on == FIRST_TIMETABLE_STARTS, OpeningHours.weekday == weekday)
+    ).one()
+    return row

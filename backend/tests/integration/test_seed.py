@@ -1,5 +1,6 @@
 from alembic import command
 from conftest import alembic_config
+from factories import first_day
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -14,6 +15,7 @@ from app.models import (
     Service,
     Setting,
     StaffUser,
+    Timetable,
 )
 from app.seed import DEFAULT_SETTINGS, seed
 from app.staff.passwords import password_matches
@@ -24,9 +26,10 @@ CATALOGUE_MODELS: tuple[type[Base], ...] = (
     Service,
     OpeningHours,
     OpeningHoursBreak,
+    Timetable,
 )
-# bay types, bays, services, opening-hours days, breaks
-DEMO_COUNTS = [2, 4, 10, 7, 5]
+# bay types, bays, services, opening-hours days, breaks, timetables
+DEMO_COUNTS = [2, 4, 10, 7, 5, 1]
 
 
 def count(session: Session, model: type[Base]) -> int:
@@ -116,7 +119,7 @@ def test_seed_inserts_demo_catalogue(db_session: Session) -> None:
         "needs_approval",
     )
 
-    monday = db_session.get(OpeningHours, 0)
+    monday = first_day(db_session, 0)
     assert monday is not None
     assert [(b.start_time.isoformat(), b.end_time.isoformat()) for b in monday.breaks] == [
         ("12:30:00", "13:00:00")
@@ -149,16 +152,25 @@ def test_seed_keeps_deactivated_service_inactive(db_session: Session) -> None:
 
 def test_seed_does_not_recreate_deleted_break(db_session: Session) -> None:
     seed(db_session)
-    monday = db_session.get(OpeningHours, 0)
+    monday = first_day(db_session, 0)
     assert monday is not None
     monday.breaks.clear()
     db_session.flush()
     seed(db_session)
     db_session.expire_all()
-    monday = db_session.get(OpeningHours, 0)
+    monday = first_day(db_session, 0)
     assert monday is not None
     assert monday.breaks == []
     assert count(db_session, OpeningHoursBreak) == 4
+
+
+def test_seed_creates_first_timetable(db_session: Session) -> None:
+    seed(db_session)
+    timetables = list(db_session.scalars(select(Timetable)))
+    assert [str(t.starts_on) for t in timetables] == ["2000-01-01"]
+    assert {d.weekday for d in timetables[0].days} == set(range(7))
+    seed(db_session)
+    assert count(db_session, Timetable) == 1
 
 
 # --- sample staff accounts --------------------------------------------------------

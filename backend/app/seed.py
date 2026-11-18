@@ -15,7 +15,17 @@ from app.demo_data import (
     DEMO_SERVICES,
     DEMO_STAFF,
 )
-from app.models import Bay, BayType, OpeningHours, OpeningHoursBreak, Service, Setting, StaffUser
+from app.models import (
+    Bay,
+    BayType,
+    OpeningHours,
+    OpeningHoursBreak,
+    Service,
+    Setting,
+    StaffUser,
+    Timetable,
+)
+from app.models.catalogue import FIRST_TIMETABLE_STARTS
 from app.staff.passwords import hash_password
 
 DEFAULT_SETTINGS: Final[dict[str, Any]] = {
@@ -108,6 +118,16 @@ def _seed_catalogue(session: Session) -> None:
         .on_conflict_do_nothing(index_elements=["slug"])
     )
 
+    # The demo week is the first timetable, which every later one follows.
+    session.execute(
+        insert(Timetable)
+        .values(starts_on=FIRST_TIMETABLE_STARTS)
+        .on_conflict_do_nothing(index_elements=["starts_on"])
+    )
+    first = session.scalars(
+        select(Timetable.id).where(Timetable.starts_on == FIRST_TIMETABLE_STARTS)
+    ).one()
+
     # RETURNING gives only the days inserted by this run, so breaks are added
     # alongside a new day and never re-created after an admin removes them.
     new_weekdays = session.scalars(
@@ -115,6 +135,7 @@ def _seed_catalogue(session: Session) -> None:
         .values(
             [
                 {
+                    "timetable_id": first,
                     "weekday": weekday,
                     "open_time": hours[0] if hours else None,
                     "close_time": hours[1] if hours else None,
@@ -122,12 +143,12 @@ def _seed_catalogue(session: Session) -> None:
                 for weekday, hours in DEMO_OPENING_HOURS.items()
             ]
         )
-        .on_conflict_do_nothing(index_elements=["weekday"])
+        .on_conflict_do_nothing(index_elements=["timetable_id", "weekday"])
         .returning(OpeningHours.weekday)
     ).all()
 
     new_breaks = [
-        {"weekday": weekday, "start_time": start, "end_time": end}
+        {"timetable_id": first, "weekday": weekday, "start_time": start, "end_time": end}
         for weekday in new_weekdays
         for start, end in DEMO_BREAKS.get(weekday, [])
     ]
