@@ -37,6 +37,28 @@ Customers can't reschedule: the page asks them to call. A reminder is sent 48 ho
 after 1, 5, 15 and 60 minutes. `PUBLIC_BASE_URL` is the address the links point to, and
 `SMTP_FROM` is the sender.
 
+**Staff back office.** Open http://localhost:8080/staff and log in with one of the sample
+accounts. The seed adds them everywhere except production:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@example.test` | `demo-admin-pass` |
+| Staff | `staff@example.test` | `demo-staff-pass` |
+
+Staff see every bay's bookings by day or week, book customers in over the phone (no deposit,
+email optional), move or cancel a booking (the customer is emailed, and a cancellation
+refunds the deposit), block time, and move a job through in progress and completed, or mark a
+no show. Admins can also invite staff, change roles, remove or restore access, send password
+resets (**Team**), and read the log of every staff change (**Audit**). Invite and reset emails
+land in Mailpit like the rest.
+
+On a fresh database with no sample accounts (production), create the first admin. The command
+prints a set-password link that works once, for 72 hours, and sends no email:
+
+```bash
+docker compose exec api python -m app.create_admin --name "Your Name" --email you@example.com
+```
+
 No `.env` file is needed. To override defaults, copy `.env.example` to `.env`.
 
 | What | URL |
@@ -77,7 +99,7 @@ docker compose down -v
 docker compose up --build
 ```
 
-Admin screens for editing the catalogue arrive in Milestone 7.
+Admin screens for editing the catalogue arrive in Milestone 8.
 
 ## Local development
 
@@ -125,7 +147,11 @@ npm run build
 [Playwright](https://playwright.dev/) tests book an MOT in a real browser, pay the deposit
 in Stripe's form with a test card, then check the booked time is no longer offered. Flow 4 then
 opens the link from the confirmation email in Mailpit, cancels, and checks the cancellation
-email and that the time is free again. A made-up link must show the safe message. They need
+email and that the time is free again. A made-up link must show the safe message. Flow 5 logs
+in as the sample staff member, books a customer in over the phone, blocks an hour on Bay 1,
+starts and completes the job, then checks the admin's audit log and removes the block. Flow 6
+has staff move a paid booking (checking the "moved" email and the customer's page) and then
+cancel it (checking the email and the refund). They need
 the stack running with Stripe test keys ([docs/stripe-setup.md](docs/stripe-setup.md)) and
 fail at once, with a clear message, in demo mode. Start the stack first:
 

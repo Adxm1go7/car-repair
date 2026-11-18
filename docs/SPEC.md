@@ -29,15 +29,18 @@ These decisions are settled. Rows marked *proposed* are my defaults that you acc
 | --- | --- |
 | Audience | One garage, built as a demo and CV project; selling to other garages is a possible later step. |
 | Customers | No accounts. Guest booking with name, phone and email. A private token link in each email lets them view or cancel one booking. To change the time, they phone the garage (decided Nov 14). |
-| Staff | Two roles, admin and staff. Everyone sees one shared schedule. |
+| Staff | Two roles, admin and staff. Everyone sees one shared schedule. An admin invites someone by email, and they set their own password from the link; passwords are reset the same way (decided Nov 16). |
 | Scheduling | Bays only, no per-mechanic calendars. Bays have types (for example MOT ramp, general bay); the detail comes later. |
 | Opening hours | Open all week, shorter hours on Saturday and Sunday. *Proposed*: Mon to Fri 08:00 to 17:30, Sat 09:00 to 14:00, Sun 10:00 to 13:00, all editable by the admin. |
 | Services | Public prices, fixed or a range. Each has a duration, a required bay type, and an instant or needs-approval flag. |
 | Multi-service visits | Allowed. If any selected service needs approval, the whole booking goes to staff. |
 | Unknown issues | A separate enquiry flow with structured fields, notes and photos. Staff approve, decline or ask for more information. |
 | Deposit | Flat £20 per booking in Stripe test mode, balance paid in person. Refundable when cancelled 24 hours or more ahead. For approval bookings it is requested after approval. |
-| Notifications | Email only in v1: confirmation, reminder, cancellation, garage-initiated change, "car ready". SMS can be added later behind the same interface. |
-| Garage-initiated changes | If staff cancel or move a booking, the system emails the customer, refunds the deposit and offers a new slot. |
+| Notifications | Email only in v1: confirmation, reminder, cancellation, garage-initiated change. SMS can be added later behind the same interface. There is no "car ready" message: when the work is done, the mechanic phones the customer if they've gone away, and payment is settled outside the system (decided Nov 16). |
+| Garage-initiated changes | Staff phone the customer first, then cancel or move the booking, optionally giving a reason. Each change records who made it. The system emails the customer: a move gives the new time staff chose, and a cancellation refunds the deposit. A moved booking keeps its deposit and follows the normal refund rules: if the customer then cancels inside the free-cancellation period, the deposit isn't refunded, even though the garage did the moving. The garage is trusted to move bookings fairly (decided Nov 16). |
+| Phone bookings | Staff can book a customer who phones in. A phone booking has no deposit, and the customer's email is optional (decided Nov 16). |
+| No-shows | Staff mark a no-show. It keeps the deposit and the booked time (nothing is refunded or freed), and sends no email (decided Nov 16). |
+| Admin settings | Admins can add a service; edit a service's name, category, description, price and duration; set its bay type and its instant or needs-approval mode only when it's created; hide or show a service; change the display order; add, rename, and take a bay out of use or put it back; add a bay type (it can't be renamed); edit opening hours and regular breaks; and edit the garage contact details. The booking rules (window, cut-off, free-cancellation period, deposit, reminder time, slot grid, bay buffer) can't be changed by admins and stay in setup data. A change that clashes with existing bookings, such as taking a bay out of use or cutting hours or adding a break over booked time, is refused until staff have moved or cancelled each clashing booking, and the refusal lists them. Bookings store their own service name, price and duration, so editing a service never changes existing bookings (decided Nov 16, built in Milestone 8). |
 | Policy settings | *Proposed*: booking window 60 days, cut-off 2 hours before a slot, slot hold 5 minutes (shortened from 10 in Milestone 4), free cancellation 24 hours. All stored as settings, not hardcoded. |
 | Stack | Python with FastAPI, React with TypeScript, PostgreSQL, Docker Compose, GitHub Actions. |
 | Photos | Enquiry photo uploads, stored in S3-compatible object storage. |
@@ -53,8 +56,8 @@ There are three kinds of user, and only two of them log in.
 | Role | Logs in? | Can do |
 | --- | --- | --- |
 | Customer | No | Browse services, book, send an enquiry, and use their emailed token link to view or cancel one booking. |
-| Staff | Yes | See the shared schedule, confirm or decline pending bookings and enquiries, move or cancel bookings, block time, mark a job in progress, complete, or "car ready". |
-| Admin | Yes | Everything staff can do, plus edit services, prices, bays, opening hours, policy settings, and staff accounts. |
+| Staff | Yes | See the shared schedule, make phone bookings, move or cancel bookings, block time, and set job status (in progress, completed, no show). Approving bookings and enquiries arrives in Milestone 9. |
+| Admin | Yes | Everything staff can do, plus manage staff accounts, read the audit log, and (from Milestone 8) edit the settings listed under "Admin settings" in the decisions log. |
 
 Every staff endpoint checks the role on the server. Hiding a button in the interface is never the only protection.
 
@@ -68,8 +71,8 @@ Version 1 is the complete demonstration. Everything in the second list is delibe
 - Booking: pick one or more services, enter car details (registration, make, model, notes), choose an open slot, pay the deposit, receive a confirmation email.
 - Enquiry: structured fields (registration, make and model, symptoms, urgency), free-text notes and photo upload, with a staff approval queue.
 - Token self-service: view and cancel from an emailed link, cancelling only within the policy window. No customer rescheduling: they call the garage.
-- Back office: login, shared day and week schedule, booking and enquiry management, blocked time, service and price editing, opening hours, settings, "car ready" button.
-- Emails: confirmation, reminder, cancellation, garage-initiated change, car ready.
+- Back office: login, staff accounts, shared day and week schedule, phone bookings (no deposit, email optional), move and cancel, blocked time, job status, booking and enquiry management, service and price editing, opening hours and contact details.
+- Emails: confirmation, reminder, cancellation, garage-initiated change (move or cancel), staff invite and password reset.
 - Operations: audit log of staff changes, seed data for a realistic demo garage, one-command local startup.
 
 **Later, not v1**
@@ -110,13 +113,13 @@ Six flows cover the whole product. Each should become at least one end-to-end te
 **5. Staff schedule management**
 
 1. Staff open the shared day or week view across all bays.
-2. They can move or cancel a booking, block time (holiday, breakdown, lunch), and advance a job through in progress, completed and car ready.
-3. Every change is written to the audit log.
+2. They can book a customer who phones in (no deposit, email optional), move or cancel a booking, block time (holiday, breakdown, lunch), and advance a job through in progress and completed, or mark a no show.
+3. Every change is written to the audit log, with who made it.
 
 **6. Garage-initiated cancellation or move**
 
-1. Staff cancel or move a booking and give a reason.
-2. The system emails the customer, refunds the deposit, and offers a link to choose a new slot.
+1. Staff phone the customer first, then cancel or move the booking, optionally giving a reason. Each change records who made it.
+2. The system emails the customer: a move gives the new time staff chose, and a cancellation refunds the deposit.
 
 ## Domain model
 
@@ -128,17 +131,19 @@ This is the conceptual model, not yet a schema. Customer details live on the boo
 | BayType | name (for example MOT ramp, general bay) | Detail to be defined later. |
 | Bay | name, bay type, active | A bay holds one booking at a time. |
 | OpeningHours | weekday, open time, close time, breaks | Per weekday, editable. |
-| ScheduleBlock | bay or all bays, start, end, reason | Holidays, breakdowns, lunch, one-off closures. |
-| Booking | customer name, phone, email, car registration, make, model, notes, bay, start, end, status, deposit status, token hash, expiry of hold | One continuous block in one bay. |
+| Block | bays (one or all), start, end, note, created by | Holidays, breakdowns, one-off closures. Removing one is audited. |
+| Booking | customer name, phone, email (optional for phone bookings), car registration, make, model, notes, bay, start, end, status, deposit status, source (online or phone), created by, token hash, expiry of hold | One continuous block in one bay. Deposit status includes `not_required` for phone bookings. |
 | BookingItem | booking, service, price at time of booking, duration at time of booking | Snapshots, so later price edits do not rewrite history. |
 | Enquiry | same car and contact fields, symptoms, urgency, notes, status, linked booking | Photos attach to it. |
 | EnquiryPhoto | enquiry, storage key, content type, size | Validated on upload. |
 | Payment | booking, provider reference, amount, kind (deposit or refund), status | Webhook events are stored to make handling idempotent. |
-| StaffUser | name, email, password hash, role | Roles: admin, staff. |
+| StaffUser | name, email, password hash, role, active, last login | Roles: admin, staff. A removed account is kept inactive so the audit log can still name it. |
+| StaffSession | staff user, token hash, created, last used, expires | Server-side login sessions, carried by a cookie. |
+| PasswordToken | staff user, kind (invite or reset), token hash, expires, used | Set-password links. Only the hash is stored. |
 | Setting | key, value | Cancellation window, booking window, cut-off, hold time, deposit amount. |
 | BookingLink | booking, token hash, expires at, created at | One per email that carries a link. Only the hash is stored; it expires a week after the booking ends. |
 | EmailLog | recipient, template, related booking, status, attempts, next attempt at, last error, sent at | The send queue as well as the log. Doubles as a test and debugging aid. |
-| AuditEntry | staff user, action, entity, before, after, time | Written for every staff change. |
+| AuditEntry | staff user, action, entity, before, after, reason, time | Written for every staff change, in the same transaction. |
 
 **Booking statuses:** held, pending approval, confirmed, in progress, completed, cancelled, no show, expired.
 
@@ -300,10 +305,11 @@ There is no deadline, so each milestone has a definition of done and the next on
 4. **Booking flow with slot hold.** Service selection, slot picker, hold and expiry job, customer details. *Done when* flow 1 passes end to end without payment.
 5. **Deposit payments.** Stripe test mode, idempotent webhooks, refund on eligible cancellation. *Done when* success, failure and duplicate-webhook tests pass.
 6. **Email and token self-service.** Templates, send log, token links, customer cancel within policy (no customer rescheduling). *Done when* flow 4 passes end to end and expired tokens fail safely.
-7. **Staff back office.** Login, roles, shared day and week schedule, move, cancel, block time, job status, "car ready", audit log, mobile layout. *Done when* flow 5 and flow 6 pass and role checks are tested.
-8. **Approval bookings and enquiries.** Needs-approval services, the staff queue, enquiry form with photo upload, approve, decline and convert. *Done when* flows 2 and 3 pass end to end.
-9. **Hardening and polish.** Rate limiting, accessibility pass, error pages, load test of the availability endpoint, security scans, documentation. *Done when* the checklist section is fully ticked.
-10. **Deployment.** Cloud environment from the same images, environment configuration, a seeded live demo, and a short walkthrough or recording. *Done when* the live demo passes the end-to-end suite.
+7. **Staff back office.** Login, staff accounts, roles, shared day and week schedule, phone bookings, move, cancel, block time, job status, audit log, mobile layout. *Done when* flow 5 and flow 6 pass and role checks are tested.
+8. **Admin settings.** Editing services, bays, bay types, opening hours, breaks and contact details, with clashing changes refused until the bookings in the way are moved or cancelled. *Done when* each setting can be edited and a clashing change is refused with the bookings listed.
+9. **Approval bookings and enquiries.** Needs-approval services, the staff queue, enquiry form with photo upload, approve, decline and convert. *Done when* flows 2 and 3 pass end to end.
+10. **Hardening and polish.** Rate limiting, accessibility pass, error pages, load test of the availability endpoint, security scans, documentation. *Done when* the checklist section is fully ticked.
+11. **Deployment.** Cloud environment from the same images, environment configuration, a seeded live demo, and a short walkthrough or recording. *Done when* the live demo passes the end-to-end suite.
 
 ## Open questions and next steps
 
@@ -315,8 +321,8 @@ These are the gaps still to close. None blocks milestones 1 to 3, so building ca
 - [ ] **Slot grid.** Should start times fall every 15, 30 or 60 minutes, and is a buffer needed between jobs?
 - [ ] **Needs-approval hold.** How long is a pending booking's slot held while staff decide?
 - [x] **Reschedule rules.** No customer rescheduling: customers call the garage for a different time (Nov 14).
-- [ ] **No-shows.** Is the deposit forfeited, and who marks a no-show?
-- [ ] **Staff accounts.** How are they created and recovered (admin creates them, password reset by email)?
+- [x] **No-shows.** Staff mark a no-show; it keeps the deposit and the booked time, and sends no email (Nov 16).
+- [x] **Staff accounts.** An admin invites someone by email and they set their own password from the link; passwords are reset the same way (Nov 16).
 - [ ] **Hosting.** Which free cloud tier to target when the time comes.
 
 **Suggested next steps**
