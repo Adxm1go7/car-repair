@@ -8,8 +8,9 @@ from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Bay, Block, Booking, OpeningHours, Reservation
+from app.models import Bay, Block, Booking, Reservation
 from app.repositories.bookings import expired_hold
+from app.repositories.hours import hours_on
 
 
 @dataclass(frozen=True)
@@ -56,22 +57,12 @@ def load_schedule(
             .order_by(Bay.id)
         )
     )
-    hours = {
-        row.weekday: row
-        for row in session.scalars(select(OpeningHours).options(selectinload(OpeningHours.breaks)))
-    }
     day_list = [first + timedelta(days=n) for n in range(days)]
-    day_hours = []
-    for day in day_list:
-        row = hours.get(day.weekday())
-        day_hours.append(
-            DayHours(
-                day=day,
-                open=row.open_time if row else None,
-                close=row.close_time if row else None,
-                breaks=tuple((b.start_time, b.end_time) for b in row.breaks) if row else (),
-            )
-        )
+    hours = hours_on(session, day_list)
+    day_hours = [
+        DayHours(day=day, open=hours[day].open, close=hours[day].close, breaks=hours[day].breaks)
+        for day in day_list
+    ]
 
     start = local_midnight(first, zone)
     end = local_midnight(first + timedelta(days=days), zone)

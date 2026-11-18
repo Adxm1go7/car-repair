@@ -1,10 +1,10 @@
 """The staff schedule: bays, each day's hours, and the bookings and blocks in range."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 import pytest
-from factories import make_block_reservation, make_hold
+from factories import make_block_reservation, make_hold, make_timetable
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -165,3 +165,17 @@ def test_staff_availability_mixed_bay_types(client: TestClient) -> None:
 def test_staff_availability_unknown_service_is_422(client: TestClient) -> None:
     response = client.get("/api/staff/availability", params={"services": ["nope"], "date": TUESDAY})
     assert response.status_code == 422
+
+
+def test_schedule_days_follow_timetables(client: TestClient, db_session: Session) -> None:
+    # From Tue 1 Dec: Tuesday 09:00–12:00, every other day closed.
+    make_timetable(db_session, date(2026, 12, 1), {1: (time(9), time(12))})
+    days = schedule(client, "2026-11-30", 3)["days"]
+    assert days[0] == {
+        "date": "2026-11-30",
+        "open": "08:00",
+        "close": "17:30",
+        "breaks": [{"start": "12:30", "end": "13:00"}],
+    }
+    assert days[1] == {"date": "2026-12-01", "open": "09:00", "close": "12:00", "breaks": []}
+    assert days[2] == {"date": "2026-12-02", "open": None, "close": None, "breaks": []}
