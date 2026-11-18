@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import (
     availability,
@@ -64,6 +65,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.state.stripe_provider = (
         StripeProvider(config.stripe_secret_key) if config.payment_provider == "stripe" else None
     )
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=config.trusted_proxies)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(health.router, prefix="/api")
     app.include_router(catalogue.router, prefix="/api")

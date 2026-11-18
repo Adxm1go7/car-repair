@@ -84,7 +84,10 @@ def login(
         session.commit()
         raise WRONG
     user = session.scalars(select(StaffUser).where(StaffUser.email == email)).one_or_none()
-    matches = password_matches(body.password, user.password_hash if user else _DUMMY_HASH)
+    # Always run a real hash check, even for an unknown email or an account with no password
+    # yet, so the answer takes as long either way and doesn't reveal which emails exist.
+    stored = user.password_hash if user is not None else None
+    matches = password_matches(body.password, stored or _DUMMY_HASH) and stored is not None
     ok = user is not None and user.active and matches
     record_attempt(session, email, ip, ok, now)
     if not ok or user is None:

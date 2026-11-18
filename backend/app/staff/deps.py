@@ -14,7 +14,7 @@ from app.clock import utc_now
 from app.config import AppConfig
 from app.db import get_session
 from app.models import StaffUser
-from app.staff.sessions import IDLE_LIMIT, find_session_user
+from app.staff.sessions import SESSION_CAP, find_session_user
 
 COOKIE_NAME: Final = "staff_session"
 COOKIE_PATH: Final = "/api/staff"
@@ -69,7 +69,10 @@ def set_session_cookie(response: Response, token: str, config: AppConfig) -> Non
     response.set_cookie(
         COOKIE_NAME,
         token,
-        max_age=int(IDLE_LIMIT.total_seconds()),
+        # The cookie lives as long as the longest session; the server ends it sooner after
+        # 7 idle days. (The cookie is only set at login, so an idle-length cookie would end a
+        # session that is used every day.)
+        max_age=int(SESSION_CAP.total_seconds()),
         path=COOKIE_PATH,
         secure=config.public_base_url.startswith("https://"),
         httponly=True,
