@@ -26,6 +26,12 @@ export type OpeningDay = {
   breaks: OpeningBreak[]
 }
 
+/** A week of hours in force from `starts_on` ("YYYY-MM-DD", garage-local) until the next one. */
+export type Timetable = {
+  starts_on: string
+  days: OpeningDay[]
+}
+
 export type Garage = {
   name: string
   address: string
@@ -36,7 +42,8 @@ export type Garage = {
 
 export type Catalogue = {
   services: Service[]
-  hours: OpeningDay[]
+  /** The timetable in force today first, then any starting within the booking window. */
+  timetables: Timetable[]
   garage: Garage
 }
 

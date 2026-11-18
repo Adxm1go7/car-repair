@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
-import { HOURS, SERVICES } from '../../testing/fixtures.ts'
+import { TIMETABLES, SERVICES } from '../../testing/fixtures.ts'
 import { DAY_SCHEDULE, MOVE_OPTIONS, STAFF_BOOKING, scheduleUrl } from '../../testing/schedule.ts'
 import type { Reply } from '../../testing/staffApi.tsx'
 import { STAFF_ME, renderAt, sentBody, stubFetch } from '../../testing/staffApi.tsx'
@@ -14,7 +14,7 @@ function stubForm(post: Reply = { status: 201, body: { reference: 'PHON-EONE' } 
   return stubFetch({
     'GET /api/staff/me': { status: 200, body: STAFF_ME },
     '/api/services': { status: 200, body: SERVICES },
-    '/api/opening-hours': { status: 200, body: HOURS },
+    '/api/opening-hours': { status: 200, body: { timetables: TIMETABLES } },
     [`GET ${scheduleUrl('2026-11-17', 1)}`]: { status: 200, body: DAY_SCHEDULE },
     [`GET ${MOT_TIMES}`]: { status: 200, body: MOVE_OPTIONS },
     [`GET ${MIXED_TIMES}`]: {

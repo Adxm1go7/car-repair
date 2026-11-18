@@ -5,7 +5,7 @@ import { MemoryRouter, useNavigate } from 'react-router'
 import { afterEach, expect, it, vi } from 'vitest'
 import { App } from '../App.tsx'
 import type { OpeningDay } from '../catalogue/types.ts'
-import { GARAGE, HOURS, SERVICES } from '../testing/fixtures.ts'
+import { GARAGE, HOURS, SERVICES, onlyWeek } from '../testing/fixtures.ts'
 import type { Availability, BookingSummary, Hold, HoldStatus } from './types.ts'
 
 // Sunday 15 November, 10:00 in London. The garage is closed on Sundays here.
@@ -86,7 +86,7 @@ function stubApi({
   let releasedAlready = false
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     if (url === '/api/services') return Promise.resolve(json(SERVICES))
-    if (url === '/api/opening-hours') return Promise.resolve(json(SUNDAY_CLOSED))
+    if (url === '/api/opening-hours') return Promise.resolve(json({ timetables: onlyWeek(SUNDAY_CLOSED) }))
     if (url === '/api/garage') return Promise.resolve(json(GARAGE))
     if (url === '/api/booking-policy') {
       return Promise.resolve(json(POLICY))

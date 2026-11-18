@@ -1,5 +1,5 @@
 // Demo-garage data shared by the page tests.
-import type { Garage, OpeningDay, Service } from '../catalogue/types.ts'
+import type { Garage, OpeningDay, Service, Timetable } from '../catalogue/types.ts'
 
 export const SERVICES: Service[] = [
   {
@@ -40,6 +40,14 @@ export const HOURS: OpeningDay[] = [
   { weekday: 5, open: '09:00', close: '14:00', breaks: [] },
   { weekday: 6, open: '10:00', close: '13:00', breaks: [] },
 ]
+
+/** One timetable, in force since the start: what GET /api/opening-hours lists for the demo garage. */
+export const TIMETABLES: Timetable[] = [{ starts_on: '2000-01-01', days: HOURS }]
+
+/** `days` as the only timetable. */
+export function onlyWeek(days: OpeningDay[]): Timetable[] {
+  return [{ starts_on: '2000-01-01', days }]
+}
 
 export const GARAGE: Garage = {
   name: 'Hillside Motors',

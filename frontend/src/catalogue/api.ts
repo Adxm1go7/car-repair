@@ -1,4 +1,4 @@
-import type { CatalogueResult, Garage, OpeningDay, Service } from './types.ts'
+import type { CatalogueResult, Garage, Service, Timetable } from './types.ts'
 
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url)
@@ -13,11 +13,14 @@ async function getJson<T>(url: string): Promise<T> {
 export async function fetchCatalogue(): Promise<CatalogueResult> {
   const [services, hours, garage] = await Promise.allSettled([
     getJson<Service[]>('/api/services'),
-    getJson<OpeningDay[]>('/api/opening-hours'),
+    getJson<{ timetables: Timetable[] }>('/api/opening-hours'),
     getJson<Garage>('/api/garage'),
   ])
   if (services.status === 'fulfilled' && hours.status === 'fulfilled' && garage.status === 'fulfilled') {
-    return { ok: true, data: { services: services.value, hours: hours.value, garage: garage.value } }
+    return {
+      ok: true,
+      data: { services: services.value, timetables: hours.value.timetables, garage: garage.value },
+    }
   }
   return { ok: false, phone: garage.status === 'fulfilled' ? garage.value.phone : null }
 }

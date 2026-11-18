@@ -54,16 +54,12 @@ def timetable_on(session: Session, day: date) -> Timetable:
     ).one()
 
 
-def hours_on(session: Session, days: Sequence[date]) -> dict[date, WeekdayHours]:
-    """Each day's hours, from the timetable in force on it. One query for all the days."""
-    if not days:
-        return {}
-    first, last = min(days), max(days)
-    # The timetable in force on the first day, and every one starting up to the last day.
+def timetables_between(session: Session, first: date, last: date) -> list[Timetable]:
+    """The timetable in force on `first`, then every one starting up to `last`, oldest first."""
     floor = (
         select(func.max(Timetable.starts_on)).where(Timetable.starts_on <= first).scalar_subquery()
     )
-    timetables = list(
+    return list(
         session.scalars(
             select(Timetable)
             .options(_WITH_DAYS)
@@ -71,6 +67,13 @@ def hours_on(session: Session, days: Sequence[date]) -> dict[date, WeekdayHours]
             .order_by(Timetable.starts_on)
         )
     )
+
+
+def hours_on(session: Session, days: Sequence[date]) -> dict[date, WeekdayHours]:
+    """Each day's hours, from the timetable in force on it. One query for all the days."""
+    if not days:
+        return {}
+    timetables = timetables_between(session, min(days), max(days))
     starts = [t.starts_on for t in timetables]
     weeks = [week_of(t) for t in timetables]
     result = {}

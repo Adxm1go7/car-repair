@@ -1,12 +1,13 @@
 """Public, read-only catalogue endpoints: services, opening hours, garage details."""
 
-from datetime import time
+from datetime import datetime, time, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy.orm import Session
 
+from app.clock import utc_now
 from app.config import AppConfig
 from app.db import get_session
 from app.repositories.availability import (
@@ -15,12 +16,15 @@ from app.repositories.availability import (
     load_deposit_pence,
     load_hold_minutes,
     load_payment_hold_minutes,
+    load_policy,
 )
-from app.repositories.catalogue import get_setting, list_active_services, list_opening_hours
+from app.repositories.catalogue import get_setting, list_active_services
+from app.repositories.hours import timetables_between, week_of
 
 router = APIRouter()
 
 SessionDep = Annotated[Session, Depends(get_session)]
+NowDep = Annotated[datetime, Depends(utc_now)]
 
 
 class ServiceOut(BaseModel):
@@ -65,27 +69,38 @@ def services(session: SessionDep) -> list[ServiceOut]:
     return [ServiceOut.model_validate(service) for service in list_active_services(session)]
 
 
+class TimetableOut(BaseModel):
+    starts_on: str
+    days: list[OpeningDayOut]  # always Monday to Sunday
+
+
+class OpeningHoursOut(BaseModel):
+    timetables: list[TimetableOut]
+
+
 @router.get("/opening-hours")
-def opening_hours(session: SessionDep) -> list[OpeningDayOut]:
-    """Always Monday to Sunday; a weekday with no row is reported as closed."""
-    rows = {row.weekday: row for row in list_opening_hours(session)}
-    days = []
-    for weekday in range(7):
-        row = rows.get(weekday)
-        if row is None or row.open_time is None or row.close_time is None:
-            days.append(OpeningDayOut(weekday=weekday, open=None, close=None, breaks=[]))
-            continue
-        days.append(
-            OpeningDayOut(
-                weekday=weekday,
-                open=_hhmm(row.open_time),
-                close=_hhmm(row.close_time),
-                breaks=[
-                    BreakOut(start=_hhmm(b.start_time), end=_hhmm(b.end_time)) for b in row.breaks
-                ],
+def opening_hours(session: SessionDep, now: NowDep) -> OpeningHoursOut:
+    """The timetable in force today, then any starting within the booking window, oldest
+    first. A weekday with no row is reported as closed."""
+    try:
+        today = now.astimezone(load_policy(session).zone).date()
+        last = today + timedelta(days=load_booking_window_days(session))
+    except SettingsUnavailable as error:
+        raise HTTPException(status_code=503, detail="Opening hours unavailable") from error
+    timetables = []
+    for timetable in timetables_between(session, today, last):
+        days = []
+        for weekday, hours in week_of(timetable).items():
+            days.append(
+                OpeningDayOut(
+                    weekday=weekday,
+                    open=_hhmm(hours.open) if hours.open is not None else None,
+                    close=_hhmm(hours.close) if hours.close is not None else None,
+                    breaks=[BreakOut(start=_hhmm(a), end=_hhmm(b)) for a, b in hours.breaks],
+                )
             )
-        )
-    return days
+        timetables.append(TimetableOut(starts_on=timetable.starts_on.isoformat(), days=days))
+    return OpeningHoursOut(timetables=timetables)
 
 
 class StripePaymentOut(BaseModel):

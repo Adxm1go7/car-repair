@@ -3,11 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, it, vi } from 'vitest'
 import { App } from './App.tsx'
-import { GARAGE, HOURS, SERVICES } from './testing/fixtures.ts'
+import { GARAGE, HOURS, SERVICES, TIMETABLES } from './testing/fixtures.ts'
 
 const RESPONSES: Record<string, unknown> = {
   '/api/services': SERVICES,
-  '/api/opening-hours': HOURS,
+  '/api/opening-hours': { timetables: TIMETABLES },
   '/api/garage': GARAGE,
 }
 
@@ -138,4 +138,22 @@ it('pre-ticks services from the URL', async () => {
   expect(await screen.findByRole('checkbox', { name: 'MOT test' })).toBeChecked()
   expect(screen.getByRole('checkbox', { name: 'Full service' })).not.toBeChecked()
   expect(screen.getByRole('link', { name: 'Choose a time · 1 service · 1h' })).toBeInTheDocument()
+})
+
+it('home page shows new hours from a date', async () => {
+  const noSaturdays = HOURS.map((day) => (day.weekday === 5 ? { ...day, open: null, close: null } : day))
+  RESPONSES['/api/opening-hours'] = {
+    timetables: [...TIMETABLES, { starts_on: '2026-12-01', days: noSaturdays }],
+  }
+  try {
+    stubApi()
+    renderApp()
+    const heading = await screen.findByRole('heading', { level: 3, name: 'New hours from Tue 1 Dec' })
+    const week = heading.nextElementSibling
+    if (!(week instanceof HTMLElement)) throw new Error('no week after the heading')
+    expect(within(week).getAllByText('Closed')).toHaveLength(1) // Saturday
+    expect(within(week).getAllByText('08:00–17:30', { exact: false })).toHaveLength(5)
+  } finally {
+    RESPONSES['/api/opening-hours'] = { timetables: TIMETABLES }
+  }
 })
