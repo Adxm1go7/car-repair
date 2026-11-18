@@ -1,4 +1,4 @@
-import type { BookingAction, BookingStatus, DepositStatus } from './types.ts'
+import type { BookingAction, BookingStatus, DepositStatus, StaffRole, StaffState } from './types.ts'
 
 export const STATUS_LABEL: Record<BookingStatus, string> = {
   held: 'Being booked',
@@ -30,6 +30,15 @@ export const DEPOSIT_LABEL: Record<DepositStatus, string> = {
   refund_failed: 'Deposit refund failed — check Stripe',
   waived: 'No deposit (booked before deposits)',
   not_required: 'Phone booking · no deposit',
+}
+
+export const ROLE_LABEL: Record<StaffRole, string> = { admin: 'Admin', staff: 'Staff' }
+
+export const STATE_LABEL: Record<StaffState, string> = {
+  invited: 'Invited',
+  active: 'Active',
+  reset_sent: 'Reset sent',
+  removed: 'Removed',
 }
 
 export const NO_EMAIL = 'No email, phone only'

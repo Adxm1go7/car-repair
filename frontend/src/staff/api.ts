@@ -1,5 +1,15 @@
 import { post } from '../booking/api.ts'
-import type { Message, Schedule, StaffAvailability, StaffBooking, StaffMe, StatusAction } from './types.ts'
+import type {
+  AuditPage,
+  Message,
+  Schedule,
+  StaffAvailability,
+  StaffBooking,
+  StaffMe,
+  StaffRole,
+  StatusAction,
+  TeamMember,
+} from './types.ts'
 
 /** Every call resolves, never throws. `detail` is the server's message when it sent one. */
 export type StaffResult<T> =
@@ -154,4 +164,36 @@ export function createBlock(block: BlockIn): Promise<StaffResult<{ id: number }>
 
 export function removeBlock(id: number): Promise<StaffResult<void>> {
   return staffRequest<void>(`/blocks/${id}`, { method: 'DELETE' })
+}
+
+// --- admin: team and audit ---------------------------------------------------------
+
+export function fetchTeam(): Promise<StaffResult<TeamMember[]>> {
+  return staffRequest<TeamMember[]>('/team')
+}
+
+/** A 409 means the email already has an account; its detail says so. */
+export function inviteStaff(invite: { name: string; email: string; role: StaffRole }): Promise<StaffResult<TeamMember>> {
+  return staffRequest<TeamMember>('/team', post(invite))
+}
+
+/** A 409 means the garage would be left without an admin; its detail says so. */
+export function updateStaff(id: number, change: { role: StaffRole } | { active: boolean }): Promise<StaffResult<TeamMember>> {
+  return staffRequest<TeamMember>(`/team/${id}`, post(change, 'PATCH'))
+}
+
+export function resetStaffPassword(id: number): Promise<StaffResult<TeamMember>> {
+  return staffRequest<TeamMember>(`/team/${id}/reset-password`, { method: 'POST' })
+}
+
+export type AuditFilters = { from: string; to: string; staff: string; reference: string; page: number }
+
+/** Newest first, 50 a page. Blank filters are left out. */
+export function fetchAudit(filters: AuditFilters): Promise<StaffResult<AuditPage>> {
+  const params = new URLSearchParams()
+  for (const key of ['from', 'to', 'staff', 'reference'] as const) {
+    if (filters[key]) params.set(key, filters[key])
+  }
+  params.set('page', String(filters.page))
+  return staffRequest<AuditPage>(`/audit?${params.toString()}`)
 }

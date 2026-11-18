@@ -90,3 +90,25 @@ export type StaffAvailability = {
   unavailable_reason: 'mixed_bay_types' | null
   slots: StaffSlot[]
 }
+
+// --- admin: team and audit --------------------------------------------------------
+
+export type StaffState = 'invited' | 'active' | 'reset_sent' | 'removed'
+
+/** GET /api/staff/team: one account. */
+export type TeamMember = { id: number; name: string; email: string; role: StaffRole; state: StaffState }
+
+/** One row of GET /api/staff/audit. `at` is garage-local ISO; `staff_name` is "Setup" for create_admin. */
+export type AuditEntry = {
+  at: string
+  staff_name: string
+  action: string
+  entity_type: string
+  entity_id: number
+  booking_reference: string | null
+  before: Record<string, unknown> | null
+  after: Record<string, unknown> | null
+  reason: string | null
+}
+
+export type AuditPage = { entries: AuditEntry[]; page: number; has_more: boolean }

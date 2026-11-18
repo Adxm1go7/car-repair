@@ -6,6 +6,8 @@ import type { StaffResult } from './api.ts'
 import { ForgotPasswordPage } from './ForgotPasswordPage.tsx'
 import { LoginPage } from './LoginPage.tsx'
 import { SetPasswordPage } from './SetPasswordPage.tsx'
+import { AuditPage } from './admin/AuditPage.tsx'
+import { TeamPage } from './admin/TeamPage.tsx'
 import { BookingDetailPage } from './booking/BookingDetailPage.tsx'
 import { NewBlockPage } from './forms/NewBlockPage.tsx'
 import { NewBookingPage } from './forms/NewBookingPage.tsx'
@@ -73,11 +75,6 @@ function AdminOnly({ children }: { children: ReactNode }): JSX.Element {
   return me.role === 'admin' ? <>{children}</> : <p role="alert">{"You don't have access to this page"}</p>
 }
 
-/** Stands in for the pages the next tasks build. */
-function Placeholder({ title }: { title: string }): JSX.Element {
-  return <h1>{title}</h1>
-}
-
 /** Everything under /staff. Doesn't wait for the public catalogue the customer pages load. */
 export function StaffApp(): JSX.Element {
   const navigate = useNavigate()
@@ -112,7 +109,7 @@ export function StaffApp(): JSX.Element {
           path="team"
           element={
             <AdminOnly>
-              <Placeholder title="Team" />
+              <TeamPage />
             </AdminOnly>
           }
         />
@@ -120,7 +117,7 @@ export function StaffApp(): JSX.Element {
           path="audit"
           element={
             <AdminOnly>
-              <Placeholder title="Audit" />
+              <AuditPage />
             </AdminOnly>
           }
         />

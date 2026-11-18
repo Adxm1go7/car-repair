@@ -529,3 +529,118 @@ button.entry {
   align-items: center;
   min-height: 44px;
 }
+
+/* --- team and audit ------------------------------------------------------------- */
+
+.team-page,
+.audit-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.team-page h1,
+.audit-page h1 {
+  margin: 0;
+}
+
+.team-notice:empty {
+  display: none;
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-member {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.team-who {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.team-who h3,
+.team-email,
+.team-state {
+  margin: 0;
+}
+
+.team-email {
+  overflow-wrap: anywhere;
+}
+
+.team-state {
+  color: var(--muted);
+}
+
+.team-invite {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.team-invite h2 {
+  margin: 0;
+}
+
+.team-invite select,
+.audit-filters input,
+.audit-filters select {
+  min-height: 44px;
+}
+
+.audit-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.audit-entry time {
+  min-width: 10em;
+  color: var(--muted);
+}
+
+.audit-who {
+  font-weight: 600;
+}
+
+.audit-reason {
+  flex-basis: 100%;
+  color: var(--muted);
+}
+
+.audit-pages {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
