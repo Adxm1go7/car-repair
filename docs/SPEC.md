@@ -34,7 +34,7 @@ These decisions are settled. Rows marked *proposed* are my defaults that you acc
 | Opening hours | Open all week, shorter hours on Saturday and Sunday. *Proposed*: Mon to Fri 08:00 to 17:30, Sat 09:00 to 14:00, Sun 10:00 to 13:00, all editable by the admin. |
 | Services | Public prices, fixed or a range. Each has a duration, a required bay type, and an instant or needs-approval flag. |
 | Multi-service visits | Allowed. If any selected service needs approval, the whole booking goes to staff. |
-| Unknown issues | A separate enquiry flow with structured fields, notes and photos. Staff approve, decline or ask for more information. |
+| Unknown issues | A separate enquiry flow with structured fields and a description, no photos. Staff approve, decline or ask for more information (photos dropped Nov 19). |
 | Deposit | Flat £20 per booking in Stripe test mode, balance paid in person. Refundable when cancelled 24 hours or more ahead. For approval bookings it is requested after approval. |
 | Notifications | Email only in v1: confirmation, reminder, cancellation, garage-initiated change. SMS can be added later behind the same interface. There is no "car ready" message: when the work is done, the mechanic phones the customer if they've gone away, and payment is settled outside the system (decided Nov 16). |
 | Garage-initiated changes | Staff phone the customer first, then cancel or move the booking, optionally giving a reason. Each change records who made it. The system emails the customer: a move gives the new time staff chose, and a cancellation refunds the deposit. A moved booking keeps its deposit and follows the normal refund rules: if the customer then cancels inside the free-cancellation period, the deposit isn't refunded, even though the garage did the moving. The garage is trusted to move bookings fairly (decided Nov 16). |
@@ -43,7 +43,6 @@ These decisions are settled. Rows marked *proposed* are my defaults that you acc
 | Admin settings | Admins can add a service; edit a service's name, category, description, price and duration; set its bay type and its instant or needs-approval mode only when it's created; hide or show a service; change the display order; add, rename, and take a bay out of use or put it back; add a bay type (it can't be renamed); edit opening hours and regular breaks; and edit the garage contact details. The booking rules (window, cut-off, free-cancellation period, deposit, reminder time, slot grid, bay buffer) can't be changed by admins and stay in setup data. A change that clashes with existing bookings, such as taking a bay out of use or cutting hours or adding a break over booked time, is refused until staff have moved or cancelled each clashing booking, and the refusal lists them. Bookings store their own service name, price and duration, so editing a service never changes existing bookings (decided Nov 16, built in Milestone 8). Opening hours change from a date the admin chooses (tomorrow at the earliest). Several future timetables can be lined up, such as winter and summer hours. Taking a bay out of use takes effect at once and is for a broken or retired bay. Planned time off uses blocks (decided Nov 18). |
 | Policy settings | *Proposed*: booking window 60 days, cut-off 2 hours before a slot, slot hold 5 minutes (shortened from 10 in Milestone 4), free cancellation 24 hours. All stored as settings, not hardcoded. |
 | Stack | Python with FastAPI, React with TypeScript, PostgreSQL, Docker Compose, GitHub Actions. |
-| Photos | Enquiry photo uploads, stored in S3-compatible object storage. |
 | Staff interface | Responsive, usable on a phone or tablet in the workshop. |
 | Hosting | Run locally with Docker Compose first, then deploy to a free cloud tier without redesign. |
 | Quality bar | Tests at unit, integration, concurrency and end-to-end level, run in CI. Availability engine built test-first. |
@@ -69,7 +68,7 @@ Version 1 is the complete demonstration. Everything in the second list is delibe
 
 - Public site: services page with prices, booking flow, issue-enquiry form, contact details.
 - Booking: pick one or more services, enter car details (registration, make, model, notes), choose an open slot, pay the deposit, receive a confirmation email.
-- Enquiry: structured fields (registration, make and model, symptoms, urgency), free-text notes and photo upload, with a staff approval queue.
+- Enquiry: structured fields (registration, make and model, symptoms, urgency) and a free-text description, with a staff approval queue.
 - Token self-service: view and cancel from an emailed link, cancelling only within the policy window. No customer rescheduling: they call the garage.
 - Back office: login, staff accounts, shared day and week schedule, phone bookings (no deposit, email optional), move and cancel, blocked time, job status, booking and enquiry management, service and price editing, opening hours and contact details.
 - Emails: confirmation, reminder, cancellation, garage-initiated change (move or cancel), staff invite and password reset.
@@ -100,7 +99,7 @@ Seven flows cover the whole product. Each should become at least one end-to-end 
 
 **3. Diagnosis enquiry (unknown issue)**
 
-1. The customer fills in the structured form (registration, make and model, symptoms, urgency), adds notes and optional photos.
+1. The customer fills in the structured form (registration, make and model, symptoms, urgency) and describes the problem.
 2. The enquiry appears in the staff queue as new.
 3. Staff reply by email to approve and offer a slot, ask for more information, or decline. An approved enquiry converts into a pending booking.
 
@@ -141,8 +140,7 @@ This is the conceptual model, not yet a schema. Customer details live on the boo
 | Block | bays (one or all), start, end, note, created by | Holidays, breakdowns, one-off closures. Removing one is audited. |
 | Booking | customer name, phone, email (optional for phone bookings), car registration, make, model, notes, bay, start, end, status, deposit status, source (online or phone), created by, token hash, expiry of hold | One continuous block in one bay. Deposit status includes `not_required` for phone bookings. |
 | BookingItem | booking, service, price at time of booking, duration at time of booking | Snapshots, so later price edits do not rewrite history. |
-| Enquiry | same car and contact fields, symptoms, urgency, notes, status, linked booking | Photos attach to it. |
-| EnquiryPhoto | enquiry, storage key, content type, size | Validated on upload. |
+| Enquiry | same car and contact fields, symptoms, urgency, description, status, linked booking | No photos (decided Nov 19). |
 | Payment | booking, provider reference, amount, kind (deposit or refund), status | Webhook events are stored to make handling idempotent. |
 | StaffUser | name, email, password hash, role, active, last login | Roles: admin, staff. A removed account is kept inactive so the audit log can still name it. |
 | StaffSession | staff user, token hash, created, last used, expires | Server-side login sessions, carried by a cookie. |
@@ -216,7 +214,6 @@ Both front ends call the same API, and the availability engine sits in the servi
 | Migrations | Alembic | Versioned schema changes, tested in CI. |
 | Background jobs | A small worker process, with a scheduler for periodic tasks | Expires held slots, sends reminders, retries emails. |
 | Email | A mail catcher locally, a free-tier provider when deployed | No cost, and the same interface in both. |
-| File storage | S3-compatible storage (a local container in development) | Photo uploads work the same locally and in the cloud. |
 | Payments | Stripe in test mode | Real integration pattern, no real money. |
 | Containers | Docker Compose for local, the same images in the cloud | Moving to hosting should not need a redesign. |
 | CI | GitHub Actions | Free, and runs the whole test suite on every push. |
@@ -285,7 +282,6 @@ These are the items that usually come only with experience. Each should map to a
 - [ ] Role check on every staff endpoint, tested for each role.
 - [x] Token links are random, hashed in storage, expiring, and limited to one booking.
 - [ ] Rate limiting and a honeypot or CAPTCHA on the booking and enquiry forms.
-- [ ] Photo uploads checked for type, size and content, stored outside the web root, and served safely.
 - [ ] Input validation on every field, with output escaping in emails and pages.
 - [ ] CORS, security headers and HTTPS settings in the deployed environment.
 - [ ] Dependency and container image scanning in CI.
@@ -295,7 +291,7 @@ These are the items that usually come only with experience. Each should map to a
 
 - [ ] Use fake data throughout the demo.
 - [ ] Collect only the fields needed to run a booking.
-- [ ] Write a short privacy note and a retention rule for old bookings and photos, even though this is a demo.
+- [ ] Write a short privacy note and a retention rule for old bookings and enquiries, even though this is a demo.
 
 **User experience**
 
@@ -314,7 +310,7 @@ There is no deadline, so each milestone has a definition of done and the next on
 6. **Email and token self-service.** Templates, send log, token links, customer cancel within policy (no customer rescheduling). *Done when* flow 4 passes end to end and expired tokens fail safely.
 7. **Staff back office.** Login, staff accounts, roles, shared day and week schedule, phone bookings, move, cancel, block time, job status, audit log, mobile layout. *Done when* flow 5 and flow 6 pass and role checks are tested.
 8. **Admin settings.** Editing services, bays, bay types, opening hours, breaks and contact details, with clashing changes refused until the bookings in the way are moved or cancelled. *Done when* an admin can make each kind of change from the Settings page; a clashing change (a bay out of use with bookings, or hours that leave bookings outside opening time) is refused with those bookings listed, and nothing changes; the public site and the staff schedule show the right hours for every date, across a change of timetable; every change is in the audit log; and flow 7 passes end to end in CI.
-9. **Approval bookings and enquiries.** Needs-approval services, the staff queue, enquiry form with photo upload, approve, decline and convert. *Done when* flows 2 and 3 pass end to end.
+9. **Approval bookings and enquiries.** Needs-approval services, the staff queue, enquiry form, approve, decline and convert. *Done when* flows 2 and 3 pass end to end.
 10. **Hardening and polish.** Rate limiting, accessibility pass, error pages, load test of the availability endpoint, security scans, documentation. *Done when* the checklist section is fully ticked.
 11. **Deployment.** Cloud environment from the same images, environment configuration, a seeded live demo, and a short walkthrough or recording. *Done when* the live demo passes the end-to-end suite.
 
