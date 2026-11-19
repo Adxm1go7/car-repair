@@ -780,3 +780,54 @@ button.entry {
   margin: 0;
   padding-left: 1.2em;
 }
+
+.hours-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.hours-summary {
+  color: var(--muted);
+}
+
+.hours-week {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hours-day {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.hours-day legend {
+  font-weight: 600;
+}
+
+.hours-open,
+.hours-times label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+
+.hours-times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.hours-times input {
+  min-height: 44px;
+}

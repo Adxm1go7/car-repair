@@ -1,3 +1,5 @@
+import type { Timetable } from '../catalogue/types.ts'
+
 export type StaffRole = 'admin' | 'staff'
 
 /** The logged-in staff user, from GET /api/staff/me. */
@@ -151,3 +153,6 @@ export type AdminBay = { id: number; slug: string; name: string; bay_type_id: nu
 /** A booking in the way of a settings change. `start` is garage-local ISO; `held` means a
  * customer is paying for it right now, so it clears by itself in a few minutes. */
 export type Clash = { reference: string; start: string; bay: string; held: boolean }
+
+/** GET /api/staff/settings/hours: one timetable. Only future ones can be edited or deleted. */
+export type AdminTimetable = Timetable & { id: number; state: 'past' | 'current' | 'future' }

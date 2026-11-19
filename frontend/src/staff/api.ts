@@ -1,6 +1,8 @@
 import { post } from '../booking/api.ts'
+import type { OpeningDay } from '../catalogue/types.ts'
 import type {
   AdminBay,
+  AdminTimetable,
   AdminService,
   AuditPage,
   BayType,
@@ -258,4 +260,24 @@ export function addBayType(name: string): Promise<StaffResult<BayType>> {
 export function clashesOf(body: unknown): Clash[] | null {
   const parsed = body as { detail?: unknown; bookings?: unknown } | null
   return parsed?.detail === 'clashes' && Array.isArray(parsed.bookings) ? (parsed.bookings as Clash[]) : null
+}
+
+export function fetchTimetables(): Promise<StaffResult<AdminTimetable[]>> {
+  return staffRequest<AdminTimetable[]>(`${SETTINGS}/hours`)
+}
+
+/** New hours from `startsOn` (tomorrow at the earliest). A 409 lists the bookings the new
+ * hours would leave outside (see `clashesOf`); a 422's detail says what's wrong. */
+export function addTimetable(startsOn: string, days: OpeningDay[]): Promise<StaffResult<AdminTimetable>> {
+  return staffRequest<AdminTimetable>(`${SETTINGS}/hours`, post({ starts_on: startsOn, days }))
+}
+
+/** Replace a future timetable's week. A 409 lists clashes, or says "not_allowed" once it's in force. */
+export function replaceTimetable(id: number, days: OpeningDay[]): Promise<StaffResult<AdminTimetable>> {
+  return staffRequest<AdminTimetable>(`${SETTINGS}/hours/${id}`, post({ days }, 'PUT'))
+}
+
+/** Delete a future timetable; the one before carries on. A 409 as for replacing. */
+export function deleteTimetable(id: number): Promise<StaffResult<void>> {
+  return staffRequest<void>(`${SETTINGS}/hours/${id}`, { method: 'DELETE' })
 }
