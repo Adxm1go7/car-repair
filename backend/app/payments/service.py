@@ -18,7 +18,7 @@ from app.models import Booking, Payment
 from app.payments.provider import PaymentProvider, RefundStatus
 from app.payments.rules import CancelledBy, deposit_refundable
 from app.repositories.availability import load_policy
-from app.repositories.bookings import get_booking_for_update_by_id
+from app.repositories.bookings import get_booking_for_update_by_id, hold_has_expired, release_hold
 from app.repositories.hours import hours_on
 from app.repositories.payments import (
     count_payments,
@@ -49,8 +49,8 @@ def _confirm(session: Session, booking: Booking, now: datetime) -> None:
 
 def _take_time_back(session: Session, booking: Booking) -> bool:
     """Make an expired booking's reservation active again, if nobody has the time now, its
-    bay is still in use, and it still fits the opening hours in force on its date."""
-    lock_shared(session)  # take turns with bay and opening-hours changes
+    bay is still in use, and it still fits the opening hours in force on its date. The caller
+    holds the shared hours-and-bays lock, so a bay or hours change can't slip in between."""
     zone = load_policy(session).zone
     start, end = booking.start_at.astimezone(zone), booking.end_at.astimezone(zone)
     if not booking.reservation.bay.active:
@@ -81,6 +81,9 @@ def complete_deposit(
     if found is None or found.kind != "deposit":
         log.warning("payment for an unknown session %s", session_ref)
         return None
+    # Take turns with bay and opening-hours changes. Before any row lock, as everywhere, so
+    # this can't deadlock with a move of the same booking during an admin change.
+    lock_shared(session)
     booking = get_booking_for_update_by_id(session, found.booking_id)
     deposit = get_payment_for_update(session, provider.name, session_ref)
     if booking is None or deposit is None:
@@ -94,6 +97,10 @@ def complete_deposit(
     deposit.status = "paid"
     deposit.payment_intent_ref = state.payment_intent_ref
 
+    if hold_has_expired(booking, now):
+        # Past its time but not released yet. It stopped counting at its expiry, so a bay or
+        # hours change may have gone ahead since: release it and treat it as a late payment.
+        release_hold(session, booking)
     if booking.status == "held":
         # Its reservation is still active: nobody else could take it.
         _confirm(session, booking, now)

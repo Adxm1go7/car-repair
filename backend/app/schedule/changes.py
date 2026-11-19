@@ -170,6 +170,9 @@ def change_status(
 ) -> Booking:
     """Start, complete, no-show, or undo one of those. A no-show keeps the deposit and the
     booked time, and sends no email."""
+    # An undo makes the booking count again, so it takes turns with bay and hours changes;
+    # before the row lock, the same order as everywhere else.
+    lock_shared(session)
     booking = _locked(session, reference, action, now)
     if action in ("undo_no_show", "undo_complete") and not booking.reservation.bay.active:
         # Back to an active status in a bay that's out of use: staff move it instead.
