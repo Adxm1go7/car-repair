@@ -19,6 +19,7 @@ from app.clock import utc_now
 from app.db import get_session
 from app.enquiries.actions import EnquiryDetails, create_enquiry
 from app.enquiries.rules import clean_description
+from app.limits import limited
 
 router = APIRouter()
 
@@ -40,7 +41,7 @@ class EnquirySentOut(BaseModel):
     email: str  # where the "we've got it" email is going
 
 
-@router.post("/enquiries", status_code=201)
+@router.post("/enquiries", status_code=201, dependencies=[Depends(limited("enquiry"))])
 def send_enquiry(body: EnquiryIn, session: SessionDep, now: NowDep) -> EnquirySentOut:
     details = EnquiryDetails(
         name=body.name,

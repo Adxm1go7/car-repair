@@ -37,6 +37,7 @@ from app.bookings.service import (
 )
 from app.clock import utc_now
 from app.db import get_session
+from app.limits import limited
 from app.models import Booking
 from app.payments.deps import get_payment_provider
 from app.payments.provider import PaymentProvider, PaymentUnavailable
@@ -91,7 +92,7 @@ class HoldOut(BaseModel):
     services: list[ServiceSummaryOut]
 
 
-@router.post("/holds", status_code=201)
+@router.post("/holds", status_code=201, dependencies=[Depends(limited("hold"))])
 def hold(body: HoldIn, session: SessionDep, now: NowDep) -> HoldOut:
     """Hold `start` for these services. Only the returned `hold_token` can confirm it."""
     try:
@@ -207,7 +208,7 @@ class StatusOut(BaseModel):
     summary: BookingSummaryOut | None
 
 
-@router.post("/holds/{reference}/checkout")
+@router.post("/holds/{reference}/checkout", dependencies=[Depends(limited("pay"))])
 def checkout(
     reference: str, body: CheckoutIn, session: SessionDep, now: NowDep, provider: ProviderDep
 ) -> CheckoutOut:
@@ -258,7 +259,9 @@ def checkout(
     return CheckoutOut(**asdict(result))
 
 
-@router.post("/holds/{reference}/request", status_code=201)
+@router.post(
+    "/holds/{reference}/request", status_code=201, dependencies=[Depends(limited("request"))]
+)
 def request(
     reference: str, body: CheckoutIn, session: SessionDep, now: NowDep
 ) -> BookingSummaryOut:
