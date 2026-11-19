@@ -1,0 +1,16 @@
+Hello {{ c.customer_name }},
+
+Good news: we've approved your booking with {{ c.garage.name }}.
+
+{% include "_booking.txt.j2" %}
+
+To confirm it, please pay the {{ deposit_due }} deposit by {{ deadline }}. If it isn't paid by then, the time is released.
+{% if c.link_url %}
+
+Pay the deposit:
+{{ c.link_url }}
+{% endif %}
+
+Can't make this time? Please call us on {{ c.garage.phone }}.
+
+{% include "_footer.txt.j2" %}

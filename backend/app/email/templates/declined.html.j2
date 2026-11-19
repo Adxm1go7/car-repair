@@ -1,0 +1,10 @@
+{% extends "_layout.html.j2" %}
+{% block content %}
+<p>We're sorry: we can't take your booking request with {{ c.garage.name }} for {{ when }}.</p>
+{% if c.reason %}
+<p>Reason: {{ c.reason }}</p>
+{% endif %}
+{% endblock %}
+{% block after %}
+<p>Nothing has been charged. If you'd like to talk it through, please call us on {{ c.garage.phone }}.</p>
+{% endblock %}

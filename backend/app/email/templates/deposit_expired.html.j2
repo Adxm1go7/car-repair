@@ -1,0 +1,7 @@
+{% extends "_layout.html.j2" %}
+{% block content %}
+<p>The deposit for your booking with {{ c.garage.name }} wasn't paid in time, so the time we were keeping for you has been released.</p>
+{% endblock %}
+{% block after %}
+<p>Nothing has been charged. If you'd still like to book, please call us on {{ c.garage.phone }}.</p>
+{% endblock %}

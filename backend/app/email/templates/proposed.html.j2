@@ -1,0 +1,14 @@
+{% extends "_layout.html.j2" %}
+{% block content %}
+<p>We can't do the time you asked for at {{ c.garage.name }}, but we can do another one, as we discussed on the phone.</p>
+{% if c.reason %}
+<p>Reason: {{ c.reason }}</p>
+{% endif %}
+<p>{% if was %}You asked for: <s>{{ was }} – {{ was_ends }}</s><br>{% endif %}We can do: <strong>{{ when }} – {{ ends }}</strong></p>
+{% endblock %}
+{% block after %}
+<p>To take the new time, please pay the {{ deposit_due }} deposit by <strong>{{ deadline }}</strong>. If it isn't paid by then, the time is released.</p>
+{% set link_label = "Pay the deposit" %}
+{% include "_link.html.j2" %}
+<p>If the new time doesn't suit, please call us on {{ c.garage.phone }}.</p>
+{% endblock %}

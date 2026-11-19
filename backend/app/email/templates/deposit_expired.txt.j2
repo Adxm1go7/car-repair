@@ -1,0 +1,9 @@
+Hello {{ c.customer_name }},
+
+The deposit for your booking with {{ c.garage.name }} wasn't paid in time, so the time we were keeping for you has been released.
+
+{% include "_booking.txt.j2" %}
+
+Nothing has been charged. If you'd still like to book, please call us on {{ c.garage.phone }}.
+
+{% include "_footer.txt.j2" %}

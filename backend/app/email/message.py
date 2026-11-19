@@ -3,7 +3,19 @@ from typing import Literal
 
 # Together, the same names as EMAIL_TEMPLATES in app/models/email.py.
 # Emails to a customer, about a booking:
-EmailTemplate = Literal["confirmation", "reminder", "cancellation", "moved", "garage_cancellation"]
+EmailTemplate = Literal[
+    "confirmation",
+    "reminder",
+    "cancellation",
+    "moved",
+    "garage_cancellation",
+    "request_received",
+    "approved",
+    "proposed",
+    "declined",
+    "request_expired",
+    "deposit_expired",
+]
 # Emails to a staff member, about their account:
 StaffTemplate = Literal["staff_invite", "password_reset"]
 

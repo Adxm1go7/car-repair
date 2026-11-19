@@ -217,3 +217,71 @@ def test_reason_is_html_escaped() -> None:
     message = render_email("moved", "x@example.test", replace(MOVED, reason="<i>oops</i>"))
     assert "&lt;i&gt;oops&lt;/i&gt;" in message.html
     assert "<i>oops</i>" in message.text
+
+
+# --- approval emails -------------------------------------------------------------
+
+DEADLINE = datetime(2026, 11, 18, 9, tzinfo=UTC)  # Wed 18 Nov, 09:00 in London
+APPROVAL = replace(
+    CONTEXT, deposit_status="unpaid", deposit_pence=0, deposit_due_pence=2000, deadline=DEADLINE
+)
+
+APPROVAL_SUBJECTS: list[tuple[EmailTemplate, str]] = [
+    ("request_received", "We've got your request — ABCD-EFGH"),
+    ("approved", "Your booking is approved — pay the deposit to confirm — ABCD-EFGH"),
+    ("proposed", "We've suggested a new time — ABCD-EFGH"),
+    ("declined", "We can't take your booking — ABCD-EFGH"),
+    ("request_expired", "Your request has lapsed — ABCD-EFGH"),
+    ("deposit_expired", "Your booking time has been released — ABCD-EFGH"),
+]
+
+
+@pytest.mark.parametrize(("template", "subject"), APPROVAL_SUBJECTS)
+def test_approval_email_subjects(template: EmailTemplate, subject: str) -> None:
+    assert render_email(template, "sam@example.com", APPROVAL).subject == subject
+
+
+@pytest.mark.parametrize("template", ["request_received", "approved", "proposed"])
+def test_approval_emails_with_something_to_do_carry_the_link(template: EmailTemplate) -> None:
+    message = render_email(template, "sam@example.com", APPROVAL)
+    for body in (message.text, message.html):
+        assert LINK in body
+        assert "Wed 18 Nov, 09:00" in body
+
+
+@pytest.mark.parametrize("template", ["approved", "proposed"])
+def test_approval_asks_for_the_deposit_by_the_deadline(template: EmailTemplate) -> None:
+    message = render_email(template, "sam@example.com", APPROVAL)
+    for body in (message.text, message.html):
+        assert "£20" in body
+        assert "Wed 18 Nov, 09:00" in body
+
+
+def test_proposal_shows_old_and_new_time() -> None:
+    proposal = replace(
+        APPROVAL,
+        previous_start=START - timedelta(days=1),
+        previous_end=START - timedelta(days=1) + timedelta(hours=1),
+    )
+    message = render_email("proposed", "sam@example.com", proposal)
+    for body in (message.text, message.html):
+        assert "Thu 19 Nov, 09:00" in body
+        assert "Fri 20 Nov, 09:00" in body
+
+
+def test_decline_shows_a_reason_only_when_given() -> None:
+    with_reason = render_email("declined", "x@example.com", replace(APPROVAL, reason="No parts"))
+    without = render_email("declined", "x@example.com", APPROVAL)
+    assert "Reason: No parts" in with_reason.text
+    assert "No parts" in with_reason.html
+    assert "Reason" not in without.text
+    assert "Reason" not in without.html
+
+
+@pytest.mark.parametrize("template", ["declined", "request_expired", "deposit_expired"])
+def test_approval_emails_with_nothing_to_do_say_call_us(template: EmailTemplate) -> None:
+    message = render_email(template, "sam@example.com", replace(APPROVAL, link_url=None))
+    for body in (message.text, message.html):
+        assert "call us on 000 111" in body
+        assert "secret-token" not in body
+        assert "refund" not in body.lower()

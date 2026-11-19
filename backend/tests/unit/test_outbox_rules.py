@@ -24,6 +24,16 @@ def test_retry_delays(attempts: int, minutes: int) -> None:
         ("reminder", "no_show", False),
         ("cancellation", "cancelled", True),
         ("cancellation", "confirmed", False),
+        ("request_received", "pending_approval", True),
+        ("request_received", "awaiting_deposit", False),
+        ("approved", "awaiting_deposit", True),
+        ("approved", "cancelled", False),
+        ("proposed", "awaiting_deposit", True),
+        ("proposed", "confirmed", False),
+        ("declined", "cancelled", True),
+        ("request_expired", "expired", True),
+        ("request_expired", "confirmed", False),
+        ("deposit_expired", "expired", True),
     ],
 )
 def test_email_still_applies(template: EmailTemplate, status: str, applies: bool) -> None:
