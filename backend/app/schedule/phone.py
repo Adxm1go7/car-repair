@@ -5,6 +5,7 @@ Nothing here commits."""
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy.orm import Session
 
@@ -36,9 +37,12 @@ def create_phone_booking(
     bay_id: int,
     details: PhoneDetails,
     now: datetime,
+    *,
+    source: Literal["phone", "enquiry"] = "phone",
 ) -> Booking:
     """Reserve `start` in the chosen bay and record a confirmed booking. Raises
-    SlotUnavailable if the bay can't take it."""
+    SlotUnavailable if the bay can't take it. `source` is "enquiry" when staff book in an
+    enquiry: the same booking, with no deposit."""
     reserved = reserve(
         session, [s.id for s in services], start, now, cutoff_minutes=0, bay_id=bay_id
     )
@@ -48,7 +52,7 @@ def create_phone_booking(
             reference=reference,
             reservation=reserved.reservation,
             status="confirmed",
-            source="phone",
+            source=source,
             created_by=staff.id,
             start_at=reserved.start,
             end_at=reserved.end,
@@ -76,6 +80,7 @@ def create_phone_booking(
             "end": booking.end_at.isoformat(),
             "bay_id": bay_id,
             "services": [s.name for s in services],
+            "source": source,
             **asdict(details),
         },
         booking_reference=booking.reference,
