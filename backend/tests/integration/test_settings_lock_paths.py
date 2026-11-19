@@ -121,7 +121,7 @@ def test_undo_no_show_waits_for_a_settings_change(engine: Engine) -> None:
 
 
 def waits_before_row_lock(
-    engine: Engine, booking_id: int, act: Callable[[Session], None]
+    engine: Engine, booking_id: int, act: Callable[[Session], object]
 ) -> list[str]:
     """Run `act` while an admin holds the exclusive lock. While it waits for the shared
     lock, it must hold no row lock that a move could be waiting on."""
