@@ -160,6 +160,7 @@ def garage_cancel(
 ) -> Booking:
     """Cancel as the garage: a paid deposit is always refunded. PaymentUnavailable
     propagates, and the caller rolls back."""
+    lock_shared(session)  # closing a form may complete a payment: same lock order as it
     booking = locked_booking(session, reference, "cancel", now)
     if booking.status == "awaiting_deposit":
         # Close the deposit's form first, so the customer can't pay for a cancelled booking.

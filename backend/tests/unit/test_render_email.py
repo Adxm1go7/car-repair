@@ -284,4 +284,12 @@ def test_approval_emails_with_nothing_to_do_say_call_us(template: EmailTemplate)
     for body in (message.text, message.html):
         assert "call us on 000 111" in body
         assert "secret-token" not in body
-        assert "refund" not in body.lower()
+        assert "refund" not in body.lower()  # nothing was paid
+
+
+def test_released_approval_paid_late_says_the_payment_is_refunded() -> None:
+    late = replace(APPROVAL, deposit_status="refund_pending", link_url=None)
+    message = render_email("deposit_expired", "sam@example.com", late)
+    for body in (message.text, message.html):
+        assert "Your £20 payment came in after the time was released, so we're refunding it" in body
+        assert "Nothing has been charged" not in body

@@ -88,6 +88,9 @@ def cancel_from_link(
 
     The booking row is locked first, so a second press waits and then finds it cancelled.
     PaymentUnavailable propagates: the caller rolls back and nothing changes."""
+    # Closing an approval's form may complete a payment, which takes turns with bay and
+    # hours changes: take that lock before the row lock, the same order as everywhere else.
+    lock_shared(session)
     booking = find_linked_booking(session, reference, token, now, lock=True)
     if booking is None:
         raise LinkNotValid

@@ -4,24 +4,27 @@ so the lock order is the same everywhere and they can't deadlock with a move."""
 
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from alembic import command
 from conftest import alembic_config
-from factories import make_deposit, make_hold, make_staff
+from factories import make_deposit, make_hold, make_request, make_staff
 from fakes import FakeProvider
 from sqlalchemy import Engine, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.bookings.links import create_link
+from app.bookings.self_service import cancel_from_link
 from app.db import make_engine
 from app.models import Booking, StaffUser
 from app.payments.service import complete_deposit
-from app.schedule.changes import change_status
+from app.schedule.changes import change_status, garage_cancel
 from app.seed import seed
 from app.settings.lock import lock_exclusive
+from app.worker import close_stale_checkouts
 
 NOW = datetime(2026, 11, 9, 9, tzinfo=UTC)
 START = datetime(2026, 11, 10, 8, tzinfo=UTC)
@@ -115,3 +118,72 @@ def test_undo_no_show_waits_for_a_settings_change(engine: Engine) -> None:
     admin.join(timeout=10)
     assert log == ["settings done", "undone"]
     assert status == "confirmed"
+
+
+def waits_before_row_lock(
+    engine: Engine, booking_id: int, act: Callable[[Session], None]
+) -> list[str]:
+    """Run `act` while an admin holds the exclusive lock. While it waits for the shared
+    lock, it must hold no row lock that a move could be waiting on."""
+    locked, log = threading.Event(), list[str]()
+    admin = threading.Thread(target=hold_exclusive, args=(engine, locked, log))
+    admin.start()
+    assert locked.wait(timeout=10)
+
+    def run() -> None:
+        with Session(engine) as session:
+            act(session)
+            log.append("done")
+            session.commit()
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    time.sleep(HOLD_FOR / 3)
+    assert not row_is_locked(engine, booking_id)
+    worker.join(timeout=10)
+    admin.join(timeout=10)
+    return log
+
+
+def approval_with_form(engine: Engine, status: str = "awaiting_deposit") -> tuple[int, str, str]:
+    """An approved request with an open form. Returns its id, reference and link token."""
+    with Session(engine) as session:
+        booking = make_request(
+            session, START + timedelta(days=5), NOW + timedelta(hours=24), status=status
+        )
+        make_deposit(session, booking, ref=REF)
+        token = create_link(session, booking)
+        session.commit()
+        return booking.id, booking.reference, token
+
+
+def test_customer_cancel_of_an_approval_waits_for_the_lock_first(engine: Engine) -> None:
+    booking_id, reference, token = approval_with_form(engine)
+    provider = FakeProvider()
+    provider.mark_paid(REF)  # paid in another tab: closing the form completes the payment
+    log = waits_before_row_lock(
+        engine, booking_id, lambda s: cancel_from_link(s, provider, reference, token, NOW, 24)
+    )
+    assert log == ["settings done", "done"]
+
+
+def test_garage_cancel_of_an_approval_waits_for_the_lock_first(engine: Engine) -> None:
+    booking_id, reference, _ = approval_with_form(engine)
+    provider = FakeProvider()
+    provider.mark_paid(REF)
+
+    def cancel(session: Session) -> None:
+        staff = session.scalars(select(StaffUser)).one()
+        garage_cancel(session, provider, staff, reference, None, NOW, 24)
+
+    assert waits_before_row_lock(engine, booking_id, cancel) == ["settings done", "done"]
+
+
+def test_worker_close_waits_for_the_lock_first(engine: Engine) -> None:
+    booking_id, _, _ = approval_with_form(engine, status="expired")
+    provider = FakeProvider()
+    provider.mark_paid(REF)
+    log = waits_before_row_lock(
+        engine, booking_id, lambda s: close_stale_checkouts(s, provider, NOW)
+    )
+    assert log == ["settings done", "done"]

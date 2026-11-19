@@ -149,3 +149,20 @@ it('says when the approval can no longer be paid', async () => {
   ).toBeInTheDocument()
   expect(await screen.findByText('The time we were keeping for you has been released')).toBeInTheDocument()
 })
+
+it('a payment that came too late says it is being refunded, and stops waiting', async () => {
+  const refunded: MyBooking = { ...EXPIRED, deposit_status: 'refund_pending' }
+  stubApi({ views: [APPROVED, refunded] })
+  renderPage()
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: 'Pay deposit' }))
+  await user.click(await screen.findByRole('button', { name: 'Pay £20 (demo)' }))
+  expect(
+    await screen.findByText(
+      "Your payment came in after the time was released, so we're refunding it. It can take 5–10 days to reach your card.",
+    ),
+  ).toBeInTheDocument()
+  expect(screen.getByText('The time we were keeping for you has been released')).toBeInTheDocument()
+  expect(screen.queryByText(/still confirming/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Pay deposit' })).not.toBeInTheDocument()
+})

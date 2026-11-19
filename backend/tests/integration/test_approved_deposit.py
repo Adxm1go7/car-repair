@@ -11,8 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.bookings.service import open_deposit_form
-from app.models import Booking, Payment
+from app.models import Booking, EmailLog, Payment
 from app.payments.service import cancel_booking, complete_deposit
+from app.repositories.bookings import release_expired_holds
 from app.seed import seed
 
 NOW = datetime(2026, 11, 9, 9, tzinfo=UTC)
@@ -107,3 +108,55 @@ def test_payment_on_cancelled_request_is_refunded(seeded: Session, provider: Fak
     assert booking.status == "cancelled"
     assert booking.deposit_status == "refund_pending"  # the fake's refunds start pending
     assert len(refunds(seeded)) == 1
+
+
+def expiry_emails(session: Session) -> list[EmailLog]:
+    session.expire_all()
+    return list(session.scalars(select(EmailLog).where(EmailLog.template == "deposit_expired")))
+
+
+def late_paid_after_time_taken(session: Session, provider: FakeProvider) -> Booking:
+    """An approval that ran out and was released (queuing its email), its time taken by
+    someone else, and then paid on the form still open."""
+    booking = approved(session, deadline=NOW - timedelta(minutes=1))
+    make_deposit(session, booking, ref=REF)
+    release_expired_holds(session, NOW)
+    make_hold(session, START, NOW + timedelta(minutes=5))
+    provider.mark_paid(REF)
+    assert complete_deposit(session, provider, REF, NOW) is None
+    return booking
+
+
+def test_late_refund_on_an_approval_is_told_in_the_queued_email(
+    seeded: Session, provider: FakeProvider
+) -> None:
+    late_paid_after_time_taken(seeded, provider)
+    # The "time released" email hasn't gone yet: it goes once, and says about the refund.
+    [email] = expiry_emails(seeded)
+    assert email.status == "queued"
+
+
+def test_late_refund_after_the_email_went_sends_another(
+    seeded: Session, provider: FakeProvider
+) -> None:
+    booking = approved(seeded, deadline=NOW - timedelta(minutes=1))
+    make_deposit(seeded, booking, ref=REF)
+    release_expired_holds(seeded, NOW)
+    for email in expiry_emails(seeded):
+        email.status = "sent"
+    seeded.flush()
+    make_hold(seeded, START, NOW + timedelta(minutes=5))
+    provider.mark_paid(REF)
+    complete_deposit(seeded, provider, REF, NOW)
+    assert [e.status for e in expiry_emails(seeded)] == ["sent", "queued"]
+
+
+def test_late_refund_on_a_plain_hold_sends_no_expiry_email(
+    seeded: Session, provider: FakeProvider
+) -> None:
+    hold = make_hold(seeded, START, NOW - timedelta(minutes=1), status="expired", details=True)
+    make_deposit(seeded, hold, ref=REF)
+    make_hold(seeded, START, NOW + timedelta(minutes=5))
+    provider.mark_paid(REF)
+    complete_deposit(seeded, provider, REF, NOW)
+    assert expiry_emails(seeded) == []

@@ -35,6 +35,8 @@ const OTHER_STATUS: Record<string, string> = {
  * time, nothing being paid; a confirmed one while the API says so). */
 const CANCELLABLE = new Set(['confirmed', 'pending_approval', 'awaiting_deposit'])
 const WAITING = new Set(['pending_approval', 'awaiting_deposit'])
+/** An approval paid after its time was released: the payment goes back. */
+const LATE_REFUND = new Set(['refund_pending', 'refunded'])
 
 /** "Wednesday 18 November at 09:00". */
 function formatDeadline(iso: string, zone: string): string {
@@ -244,6 +246,12 @@ export function ManageBookingPage({ garage, pollMs }: PageProps): JSX.Element {
         </div>
       )}
       {OTHER_STATUS[status] && <p className="booking-state">{OTHER_STATUS[status]}</p>}
+      {status === 'expired' && LATE_REFUND.has(booking.deposit_status) && (
+        <p>
+          Your payment came in after the time was released, so we&apos;re refunding it. It can take 5–10 days to
+          reach your card.
+        </p>
+      )}
       <Summary booking={booking} zone={zone} />
 
       {status === 'pending_approval' && booking.deadline && (
@@ -264,6 +272,7 @@ export function ManageBookingPage({ garage, pollMs }: PageProps): JSX.Element {
             setPayGone(true)
             void reload()
           }}
+          onSettled={(settled) => setState({ kind: 'ready', booking: settled })}
         />
       )}
 

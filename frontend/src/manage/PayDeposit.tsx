@@ -17,6 +17,9 @@ type Props = {
   onPaid: (booking: MyBooking) => void
   /** The booking can't be paid for any more (paid, cancelled, or run out). */
   onGone: () => void
+  /** After paying, the booking ended without being confirmed (the time had gone, so the
+   * payment is refunded): the page shows it as it is now. */
+  onSettled: (booking: MyBooking) => void
   pollMs?: number
   pollLimit?: number
 }
@@ -72,6 +75,10 @@ export function PayDeposit(props: Props): JSX.Element {
       if (gone.current) return
       if (result.ok && result.data.summary.status === 'confirmed') {
         latest.current.onPaid(result.data)
+        return
+      }
+      if (result.ok && (result.data.summary.status === 'expired' || result.data.summary.status === 'cancelled')) {
+        latest.current.onSettled(result.data)
         return
       }
     }
