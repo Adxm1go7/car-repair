@@ -10,6 +10,7 @@ import { formatDuration, formatPrice } from './catalogue/format.ts'
 import { shortDate } from './catalogue/hours.ts'
 import { openTodayText } from './catalogue/openToday.ts'
 import type { Catalogue, OpeningDay, Service } from './catalogue/types.ts'
+import { EnquiryPage } from './enquiry/EnquiryPage.tsx'
 import { ManageBookingPage } from './manage/ManageBookingPage.tsx'
 import { StaffApp } from './staff/StaffApp.tsx'
 
@@ -133,6 +134,10 @@ function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }):
           </section>
         ))}
 
+        <p className="enquiry-prompt">
+          Not sure what&apos;s wrong? <Link to="/enquiry">Describe the problem</Link> and we&apos;ll get back to you.
+        </p>
+
         <section>
           <h2>Opening hours</h2>
           {current && <WeekHours days={current.days} />}
@@ -211,6 +216,7 @@ function CustomerApp({ now }: { now: () => Date }): JSX.Element {
       <Route path="/book" element={<BookPage catalogue={state.catalogue} now={now} />} />
       <Route path="/booked/:reference" element={<BookedPage garage={state.catalogue.garage} />} />
       <Route path="/booking/:reference" element={<ManageBookingPage garage={state.catalogue.garage} />} />
+      <Route path="/enquiry" element={<EnquiryPage garage={state.catalogue.garage} />} />
     </Routes>
   )
 }

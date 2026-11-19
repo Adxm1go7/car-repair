@@ -53,6 +53,15 @@ function checkNotes(value: string): string | null {
   return length(value.trim()) > 1000 ? 'Notes can be at most 1000 characters' : null
 }
 
+/** Null, or what's wrong with an enquiry's description (backend/app/enquiries/rules.py). */
+export function checkDescription(value: string): string | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return 'Please describe the problem'
+  if (length(trimmed) < 10) return 'Please describe the problem in at least 10 characters'
+  if (length(trimmed) > 1000) return 'The description can be at most 1000 characters'
+  return null
+}
+
 /** Every field's problem, if it has one. Empty means valid. */
 export function validateDetails(values: CustomerDetails): FieldErrors {
   const checks: [keyof CustomerDetails, string | null][] = [
