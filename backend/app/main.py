@@ -1,8 +1,8 @@
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -81,6 +81,15 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=config.trusted_proxies)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(TooManyAttempts, too_many_attempts_handler)
+
+    @app.middleware("http")
+    async def no_sniffing(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
     app.include_router(health.router, prefix="/api")
     app.include_router(catalogue.router, prefix="/api")
     app.include_router(availability.router, prefix="/api")

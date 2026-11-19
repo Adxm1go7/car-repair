@@ -18,6 +18,7 @@ from pydantic import (
 from sqlalchemy.orm import Session
 
 from app.api.catalogue import OpeningDayOut, week_out
+from app.api.validation import ResourceId
 from app.bookings.rules import clean_email, clean_phone
 from app.models import Bay, BayType, Booking, Service
 from app.repositories.availability import SettingsUnavailable, load_policy
@@ -143,7 +144,7 @@ def _clash_response(session: Session, bookings: Sequence[Booking], zone: ZoneInf
     return JSONResponse(status_code=409, content=body)
 
 
-def _get_service(session: SessionDep, service_id: int) -> Service:
+def _get_service(session: SessionDep, service_id: ResourceId) -> Service:
     service = session.get(Service, service_id)
     if service is None:
         raise SERVICE_NOT_FOUND
@@ -173,7 +174,7 @@ def add_service(
 
 @router.patch("/services/{service_id}")
 def edit_service(
-    service_id: int, body: ServicePatch, admin: AdminDep, session: SessionDep, now: NowDep
+    service_id: ResourceId, body: ServicePatch, admin: AdminDep, session: SessionDep, now: NowDep
 ) -> ServiceAdminOut:
     service = _get_service(session, service_id)
     try:
@@ -188,7 +189,7 @@ def edit_service(
 
 @router.post("/services/{service_id}/move")
 def move(
-    service_id: int, body: MoveIn, admin: AdminDep, session: SessionDep, now: NowDep
+    service_id: ResourceId, body: MoveIn, admin: AdminDep, session: SessionDep, now: NowDep
 ) -> list[ServiceAdminOut]:
     service = _get_service(session, service_id)
     move_service(session, admin, service, body.direction, now)
@@ -277,7 +278,7 @@ def add_bay(body: BayIn, admin: AdminDep, session: SessionDep, now: NowDep) -> B
 
 @router.patch("/bays/{bay_id}", response_model=BayAdminOut)
 def edit_bay(
-    bay_id: int, body: BayPatch, admin: AdminDep, session: SessionDep, now: NowDep
+    bay_id: ResourceId, body: BayPatch, admin: AdminDep, session: SessionDep, now: NowDep
 ) -> BayAdminOut | JSONResponse:
     bay = session.get(Bay, bay_id)
     if bay is None:
@@ -312,11 +313,25 @@ def add_bay_type(body: BayTypeIn, admin: AdminDep, session: SessionDep, now: Now
 # Opening hours: timetables
 
 
+def plain_time(value: time | None) -> time | None:
+    """A garage-local time to the minute: no time zone, no seconds."""
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        raise ValueError("Give a time without a time zone")
+    if value.second or value.microsecond:
+        raise ValueError("Give a time to the minute")
+    return value
+
+
+PlainTime = Annotated[time, AfterValidator(plain_time)]
+
+
 class BreakIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    start: time
-    end: time
+    start: PlainTime
+    end: PlainTime
 
 
 class DayIn(BaseModel):
@@ -326,8 +341,8 @@ class DayIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     weekday: Annotated[int, Field(ge=0, le=6)]
-    open: time | None
-    close: time | None
+    open: PlainTime | None
+    close: PlainTime | None
     breaks: Annotated[list[BreakIn], Field(max_length=10)] = []
 
     @model_validator(mode="after")
@@ -440,7 +455,11 @@ def add_hours(
 
 @router.put("/hours/{timetable_id}", response_model=TimetableAdminOut)
 def replace_hours(
-    timetable_id: int, body: TimetableDaysIn, admin: AdminDep, session: SessionDep, now: NowDep
+    timetable_id: ResourceId,
+    body: TimetableDaysIn,
+    admin: AdminDep,
+    session: SessionDep,
+    now: NowDep,
 ) -> TimetableAdminOut | JSONResponse:
     zone = _zone(session)
     try:
@@ -456,7 +475,9 @@ def replace_hours(
 
 
 @router.delete("/hours/{timetable_id}", status_code=204, response_model=None)
-def delete_hours(timetable_id: int, admin: AdminDep, session: SessionDep, now: NowDep) -> Response:
+def delete_hours(
+    timetable_id: ResourceId, admin: AdminDep, session: SessionDep, now: NowDep
+) -> Response:
     zone = _zone(session)
     try:
         hours_settings.delete_timetable(session, admin, timetable_id, zone, now)

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.holds import local_iso
 from app.api.staff_bookings import TAKEN, CancelIn, PhoneBookingIn, check_new_booking, zone_or_503
-from app.api.validation import resolve_services
+from app.api.validation import ResourceId, resolve_services
 from app.bookings.rules import clean_email
 from app.enquiries.actions import EnquiryNotNew, approve_enquiry, decline_enquiry
 from app.models import Enquiry
@@ -119,7 +119,7 @@ def _out(session: Session, enquiry: Enquiry) -> StaffEnquiryOut:
     )
 
 
-def _find(session: Session, enquiry_id: int) -> Enquiry:
+def _find(session: Session, enquiry_id: ResourceId) -> Enquiry:
     enquiry = session.scalars(
         select(Enquiry)
         .where(Enquiry.id == enquiry_id)
@@ -132,7 +132,7 @@ def _find(session: Session, enquiry_id: int) -> Enquiry:
 
 
 @router.get("/enquiries/{enquiry_id}")
-def enquiry_detail(enquiry_id: int, session: SessionDep) -> StaffEnquiryOut:
+def enquiry_detail(enquiry_id: ResourceId, session: SessionDep) -> StaffEnquiryOut:
     return _out(session, _find(session, enquiry_id))
 
 
@@ -143,7 +143,11 @@ def _refused(session: Session, status: int, detail: str) -> HTTPException:
 
 @router.post("/enquiries/{enquiry_id}/approve")
 def approve(
-    enquiry_id: int, body: EnquiryApproveIn, staff: StaffDep, session: SessionDep, now: NowDep
+    enquiry_id: ResourceId,
+    body: EnquiryApproveIn,
+    staff: StaffDep,
+    session: SessionDep,
+    now: NowDep,
 ) -> StaffEnquiryOut:
     """Book the enquiry in: a confirmed booking with no deposit; the customer is emailed."""
     services = resolve_services(session, body.services)
@@ -171,7 +175,7 @@ def approve(
 
 @router.post("/enquiries/{enquiry_id}/decline")
 def decline(
-    enquiry_id: int, body: CancelIn, staff: StaffDep, session: SessionDep, now: NowDep
+    enquiry_id: ResourceId, body: CancelIn, staff: StaffDep, session: SessionDep, now: NowDep
 ) -> StaffEnquiryOut:
     try:
         decline_enquiry(session, staff, enquiry_id, body.reason, now)

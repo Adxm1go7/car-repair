@@ -47,6 +47,14 @@ class AppConfig(BaseSettings):
     def check_stripe_keys(self) -> Self:
         if self.environment == "production" and not self.stripe_secret_key:
             raise ValueError("STRIPE_SECRET_KEY is required in production (no demo payments)")
+        if (
+            self.environment == "production"
+            and self.stripe_secret_key
+            and not self.stripe_webhook_secret
+        ):
+            raise ValueError(
+                "STRIPE_WEBHOOK_SECRET is required in production: without it payments never confirm"
+            )
         if self.stripe_secret_key and not self.stripe_publishable_key:
             raise ValueError("STRIPE_PUBLISHABLE_KEY is required with STRIPE_SECRET_KEY")
         return self

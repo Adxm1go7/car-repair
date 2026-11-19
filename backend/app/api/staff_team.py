@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import AfterValidator, BaseModel
 from sqlalchemy import select
 
+from app.api.validation import ResourceId
 from app.bookings.rules import clean_email, clean_name
 from app.models import StaffUser
 from app.staff.accounts import (
@@ -52,7 +53,7 @@ def member_out(user: StaffUser) -> TeamMemberOut:
     )
 
 
-def _get(session: SessionDep, user_id: int) -> StaffUser:
+def _get(session: SessionDep, user_id: ResourceId) -> StaffUser:
     user = session.get(StaffUser, user_id)
     if user is None:
         raise NOT_FOUND
@@ -77,7 +78,7 @@ def invite(body: InviteIn, admin: AdminDep, session: SessionDep, now: NowDep) ->
 
 @router.patch("/{user_id}")
 def update(
-    user_id: int, body: UpdateIn, admin: AdminDep, session: SessionDep, now: NowDep
+    user_id: ResourceId, body: UpdateIn, admin: AdminDep, session: SessionDep, now: NowDep
 ) -> TeamMemberOut:
     user = _get(session, user_id)
     try:
@@ -93,7 +94,7 @@ def update(
 
 @router.post("/{user_id}/reset-password", status_code=202)
 def reset_password(
-    user_id: int, admin: AdminDep, session: SessionDep, now: NowDep
+    user_id: ResourceId, admin: AdminDep, session: SessionDep, now: NowDep
 ) -> TeamMemberOut:
     user = _get(session, user_id)
     admin_reset_password(session, admin, user, now)

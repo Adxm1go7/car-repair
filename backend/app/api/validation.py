@@ -2,9 +2,10 @@
 
 import logging
 from datetime import date, datetime, timedelta
+from typing import Annotated
 from zoneinfo import ZoneInfo
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Path, Request
 from sqlalchemy.orm import Session
 
 from app.models import Service
@@ -15,6 +16,8 @@ from app.staff.deps import client_ip
 log = logging.getLogger("uvicorn.error")
 
 MAX_SERVICES = 20
+# An id in a URL: a PostgreSQL integer, so anything else is a 422, never a database error.
+ResourceId = Annotated[int, Path(ge=1, le=2_147_483_647)]
 MAX_SLUG_LENGTH = 64  # Service.slug is String(64)
 
 

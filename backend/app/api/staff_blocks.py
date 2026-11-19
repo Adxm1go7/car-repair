@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import AfterValidator, AwareDatetime, BaseModel, model_validator
 
 from app.api.holds import local_iso
-from app.api.validation import reject
+from app.api.validation import ResourceId, reject
 from app.repositories.availability import load_policy
 from app.schedule.blocks import BlockClashes, UnknownBay, create_block, remove_block
 from app.staff.deps import NowDep, SessionDep, StaffDep, check_origin, current_staff
@@ -76,7 +76,7 @@ def add_block(body: BlockIn, staff: StaffDep, session: SessionDep, now: NowDep) 
 
 
 @router.delete("/blocks/{block_id}", status_code=204)
-def delete_block(block_id: int, staff: StaffDep, session: SessionDep, now: NowDep) -> None:
+def delete_block(block_id: ResourceId, staff: StaffDep, session: SessionDep, now: NowDep) -> None:
     try:
         remove_block(session, staff, block_id, now)
     except LookupError as error:

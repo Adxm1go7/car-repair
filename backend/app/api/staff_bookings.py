@@ -22,6 +22,7 @@ from app.bookings.rules import (
     clean_notes,
     clean_phone,
     clean_registration,
+    reject_control_chars,
 )
 from app.email.render import format_moment
 from app.models import AuditEntry, Booking, Enquiry, Service
@@ -122,7 +123,7 @@ def create_booking(
 def clean_reason(value: str | None) -> str | None:
     if value is None or not value.strip():
         return None
-    value = value.strip()
+    value = reject_control_chars(value).strip()
     if len(value) > 500:
         raise ValueError("The reason can be at most 500 characters")
     return value

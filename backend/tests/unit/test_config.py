@@ -79,3 +79,24 @@ def test_stripe_key_needs_publishable_key(monkeypatch: pytest.MonkeyPatch) -> No
     clear_stripe(monkeypatch)
     with pytest.raises(ValidationError, match="STRIPE_PUBLISHABLE_KEY"):
         AppConfig(database_url=URL, stripe_secret_key=FAKE_SECRET)
+
+
+TEST_SECRET = "whsec_x"  # noqa: S105 - a made-up webhook secret
+
+
+def test_production_needs_webhook_secret() -> None:
+    with pytest.raises(ValidationError, match="STRIPE_WEBHOOK_SECRET"):
+        AppConfig(
+            database_url="postgresql+psycopg://u:p@h/d",
+            environment="production",
+            stripe_secret_key="sk_test_x",  # noqa: S106 - a made-up key
+            stripe_publishable_key="pk_test_x",
+        )
+    config = AppConfig(
+        database_url="postgresql+psycopg://u:p@h/d",
+        environment="production",
+        stripe_secret_key="sk_test_x",  # noqa: S106 - a made-up key
+        stripe_publishable_key="pk_test_x",
+        stripe_webhook_secret=TEST_SECRET,
+    )
+    assert config.stripe_webhook_secret == TEST_SECRET
