@@ -1,14 +1,28 @@
 """Admin only: the garage's settings — services, bays, opening hours and contact details."""
 
+from collections.abc import Sequence
+from datetime import date, datetime, time
 from typing import Annotated, Any, Final, Self
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
+from sqlalchemy.orm import Session
 
-from app.models import Bay, BayType, Service
+from app.api.catalogue import OpeningDayOut, week_out
+from app.models import Bay, BayType, Booking, Service
 from app.repositories.availability import SettingsUnavailable, load_policy
+from app.repositories.hours import WeekdayHours
 from app.settings import bays as bay_settings
+from app.settings import hours as hours_settings
 from app.settings.clashes import clash_body
 from app.settings.services import (
     EDITABLE,
@@ -111,6 +125,20 @@ def service_out(service: Service) -> ServiceAdminOut:
         active=service.active,
         sort_order=service.sort_order,
     )
+
+
+def _zone(session: Session) -> ZoneInfo:
+    try:
+        return load_policy(session).zone
+    except SettingsUnavailable as error:
+        raise HTTPException(status_code=503, detail="Settings unavailable") from error
+
+
+def _clash_response(session: Session, bookings: Sequence[Booking], zone: ZoneInfo) -> JSONResponse:
+    """The 409 listing what's in the way. Built before the rollback, which expires them."""
+    body = clash_body(bookings, zone)
+    session.rollback()
+    return JSONResponse(status_code=409, content=body)
 
 
 def _get_service(session: SessionDep, service_id: int) -> Service:
@@ -252,19 +280,14 @@ def edit_bay(
     bay = session.get(Bay, bay_id)
     if bay is None:
         raise HTTPException(status_code=404, detail="No such bay")
-    try:
-        zone = load_policy(session).zone
-    except SettingsUnavailable as error:
-        raise HTTPException(status_code=503, detail="Settings unavailable") from error
+    zone = _zone(session)
     changes = {field: getattr(body, field) for field in body.model_fields_set}
     try:
         bay_settings.update_bay(session, admin, bay, changes, now)
     except bay_settings.NameTaken as error:
         raise NAME_TAKEN from error
     except bay_settings.BayInUse as error:
-        body_409 = clash_body(error.bookings, zone)
-        session.rollback()
-        return JSONResponse(status_code=409, content=body_409)
+        return _clash_response(session, error.bookings, zone)
     session.commit()
     return bay_out(bay)
 
@@ -282,3 +305,164 @@ def add_bay_type(body: BayTypeIn, admin: AdminDep, session: SessionDep, now: Now
         raise NAME_TAKEN from error
     session.commit()
     return bay_type_out(bay_type)
+
+
+# Opening hours: timetables
+
+
+class BreakIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start: time
+    end: time
+
+
+class DayIn(BaseModel):
+    """A weekday's hours: open and close both set, or both null for a closed day. Breaks lie
+    inside the hours, start before they end, and don't overlap (touching is fine)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    weekday: Annotated[int, Field(ge=0, le=6)]
+    open: time | None
+    close: time | None
+    breaks: Annotated[list[BreakIn], Field(max_length=10)] = []
+
+    @model_validator(mode="after")
+    def hours_make_sense(self) -> Self:
+        if (self.open is None) != (self.close is None):
+            raise ValueError("Give both opening and closing times, or neither")
+        if self.open is None or self.close is None:
+            if self.breaks:
+                raise ValueError("A closed day can't have breaks")
+            return self
+        if self.open >= self.close:
+            raise ValueError("Opening must be before closing")
+        previous_end = self.open
+        for each in sorted(self.breaks, key=lambda b: b.start):
+            if each.start >= each.end:
+                raise ValueError("A break must start before it ends")
+            if each.start < previous_end or each.end > self.close:
+                raise ValueError("Breaks must be inside the hours and not overlap")
+            previous_end = each.end
+        return self
+
+    def hours(self) -> WeekdayHours:
+        breaks = tuple(sorted((b.start, b.end) for b in self.breaks))
+        return WeekdayHours(self.open, self.close, breaks)
+
+
+def _seven_days(days: list[DayIn]) -> list[DayIn]:
+    if sorted(day.weekday for day in days) != list(range(7)):
+        raise ValueError("Give each weekday, Monday to Sunday, once")
+    return days
+
+
+SevenDays = Annotated[list[DayIn], AfterValidator(_seven_days)]
+
+
+def _week(days: list[DayIn]) -> dict[int, WeekdayHours]:
+    return {day.weekday: day.hours() for day in days}
+
+
+class TimetableIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    starts_on: date
+    days: SevenDays
+
+
+class TimetableDaysIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    days: SevenDays
+
+
+class TimetableAdminOut(BaseModel):
+    id: int
+    starts_on: str
+    state: hours_settings.State
+    days: list[OpeningDayOut]
+
+
+def _not_allowed(session: Session) -> JSONResponse:
+    session.rollback()
+    return JSONResponse(status_code=409, content={"detail": "not_allowed"})
+
+
+def _timetables_out(session: Session, zone: ZoneInfo, now: datetime) -> list[TimetableAdminOut]:
+    timetables = hours_settings.list_timetables(session)
+    states = hours_settings.states(timetables, now.astimezone(zone).date())
+    return [
+        TimetableAdminOut(
+            id=t.id, starts_on=t.starts_on.isoformat(), state=states[t.id], days=week_out(t)
+        )
+        for t in timetables
+    ]
+
+
+def _timetable_out(
+    session: Session, zone: ZoneInfo, now: datetime, timetable_id: int
+) -> TimetableAdminOut:
+    return next(t for t in _timetables_out(session, zone, now) if t.id == timetable_id)
+
+
+@router.get("/hours")
+def get_hours(session: SessionDep, now: NowDep) -> list[TimetableAdminOut]:
+    """Every timetable, oldest first, marked past, current (in force today) or future."""
+    return _timetables_out(session, _zone(session), now)
+
+
+@router.post("/hours", status_code=201, response_model=TimetableAdminOut)
+def add_hours(
+    body: TimetableIn, admin: AdminDep, session: SessionDep, now: NowDep
+) -> TimetableAdminOut | JSONResponse:
+    zone = _zone(session)
+    try:
+        timetable = hours_settings.create_timetable(
+            session, admin, body.starts_on, _week(body.days), zone, now
+        )
+    except hours_settings.StartTooSoon as error:
+        raise HTTPException(
+            status_code=422, detail="New hours can start tomorrow at the earliest"
+        ) from error
+    except hours_settings.DateTaken as error:
+        raise HTTPException(
+            status_code=422, detail="There are already hours from that date"
+        ) from error
+    except hours_settings.HoursClash as error:
+        return _clash_response(session, error.bookings, zone)
+    session.commit()
+    return _timetable_out(session, zone, now, timetable.id)
+
+
+@router.put("/hours/{timetable_id}", response_model=TimetableAdminOut)
+def replace_hours(
+    timetable_id: int, body: TimetableDaysIn, admin: AdminDep, session: SessionDep, now: NowDep
+) -> TimetableAdminOut | JSONResponse:
+    zone = _zone(session)
+    try:
+        hours_settings.replace_timetable(session, admin, timetable_id, _week(body.days), zone, now)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail="No such hours") from error
+    except hours_settings.NotAllowed:
+        return _not_allowed(session)
+    except hours_settings.HoursClash as error:
+        return _clash_response(session, error.bookings, zone)
+    session.commit()
+    return _timetable_out(session, zone, now, timetable_id)
+
+
+@router.delete("/hours/{timetable_id}", status_code=204, response_model=None)
+def delete_hours(timetable_id: int, admin: AdminDep, session: SessionDep, now: NowDep) -> Response:
+    zone = _zone(session)
+    try:
+        hours_settings.delete_timetable(session, admin, timetable_id, zone, now)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail="No such hours") from error
+    except hours_settings.NotAllowed:
+        return _not_allowed(session)
+    except hours_settings.HoursClash as error:
+        return _clash_response(session, error.bookings, zone)
+    session.commit()
+    return Response(status_code=204)

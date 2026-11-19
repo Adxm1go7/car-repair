@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.clock import utc_now
 from app.config import AppConfig
 from app.db import get_session
+from app.models import Timetable
 from app.repositories.availability import (
     SettingsUnavailable,
     load_booking_window_days,
@@ -64,6 +65,19 @@ def _hhmm(value: time) -> str:
     return value.strftime("%H:%M")
 
 
+def week_out(timetable: Timetable) -> list[OpeningDayOut]:
+    """A timetable's seven days, Monday first. A weekday with no row is closed."""
+    return [
+        OpeningDayOut(
+            weekday=weekday,
+            open=_hhmm(hours.open) if hours.open is not None else None,
+            close=_hhmm(hours.close) if hours.close is not None else None,
+            breaks=[BreakOut(start=_hhmm(a), end=_hhmm(b)) for a, b in hours.breaks],
+        )
+        for weekday, hours in week_of(timetable).items()
+    ]
+
+
 @router.get("/services")
 def services(session: SessionDep) -> list[ServiceOut]:
     return [ServiceOut.model_validate(service) for service in list_active_services(session)]
@@ -87,20 +101,12 @@ def opening_hours(session: SessionDep, now: NowDep) -> OpeningHoursOut:
         last = today + timedelta(days=load_booking_window_days(session))
     except SettingsUnavailable as error:
         raise HTTPException(status_code=503, detail="Opening hours unavailable") from error
-    timetables = []
-    for timetable in timetables_between(session, today, last):
-        days = []
-        for weekday, hours in week_of(timetable).items():
-            days.append(
-                OpeningDayOut(
-                    weekday=weekday,
-                    open=_hhmm(hours.open) if hours.open is not None else None,
-                    close=_hhmm(hours.close) if hours.close is not None else None,
-                    breaks=[BreakOut(start=_hhmm(a), end=_hhmm(b)) for a, b in hours.breaks],
-                )
-            )
-        timetables.append(TimetableOut(starts_on=timetable.starts_on.isoformat(), days=days))
-    return OpeningHoursOut(timetables=timetables)
+    return OpeningHoursOut(
+        timetables=[
+            TimetableOut(starts_on=timetable.starts_on.isoformat(), days=week_out(timetable))
+            for timetable in timetables_between(session, today, last)
+        ]
+    )
 
 
 class StripePaymentOut(BaseModel):
