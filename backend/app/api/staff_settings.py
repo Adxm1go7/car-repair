@@ -3,9 +3,13 @@
 from typing import Annotated, Any, Final, Self
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.models import Service
+from app.models import Bay, BayType, Service
+from app.repositories.availability import SettingsUnavailable, load_policy
+from app.settings import bays as bay_settings
+from app.settings.clashes import clash_body
 from app.settings.services import (
     EDITABLE,
     ApprovalMode,
@@ -160,3 +164,121 @@ def move(
     move_service(session, admin, service, body.direction, now)
     session.commit()
     return [service_out(each) for each in list_services(session)]
+
+
+# Bays and bay types
+
+
+class BayIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Name
+    bay_type_id: int
+
+
+class BayPatch(BaseModel):
+    """Only the fields sent are changed; neither may be null. The bay type can't change."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Name | None = None
+    active: bool | None = None
+
+    @model_validator(mode="after")
+    def nothing_null(self) -> Self:
+        for field in self.model_fields_set:
+            if getattr(self, field) is None:
+                raise ValueError(f"{field} can't be empty")
+        return self
+
+
+class BayTypeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Name
+
+
+class BayAdminOut(BaseModel):
+    id: int
+    slug: str
+    name: str
+    bay_type_id: int
+    bay_type: str
+    active: bool
+
+
+class BayTypeOut(BaseModel):
+    id: int
+    slug: str
+    name: str
+
+
+def bay_out(bay: Bay) -> BayAdminOut:
+    return BayAdminOut(
+        id=bay.id,
+        slug=bay.slug,
+        name=bay.name,
+        bay_type_id=bay.bay_type_id,
+        bay_type=bay.bay_type.name,
+        active=bay.active,
+    )
+
+
+def bay_type_out(bay_type: BayType) -> BayTypeOut:
+    return BayTypeOut(id=bay_type.id, slug=bay_type.slug, name=bay_type.name)
+
+
+@router.get("/bays")
+def get_bays(session: SessionDep) -> list[BayAdminOut]:
+    return [bay_out(bay) for bay in bay_settings.list_bays(session)]
+
+
+@router.post("/bays", status_code=201)
+def add_bay(body: BayIn, admin: AdminDep, session: SessionDep, now: NowDep) -> BayAdminOut:
+    try:
+        bay = bay_settings.create_bay(session, admin, body.name, body.bay_type_id, now)
+    except bay_settings.NameTaken as error:
+        raise NAME_TAKEN from error
+    except bay_settings.UnknownBayType as error:
+        raise HTTPException(status_code=422, detail="Unknown bay type") from error
+    session.commit()
+    return bay_out(bay)
+
+
+@router.patch("/bays/{bay_id}", response_model=BayAdminOut)
+def edit_bay(
+    bay_id: int, body: BayPatch, admin: AdminDep, session: SessionDep, now: NowDep
+) -> BayAdminOut | JSONResponse:
+    bay = session.get(Bay, bay_id)
+    if bay is None:
+        raise HTTPException(status_code=404, detail="No such bay")
+    try:
+        zone = load_policy(session).zone
+    except SettingsUnavailable as error:
+        raise HTTPException(status_code=503, detail="Settings unavailable") from error
+    changes = {field: getattr(body, field) for field in body.model_fields_set}
+    try:
+        bay_settings.update_bay(session, admin, bay, changes, now)
+    except bay_settings.NameTaken as error:
+        raise NAME_TAKEN from error
+    except bay_settings.BayInUse as error:
+        body_409 = clash_body(error.bookings, zone)
+        session.rollback()
+        return JSONResponse(status_code=409, content=body_409)
+    session.commit()
+    return bay_out(bay)
+
+
+@router.get("/bay-types")
+def get_bay_types(session: SessionDep) -> list[BayTypeOut]:
+    return [bay_type_out(bay_type) for bay_type in bay_settings.list_bay_types(session)]
+
+
+@router.post("/bay-types", status_code=201)
+def add_bay_type(body: BayTypeIn, admin: AdminDep, session: SessionDep, now: NowDep) -> BayTypeOut:
+    try:
+        bay_type = bay_settings.create_bay_type(session, admin, body.name, now)
+    except bay_settings.NameTaken as error:
+        raise NAME_TAKEN from error
+    session.commit()
+    return bay_type_out(bay_type)

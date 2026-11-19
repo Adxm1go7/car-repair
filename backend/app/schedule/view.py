@@ -49,13 +49,8 @@ def load_schedule(
 ) -> Schedule:
     """Everything from local midnight on `first` for `days` days. Cancelled and expired
     bookings, holds past their time and removed blocks are left out."""
-    bays = list(
-        session.scalars(
-            select(Bay)
-            .options(selectinload(Bay.bay_type))
-            .where(Bay.active.is_(True))
-            .order_by(Bay.id)
-        )
+    every_bay = list(
+        session.scalars(select(Bay).options(selectinload(Bay.bay_type)).order_by(Bay.id))
     )
     day_list = [first + timedelta(days=n) for n in range(days)]
     hours = hours_on(session, day_list)
@@ -92,4 +87,7 @@ def load_schedule(
                     reservation.bay_id, during.lower, during.upper, None, reservation.block
                 )
             )
+    # A bay out of use still shows on days where it has bookings or blocks (its history).
+    used = {item.bay_id for item in items}
+    bays = [bay for bay in every_bay if bay.active or bay.id in used]
     return Schedule(bays=bays, days=day_hours, items=items)

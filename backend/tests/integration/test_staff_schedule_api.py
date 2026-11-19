@@ -179,3 +179,19 @@ def test_schedule_days_follow_timetables(client: TestClient, db_session: Session
     }
     assert days[1] == {"date": "2026-12-01", "open": "09:00", "close": "12:00", "breaks": []}
     assert days[2] == {"date": "2026-12-02", "open": None, "close": None, "breaks": []}
+
+
+def test_schedule_shows_out_of_use_bay_only_on_days_with_items(
+    client: TestClient, db_session: Session
+) -> None:
+    bay_1, bay_2 = db_session.get(Bay, bay(db_session, "bay-1")), bay(db_session, "bay-2")
+    assert bay_1 is not None
+    make_block_reservation(db_session, bay_1.id, utc(10, 14), utc(10, 15))
+    bay_1.active = False
+    db_session.flush()
+    shown = {b["slug"]: b["active"] for b in schedule(client)["bays"]}
+    assert shown == {"mot-bay": True, "bay-1": False, "bay-2": True, "bay-3": True}
+    assert "bay-1" not in {b["slug"] for b in schedule(client, start="2026-11-11")["bays"]}
+    week = schedule(client, start=TUESDAY, days=7)["bays"]
+    assert [b["slug"] for b in week] == ["mot-bay", "bay-1", "bay-2", "bay-3"]
+    assert bay_2 in {b["id"] for b in week}
