@@ -40,7 +40,7 @@ These decisions are settled. Rows marked *proposed* are my defaults that you acc
 | Garage-initiated changes | Staff phone the customer first, then cancel or move the booking, optionally giving a reason. Each change records who made it. The system emails the customer: a move gives the new time staff chose, and a cancellation refunds the deposit. A moved booking keeps its deposit and follows the normal refund rules: if the customer then cancels inside the free-cancellation period, the deposit isn't refunded, even though the garage did the moving. The garage is trusted to move bookings fairly (decided Nov 16). |
 | Phone bookings | Staff can book a customer who phones in. A phone booking has no deposit, and the customer's email is optional (decided Nov 16). |
 | No-shows | Staff mark a no-show. It keeps the deposit and the booked time (nothing is refunded or freed), and sends no email (decided Nov 16). |
-| Admin settings | Admins can add a service; edit a service's name, category, description, price and duration; set its bay type and its instant or needs-approval mode only when it's created; hide or show a service; change the display order; add, rename, and take a bay out of use or put it back; add a bay type (it can't be renamed); edit opening hours and regular breaks; and edit the garage contact details. The booking rules (window, cut-off, free-cancellation period, deposit, reminder time, slot grid, bay buffer) can't be changed by admins and stay in setup data. A change that clashes with existing bookings, such as taking a bay out of use or cutting hours or adding a break over booked time, is refused until staff have moved or cancelled each clashing booking, and the refusal lists them. Bookings store their own service name, price and duration, so editing a service never changes existing bookings (decided Nov 16, built in Milestone 8). |
+| Admin settings | Admins can add a service; edit a service's name, category, description, price and duration; set its bay type and its instant or needs-approval mode only when it's created; hide or show a service; change the display order; add, rename, and take a bay out of use or put it back; add a bay type (it can't be renamed); edit opening hours and regular breaks; and edit the garage contact details. The booking rules (window, cut-off, free-cancellation period, deposit, reminder time, slot grid, bay buffer) can't be changed by admins and stay in setup data. A change that clashes with existing bookings, such as taking a bay out of use or cutting hours or adding a break over booked time, is refused until staff have moved or cancelled each clashing booking, and the refusal lists them. Bookings store their own service name, price and duration, so editing a service never changes existing bookings (decided Nov 16, built in Milestone 8). Opening hours change from a date the admin chooses (tomorrow at the earliest). Several future timetables can be lined up, such as winter and summer hours. Taking a bay out of use takes effect at once and is for a broken or retired bay. Planned time off uses blocks (decided Nov 18). |
 | Policy settings | *Proposed*: booking window 60 days, cut-off 2 hours before a slot, slot hold 5 minutes (shortened from 10 in Milestone 4), free cancellation 24 hours. All stored as settings, not hardcoded. |
 | Stack | Python with FastAPI, React with TypeScript, PostgreSQL, Docker Compose, GitHub Actions. |
 | Photos | Enquiry photo uploads, stored in S3-compatible object storage. |
@@ -81,7 +81,7 @@ Version 1 is the complete demonstration. Everything in the second list is delibe
 
 ## Core user flows
 
-Six flows cover the whole product. Each should become at least one end-to-end test.
+Seven flows cover the whole product. Each should become at least one end-to-end test.
 
 **1. Instant booking (all selected services are instant)**
 
@@ -121,6 +121,12 @@ Six flows cover the whole product. Each should become at least one end-to-end te
 1. Staff phone the customer first, then cancel or move the booking, optionally giving a reason. Each change records who made it.
 2. The system emails the customer: a move gives the new time staff chose, and a cancellation refunds the deposit.
 
+**7. Admin settings**
+
+1. An admin adds, edits, hides or shows, and reorders services; adds and renames bays and takes them out of use or back; adds bay types; lines up opening hours from a future date; and edits the garage's contact details.
+2. A change that would leave a booking outside the opening hours, or in a bay that's out of use, is refused and lists those bookings, each linking to its page. Staff phone the customers, move or cancel the bookings, and try again.
+3. Every change is written to the audit log, with who made it.
+
 ## Domain model
 
 This is the conceptual model, not yet a schema. Customer details live on the booking or enquiry, because there are no customer accounts.
@@ -130,7 +136,8 @@ This is the conceptual model, not yet a schema. Customer details live on the boo
 | Service | name, category, description, duration, price or price range, required bay type, approval mode (instant or needs approval), active | Edited by admin only. Prices are public. |
 | BayType | name (for example MOT ramp, general bay) | Detail to be defined later. |
 | Bay | name, bay type, active | A bay holds one booking at a time. |
-| OpeningHours | weekday, open time, close time, breaks | Per weekday, editable. |
+| Timetable | start date (garage-local), created by | A week of opening hours, in force from its start date until the next timetable starts. The first starts on 1 Jan 2000, so every date has one. A new one starts tomorrow at the earliest; only future ones can be edited or deleted, so past days keep the hours they had. |
+| OpeningHours | timetable, weekday, open time, close time, breaks | One row per weekday of a timetable; a closed day has no times. Breaks lie inside the day's hours. |
 | Block | bays (one or all), start, end, note, created by | Holidays, breakdowns, one-off closures. Removing one is audited. |
 | Booking | customer name, phone, email (optional for phone bookings), car registration, make, model, notes, bay, start, end, status, deposit status, source (online or phone), created by, token hash, expiry of hold | One continuous block in one bay. Deposit status includes `not_required` for phone bookings. |
 | BookingItem | booking, service, price at time of booking, duration at time of booking | Snapshots, so later price edits do not rewrite history. |
@@ -140,7 +147,7 @@ This is the conceptual model, not yet a schema. Customer details live on the boo
 | StaffUser | name, email, password hash, role, active, last login | Roles: admin, staff. A removed account is kept inactive so the audit log can still name it. |
 | StaffSession | staff user, token hash, created, last used, expires | Server-side login sessions, carried by a cookie. |
 | PasswordToken | staff user, kind (invite or reset), token hash, expires, used | Set-password links. Only the hash is stored. |
-| Setting | key, value | Cancellation window, booking window, cut-off, hold time, deposit amount. |
+| Setting | key, value | The booking rules (cancellation window, booking window, cut-off, hold time, deposit amount, reminder time, slot grid, bay buffer) are setup data that admins can't change. The garage contact details are edited by admins. |
 | BookingLink | booking, token hash, expires at, created at | One per email that carries a link. Only the hash is stored; it expires a week after the booking ends. |
 | EmailLog | recipient, template, related booking, status, attempts, next attempt at, last error, sent at | The send queue as well as the log. Doubles as a test and debugging aid. |
 | AuditEntry | staff user, action, entity, before, after, reason, time | Written for every staff change, in the same transaction. |
@@ -238,7 +245,7 @@ Testing is the main thing that separates this from a typical demo project, so it
 | Concurrency | Many parallel attempts to book the same slot: exactly one wins, the rest get a clean conflict response | pytest with threads or async tasks |
 | Payments | Deposit success, failure, duplicate and out-of-order webhooks | Stripe test mode and recorded fixtures |
 | Front end | Components, form validation, slot picker behaviour | Vitest, React Testing Library |
-| End to end | The six core flows in a real browser, including emailed token links | Playwright, against the mail catcher |
+| End to end | The seven core flows in a real browser, including emailed token links | Playwright, against the mail catcher |
 | Non-functional | Accessibility checks, basic load on the availability endpoint, security checks | axe, a load tool, dependency and static scans |
 
 **Practices**
@@ -306,7 +313,7 @@ There is no deadline, so each milestone has a definition of done and the next on
 5. **Deposit payments.** Stripe test mode, idempotent webhooks, refund on eligible cancellation. *Done when* success, failure and duplicate-webhook tests pass.
 6. **Email and token self-service.** Templates, send log, token links, customer cancel within policy (no customer rescheduling). *Done when* flow 4 passes end to end and expired tokens fail safely.
 7. **Staff back office.** Login, staff accounts, roles, shared day and week schedule, phone bookings, move, cancel, block time, job status, audit log, mobile layout. *Done when* flow 5 and flow 6 pass and role checks are tested.
-8. **Admin settings.** Editing services, bays, bay types, opening hours, breaks and contact details, with clashing changes refused until the bookings in the way are moved or cancelled. *Done when* each setting can be edited and a clashing change is refused with the bookings listed.
+8. **Admin settings.** Editing services, bays, bay types, opening hours, breaks and contact details, with clashing changes refused until the bookings in the way are moved or cancelled. *Done when* an admin can make each kind of change from the Settings page; a clashing change (a bay out of use with bookings, or hours that leave bookings outside opening time) is refused with those bookings listed, and nothing changes; the public site and the staff schedule show the right hours for every date, across a change of timetable; every change is in the audit log; and flow 7 passes end to end in CI.
 9. **Approval bookings and enquiries.** Needs-approval services, the staff queue, enquiry form with photo upload, approve, decline and convert. *Done when* flows 2 and 3 pass end to end.
 10. **Hardening and polish.** Rate limiting, accessibility pass, error pages, load test of the availability endpoint, security scans, documentation. *Done when* the checklist section is fully ticked.
 11. **Deployment.** Cloud environment from the same images, environment configuration, a seeded live demo, and a short walkthrough or recording. *Done when* the live demo passes the end-to-end suite.
