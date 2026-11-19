@@ -18,12 +18,14 @@ from pydantic import (
 from sqlalchemy.orm import Session
 
 from app.api.catalogue import OpeningDayOut, week_out
+from app.bookings.rules import clean_email, clean_phone
 from app.models import Bay, BayType, Booking, Service
 from app.repositories.availability import SettingsUnavailable, load_policy
 from app.repositories.hours import WeekdayHours
 from app.settings import bays as bay_settings
 from app.settings import hours as hours_settings
 from app.settings.clashes import clash_body
+from app.settings.contact import read_contact, save_contact
 from app.settings.services import (
     EDITABLE,
     ApprovalMode,
@@ -466,3 +468,36 @@ def delete_hours(timetable_id: int, admin: AdminDep, session: SessionDep, now: N
         return _clash_response(session, error.bookings, zone)
     session.commit()
     return Response(status_code=204)
+
+
+# Contact details
+
+
+class ContactIn(BaseModel):
+    """Checked like a customer's phone and email. All four are required."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Name
+    address: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    phone: Annotated[str, AfterValidator(clean_phone)]
+    email: Annotated[str, AfterValidator(clean_email)]
+
+
+class ContactOut(BaseModel):
+    name: str
+    address: str
+    phone: str
+    email: str
+
+
+@router.get("/contact")
+def get_contact(session: SessionDep) -> ContactOut:
+    return ContactOut(**read_contact(session))
+
+
+@router.put("/contact")
+def put_contact(body: ContactIn, admin: AdminDep, session: SessionDep, now: NowDep) -> ContactOut:
+    saved = save_contact(session, admin, body.model_dump(), now)
+    session.commit()
+    return ContactOut(**saved)
