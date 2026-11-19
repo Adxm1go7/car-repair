@@ -10,6 +10,7 @@ export type Message = { detail: string }
 export type BookingStatus =
   | 'held'
   | 'pending_approval'
+  | 'awaiting_deposit'
   | 'confirmed'
   | 'in_progress'
   | 'completed'
@@ -56,8 +57,11 @@ export type BookingAction =
   | 'undo_no_show'
   | 'move'
   | 'cancel'
+  | 'approve'
+  | 'propose'
+  | 'decline'
 
-export type StatusAction = Exclude<BookingAction, 'move' | 'cancel'>
+export type StatusAction = Exclude<BookingAction, 'move' | 'cancel' | 'approve' | 'propose' | 'decline'>
 
 export type DepositStatus = 'unpaid' | 'paid' | 'refund_pending' | 'refunded' | 'refund_failed' | 'waived' | 'not_required'
 
@@ -78,9 +82,22 @@ export type StaffBooking = {
   customer_email: string | null
   notes: string | null
   deposit_status: DepositStatus
+  /** A request: when it must be answered by. An approval: when its deposit is due by. */
+  deadline?: string | null
   actions: BookingAction[]
   starts_on_another_day: boolean
   history: { at: string; text: string }[]
+}
+
+/** GET /api/staff/requests: an online request waiting for an answer. Times garage-local ISO. */
+export type StaffRequest = {
+  reference: string
+  customer_name: string | null
+  services: string[]
+  start: string
+  bay: string
+  deadline: string
+  created_at: string
 }
 
 export type StaffSlot = { start: string; end: string; bay_ids: number[] }

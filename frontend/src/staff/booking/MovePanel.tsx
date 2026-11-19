@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { formatTime } from '../../booking/format.ts'
-import { conflictDetail, fetchMoveOptions, moveBooking } from '../api.ts'
+import { conflictDetail, fetchMoveOptions, moveBooking, proposeBooking } from '../api.ts'
 import { FAILED, callFirst, localDate } from '../labels.ts'
 import { shortDay } from '../schedule/layout.ts'
 import { useStaff } from '../StaffContext.ts'
@@ -12,9 +12,19 @@ import type { PickedSlot } from './TimePickerGrid.tsx'
 
 const TAKEN = 'That time has just been taken'
 const NO_CHANGE = 'That is the time and bay it already has.'
+const TOO_SOON = 'Too soon for the customer to pay — choose a later time'
+const LAPSED = 'This request has lapsed, so its time has been released.'
+
+/** The words for moving a booking, or proposing another time for a request. */
+const WORDS = {
+  move: { title: 'Move booking', pick: 'Move booking', ask: 'Move to', yes: 'Yes, move it' },
+  propose: { title: 'Propose another time', pick: 'Propose this time', ask: 'Propose', yes: 'Yes, propose it' },
+}
 
 type Props = {
   booking: StaffBooking
+  /** 'propose' asks for the deposit for the new time too: for a request or an approval. */
+  mode?: 'move' | 'propose'
   onMoved: (booking: StaffBooking) => void
   /** The booking can't be moved any more: the page reloads it. */
   onStale: () => void
@@ -23,7 +33,8 @@ type Props = {
 
 type Options = { date: string; options: StaffAvailability | null; failed: boolean }
 
-export function MovePanel({ booking, onMoved, onStale, onClose }: Props): JSX.Element {
+export function MovePanel({ booking, mode = 'move', onMoved, onStale, onClose }: Props): JSX.Element {
+  const words = WORDS[mode]
   const [date, setDate] = useState(localDate(booking.start))
   const [loaded, setLoaded] = useState<Options | null>(null)
   const [reloads, setReloads] = useState(0)
@@ -61,11 +72,9 @@ export function MovePanel({ booking, onMoved, onStale, onClose }: Props): JSX.El
   async function confirm(): Promise<void> {
     if (!picked) return
     setBusy(true)
-    const result = await moveBooking(booking.reference, {
-      start: picked.start,
-      bay_id: picked.bayId,
-      reason: reason.trim() ? reason.trim() : null,
-    })
+    const change = { start: picked.start, bay_id: picked.bayId, reason: reason.trim() ? reason.trim() : null }
+    const result =
+      mode === 'propose' ? await proposeBooking(booking.reference, change) : await moveBooking(booking.reference, change)
     setBusy(false)
     setConfirming(false)
     if (result.ok) {
@@ -88,19 +97,31 @@ export function MovePanel({ booking, onMoved, onStale, onClose }: Props): JSX.El
         setError(NO_CHANGE)
         return
       }
+      if (detail === 'too_soon') {
+        setError(TOO_SOON)
+        return
+      }
+      if (detail === 'expired') {
+        setError(LAPSED)
+        return
+      }
     }
     if (result.kind !== 'unauthorised') setError(FAILED)
   }
 
   if (confirming && picked) {
     return (
-      <section className="staff-panel" aria-label="Move booking">
-        <h2>Move booking</h2>
-        <p>{`Move to ${shortDay(date)}, ${formatTime(picked.start, zone)} · ${bayName(picked.bayId)}?`}</p>
-        <p>{callFirst(booking.customer_email !== null, "They'll be emailed the new time.")}</p>
+      <section className="staff-panel" aria-label={words.title}>
+        <h2>{words.title}</h2>
+        <p>{`${words.ask} ${shortDay(date)}, ${formatTime(picked.start, zone)} · ${bayName(picked.bayId)}?`}</p>
+        <p>
+          {mode === 'propose'
+            ? callFirst(booking.customer_email !== null, "They'll be emailed the new time and asked to pay the deposit.")
+            : callFirst(booking.customer_email !== null, "They'll be emailed the new time.")}
+        </p>
         <div className="staff-buttons">
           <button type="button" className="staff-button" disabled={busy} onClick={() => void confirm()}>
-            Yes, move it
+            {words.yes}
           </button>
           <button type="button" className="staff-button staff-button-quiet" onClick={() => setConfirming(false)}>
             Back
@@ -111,17 +132,18 @@ export function MovePanel({ booking, onMoved, onStale, onClose }: Props): JSX.El
   }
 
   return (
-    <section className="staff-panel" aria-label="Move booking">
-      <h2>Move booking</h2>
-      <div className="field">
-        <label htmlFor="move-date">Date</label>
-        <input id="move-date" type="date" value={date} onChange={(event) => changeDate(event.target.value)} />
-      </div>
+    <section className="staff-panel" aria-label={words.title}>
+      <h2>{words.title}</h2>
+      {mode === 'propose' && <p>Phone the customer first and agree the new time.</p>}
       {error && (
         <p role="alert" className="staff-alert">
           {error}
         </p>
       )}
+      <div className="field">
+        <label htmlFor="move-date">Date</label>
+        <input id="move-date" type="date" value={date} onChange={(event) => changeDate(event.target.value)} />
+      </div>
       {loaded?.date === date && loaded.failed && (
         <p className="staff-alert">{"Sorry, we couldn't load the free times."}</p>
       )}
@@ -144,7 +166,7 @@ export function MovePanel({ booking, onMoved, onStale, onClose }: Props): JSX.El
       </div>
       <div className="staff-buttons">
         <button type="button" className="staff-button" disabled={!picked} onClick={() => setConfirming(true)}>
-          Move booking
+          {words.pick}
         </button>
         <button type="button" className="staff-button staff-button-quiet" onClick={onClose}>
           Close

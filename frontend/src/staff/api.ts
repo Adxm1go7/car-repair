@@ -14,6 +14,7 @@ import type {
   StaffAvailability,
   StaffBooking,
   StaffMe,
+  StaffRequest,
   StaffRole,
   StatusAction,
   TeamMember,
@@ -124,6 +125,29 @@ export function cancelStaffBooking(reference: string, reason: string | null): Pr
 
 export function changeStatus(reference: string, action: StatusAction): Promise<StaffResult<StaffBooking>> {
   return staffRequest<StaffBooking>(bookingPath(reference, '/status'), post({ action }))
+}
+
+/** Online requests waiting for an answer, oldest first. */
+export function fetchRequests(): Promise<StaffResult<StaffRequest[]>> {
+  return staffRequest<StaffRequest[]>('/requests')
+}
+
+/** A 409's detail says why not: not_allowed, expired or too_soon. */
+export function approveBooking(reference: string): Promise<StaffResult<StaffBooking>> {
+  return staffRequest<StaffBooking>(bookingPath(reference, '/approve'), post({}))
+}
+
+/** Move a request to a time agreed on the phone and ask for the deposit. 409 details as
+ * for a move, plus too_soon and expired. */
+export function proposeBooking(
+  reference: string,
+  proposal: { start: string; bay_id: number; reason: string | null },
+): Promise<StaffResult<StaffBooking>> {
+  return staffRequest<StaffBooking>(bookingPath(reference, '/propose'), post(proposal))
+}
+
+export function declineBooking(reference: string, reason: string | null): Promise<StaffResult<StaffBooking>> {
+  return staffRequest<StaffBooking>(bookingPath(reference, '/decline'), post({ reason }))
 }
 
 /** The bays, with names, from a day's schedule. */

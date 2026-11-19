@@ -1,7 +1,7 @@
 import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
-import { DAY_SCHEDULE, scheduleUrl } from '../../testing/schedule.ts'
+import { DAY_SCHEDULE, bookingItem, scheduleUrl } from '../../testing/schedule.ts'
 import { STAFF_ME, renderAt, stubFetch } from '../../testing/staffApi.tsx'
 
 /** Makes matchMedia answer as a phone (narrow) or a desktop. */
@@ -222,4 +222,30 @@ it('narrow day view marks an out-of-use bay tab', async () => {
   renderAt('/staff?date=2026-11-17')
   const tabs = await screen.findAllByRole('tab')
   expect(tabs.map((t) => t.textContent)).toEqual(['MOT bay', 'Bay 1 (out of use)'])
+})
+
+
+it('marks requests and approvals waiting for a deposit', async () => {
+  stubScreen(false)
+  const schedule = {
+    ...DAY_SCHEDULE,
+    items: [
+      bookingItem({ reference: 'REQU-ESTA', status: 'pending_approval', registration: 'RE01QST' }),
+      bookingItem({
+        reference: 'APPR-OVED',
+        status: 'awaiting_deposit',
+        registration: 'AP01PRV',
+        start: '2026-11-17T13:00:00+00:00',
+        end: '2026-11-17T14:00:00+00:00',
+      }),
+    ],
+  }
+  stubDay({ [scheduleUrl('2026-11-17', 1)]: { status: 200, body: schedule } })
+  renderAt('/staff?date=2026-11-17')
+  const request = await screen.findByRole('link', { name: /RE01QST/ })
+  expect(request).toHaveTextContent('Request')
+  expect(request).toHaveClass('entry-pending_approval')
+  const approval = screen.getByRole('link', { name: /AP01PRV/ })
+  expect(approval).toHaveTextContent('Awaiting deposit')
+  expect(approval).toHaveClass('entry-awaiting_deposit')
 })

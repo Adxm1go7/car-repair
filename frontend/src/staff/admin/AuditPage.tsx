@@ -54,6 +54,12 @@ function describe(entry: AuditEntry): string {
       return 'Moved booking'
     case 'booking.cancel':
       return 'Cancelled booking'
+    case 'booking.approve':
+      return 'Approved request'
+    case 'booking.propose':
+      return 'Proposed a new time'
+    case 'booking.decline':
+      return 'Declined request'
     case 'booking.status': {
       const status = text(entry.after, 'status')
       const label = status ? STATUS_LABEL[status as BookingStatus] : undefined
