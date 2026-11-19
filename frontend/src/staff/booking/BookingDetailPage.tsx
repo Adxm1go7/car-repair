@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router'
 import { calendarNoon } from '../../booking/days.ts'
 import { changeStatus, conflictDetail, fetchStaffBooking } from '../api.ts'
 import type { StaffResult } from '../api.ts'
-import { ACTION_LABEL, DEPOSIT_LABEL, FAILED, NO_EMAIL, STALE, STATUS_LABEL, localDate, localTime } from '../labels.ts'
+import { ACTION_LABEL, DEPOSIT_LABEL, FAILED, NO_DEPOSIT_NOTE, NO_EMAIL, STALE, STATUS_LABEL, localDate, localTime } from '../labels.ts'
 import { shortDay } from '../schedule/layout.ts'
 import type { BookingAction, StaffBooking, StatusAction } from '../types.ts'
 import { ApprovePanel, DeclinePanel } from './ApprovalPanel.tsx'
@@ -48,7 +48,16 @@ function Details({ booking }: { booking: StaffBooking }): JSX.Element {
         <span>{booking.customer_email ?? NO_EMAIL}</span>
       </p>
       {booking.notes && <p>{`Notes: "${booking.notes}"`}</p>}
-      <p>{DEPOSIT_LABEL[booking.deposit_status]}</p>
+      <p>
+        {booking.deposit_status === 'not_required' && booking.source !== 'online'
+          ? NO_DEPOSIT_NOTE[booking.source]
+          : DEPOSIT_LABEL[booking.deposit_status]}
+      </p>
+      {typeof booking.enquiry_id === 'number' && (
+        <p>
+          <Link to={`/staff/enquiries/${booking.enquiry_id}`}>From enquiry</Link>
+        </p>
+      )}
       {booking.deadline && booking.status === 'pending_approval' && (
         <p className="booking-deadline">{`Reply by ${moment(booking.deadline)}`}</p>
       )}

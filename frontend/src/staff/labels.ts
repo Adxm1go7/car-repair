@@ -37,6 +37,12 @@ export const DEPOSIT_LABEL: Record<DepositStatus, string> = {
   not_required: 'Phone booking · no deposit',
 }
 
+/** The schedule's and booking page's note for a booking taken with no deposit. */
+export const NO_DEPOSIT_NOTE: Record<'phone' | 'enquiry', string> = {
+  phone: DEPOSIT_LABEL.not_required,
+  enquiry: 'From enquiry · no deposit',
+}
+
 export const ENQUIRY_STATUS_LABEL: Record<EnquiryStatus, string> = {
   new: 'New',
   converted: 'Booked',

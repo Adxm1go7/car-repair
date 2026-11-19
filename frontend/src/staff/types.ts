@@ -31,13 +31,15 @@ export type ScheduleDay = {
 
 type ItemTimes = { bay_id: number; start: string; end: string } // garage-local ISO
 
+export type BookingSource = 'online' | 'phone' | 'enquiry'
+
 export type ScheduleBooking = ItemTimes & {
   kind: 'booking'
   reference: string
   status: BookingStatus
   registration: string
   services: string[]
-  source: 'online' | 'phone'
+  source: BookingSource
   has_email: boolean
 }
 
@@ -69,7 +71,7 @@ export type DepositStatus = 'unpaid' | 'paid' | 'refund_pending' | 'refunded' | 
 export type StaffBooking = {
   reference: string
   status: BookingStatus
-  source: 'online' | 'phone'
+  source: BookingSource
   start: string
   end: string
   bay: { id: number; name: string }
@@ -86,6 +88,8 @@ export type StaffBooking = {
   deadline?: string | null
   actions: BookingAction[]
   starts_on_another_day: boolean
+  /** The enquiry this booking was made from. */
+  enquiry_id?: number | null
   history: { at: string; text: string }[]
 }
 
