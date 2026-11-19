@@ -269,6 +269,13 @@ a.staff-button {
   border-left-style: dashed;
 }
 
+/* A request waiting for staff, and an approval waiting for its deposit: not booked yet. */
+.entry-pending_approval,
+.entry-awaiting_deposit {
+  border-left-style: dashed;
+  border-left-color: var(--warning, #b45309);
+}
+
 .entry-block {
   border-left-color: var(--muted);
   background: var(--entry-block);
@@ -830,4 +837,25 @@ button.entry {
 
 .hours-times input {
   min-height: 44px;
+}
+
+.requests-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.requests-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.requests-deadline,
+.booking-deadline {
+  font-weight: 600;
 }

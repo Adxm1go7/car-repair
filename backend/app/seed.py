@@ -39,6 +39,10 @@ DEFAULT_SETTINGS: Final[dict[str, Any]] = {
     "garage_timezone": "Europe/London",
     "slot_grid_minutes": 30,
     "bay_buffer_minutes": 15,
+    "approval_hold_hours": 48,
+    "approval_payment_hours": 24,
+    "approval_lead_hours": 24,
+    "approval_min_payment_hours": 2,
     "garage_contact": DEMO_GARAGE_CONTACT,
 }
 

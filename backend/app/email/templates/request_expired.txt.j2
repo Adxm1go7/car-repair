@@ -1,0 +1,9 @@
+Hello {{ c.customer_name }},
+
+We're sorry: we couldn't reply to your booking request with {{ c.garage.name }} in time, so the time we were keeping for you has been released.
+
+{% include "_booking.txt.j2" %}
+
+Nothing has been charged. To find another time, please call us on {{ c.garage.phone }}.
+
+{% include "_footer.txt.j2" %}

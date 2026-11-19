@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.models import Setting
 from app.repositories.availability import (
+    ApprovalRules,
     SettingsUnavailable,
+    load_approval_rules,
     load_deposit_pence,
     load_free_cancellation_hours,
     load_payment_hold_minutes,
@@ -30,6 +32,30 @@ BAD: list[tuple[str, Loader, object]] = [
     ("free_cancellation_hours", load_free_cancellation_hours, 8761),
     *[(key, loader, value) for key, loader, _ in LOADERS for value in (True, "10")],
 ]
+
+
+def test_seeded_approval_rules_load(db_session: Session) -> None:
+    seed(db_session)
+    assert load_approval_rules(db_session) == ApprovalRules(
+        hold_hours=48, payment_hours=24, lead_hours=24, min_payment_hours=2
+    )
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("approval_hold_hours", 0),
+        ("approval_payment_hours", 0),
+        ("approval_lead_hours", -1),
+        ("approval_min_payment_hours", 0),
+        ("approval_hold_hours", "48"),
+    ],
+)
+def test_bad_approval_rule_is_unavailable(db_session: Session, key: str, value: object) -> None:
+    seed(db_session)
+    set_value(db_session, key, value)
+    with pytest.raises(SettingsUnavailable):
+        load_approval_rules(db_session)
 
 
 def set_value(session: Session, key: str, value: object) -> None:

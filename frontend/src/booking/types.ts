@@ -22,6 +22,8 @@ export type Availability = {
   timezone: string
   duration_minutes: number
   unavailable_reason: 'mixed_bay_types' | null
+  /** A request: staff check it before any payment, so it needs a day's notice. */
+  needs_approval?: boolean
   slots: AvailabilitySlot[]
 }
 

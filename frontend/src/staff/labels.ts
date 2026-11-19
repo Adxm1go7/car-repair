@@ -2,7 +2,8 @@ import type { BookingAction, BookingStatus, DepositStatus, StaffRole, StaffState
 
 export const STATUS_LABEL: Record<BookingStatus, string> = {
   held: 'Being booked',
-  pending_approval: 'Waiting for approval',
+  pending_approval: 'Request',
+  awaiting_deposit: 'Awaiting deposit',
   confirmed: 'Confirmed',
   in_progress: 'In progress',
   completed: 'Completed',
@@ -20,6 +21,9 @@ export const ACTION_LABEL: Record<BookingAction, string> = {
   undo_no_show: 'Undo no show',
   move: 'Move',
   cancel: 'Cancel booking',
+  approve: 'Approve',
+  propose: 'Propose another time',
+  decline: 'Decline',
 }
 
 export const DEPOSIT_LABEL: Record<DepositStatus, string> = {

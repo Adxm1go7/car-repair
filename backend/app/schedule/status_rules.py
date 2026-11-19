@@ -9,6 +9,9 @@
 
 Only a confirmed booking can be moved or cancelled. A no-show keeps its deposit and its
 time, and sends no email.
+
+    pending approval  -> Approve, Propose another time, Decline
+    awaiting deposit  -> Propose another time (again), Cancel
 """
 
 from datetime import datetime, timedelta
@@ -16,7 +19,17 @@ from typing import Final, Literal
 from zoneinfo import ZoneInfo
 
 Action = Literal[
-    "start", "complete", "no_show", "undo_start", "undo_complete", "undo_no_show", "move", "cancel"
+    "start",
+    "complete",
+    "no_show",
+    "undo_start",
+    "undo_complete",
+    "undo_no_show",
+    "move",
+    "cancel",
+    "approve",
+    "propose",
+    "decline",
 ]
 StatusAction = Literal[
     "start", "complete", "no_show", "undo_start", "undo_complete", "undo_no_show"
@@ -50,6 +63,10 @@ def booking_actions(
         actions += ["move", "cancel"]
     elif status == "in_progress":
         actions += ["complete", "undo_start"]
+    elif status == "pending_approval":
+        actions += ["approve", "propose", "decline"]
+    elif status == "awaiting_deposit":
+        actions += ["propose", "cancel"]
     elif status == "completed" and _within_undo(status_changed_at, now):
         actions.append("undo_complete")
     elif status == "no_show" and _within_undo(status_changed_at, now):

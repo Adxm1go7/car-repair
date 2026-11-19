@@ -1,7 +1,8 @@
 """The bookings in the way of a settings change: a bay taken out of use, or new hours.
 
 A booking counts while it holds its time: held (and not past its hold), waiting for
-approval, confirmed or in progress. Cancelled, expired, completed and no-show ones don't.
+approval, approved and waiting for its deposit, confirmed or in progress. Cancelled,
+expired, completed and no-show ones don't.
 """
 
 from collections.abc import Mapping, Sequence
@@ -18,7 +19,13 @@ from app.repositories.bookings import expired_hold
 from app.repositories.hours import WeekdayHours
 from app.schedule.view import local_midnight
 
-COUNTING_STATUSES: Final = ("held", "pending_approval", "confirmed", "in_progress")
+COUNTING_STATUSES: Final = (
+    "held",
+    "pending_approval",
+    "awaiting_deposit",
+    "confirmed",
+    "in_progress",
+)
 
 
 def fits(hours: WeekdayHours, start: datetime, end: datetime) -> bool:

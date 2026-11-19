@@ -7,13 +7,14 @@ import type { StaffResult } from '../api.ts'
 import { ACTION_LABEL, DEPOSIT_LABEL, FAILED, NO_EMAIL, STALE, STATUS_LABEL, localDate, localTime } from '../labels.ts'
 import { shortDay } from '../schedule/layout.ts'
 import type { BookingAction, StaffBooking, StatusAction } from '../types.ts'
+import { ApprovePanel, DeclinePanel } from './ApprovalPanel.tsx'
 import { CancelPanel } from './CancelPanel.tsx'
 import { MovePanel } from './MovePanel.tsx'
 
 const NOT_FOUND = 'No such booking' // the API's 404 detail
 
 type PageState = { kind: 'loading' } | { kind: 'missing' } | { kind: 'failed' } | { kind: 'ready'; booking: StaffBooking }
-type Panel = null | 'move' | 'cancel' | 'confirm-start'
+type Panel = null | 'move' | 'cancel' | 'confirm-start' | 'approve' | 'propose' | 'decline'
 
 function telHref(phone: string): string {
   return `tel:${phone.replace(/\s+/g, '')}`
@@ -25,6 +26,11 @@ function historyTime(iso: string): string {
     calendarNoon(localDate(iso)),
   )
   return `${day} ${localTime(iso)}`
+}
+
+/** "Wed 18 Nov, 09:00" for a garage-local ISO time. */
+function moment(iso: string): string {
+  return `${shortDay(localDate(iso))}, ${localTime(iso)}`
 }
 
 function Details({ booking }: { booking: StaffBooking }): JSX.Element {
@@ -43,6 +49,12 @@ function Details({ booking }: { booking: StaffBooking }): JSX.Element {
       </p>
       {booking.notes && <p>{`Notes: "${booking.notes}"`}</p>}
       <p>{DEPOSIT_LABEL[booking.deposit_status]}</p>
+      {booking.deadline && booking.status === 'pending_approval' && (
+        <p className="booking-deadline">{`Reply by ${moment(booking.deadline)}`}</p>
+      )}
+      {booking.deadline && booking.status === 'awaiting_deposit' && (
+        <p className="booking-deadline">{`Deposit due by ${moment(booking.deadline)}`}</p>
+      )}
     </div>
   )
 }
@@ -71,6 +83,7 @@ export function BookingDetailPage(): JSX.Element {
   const [panel, setPanel] = useState<Panel>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const show = useCallback((result: StaffResult<StaffBooking>): void => {
     if (result.ok) setState({ kind: 'ready', booking: result.data })
@@ -96,6 +109,11 @@ export function BookingDetailPage(): JSX.Element {
     setMessage(null)
   }
 
+  function answered(booking: StaffBooking, done: string): void {
+    updated(booking)
+    setNotice(done)
+  }
+
   function stale(): void {
     setPanel(null)
     setMessage(STALE)
@@ -114,7 +132,9 @@ export function BookingDetailPage(): JSX.Element {
 
   function press(booking: StaffBooking, action: BookingAction): void {
     setMessage(null)
-    if (action === 'move' || action === 'cancel') setPanel(action)
+    setNotice(null)
+    if (action === 'move' || action === 'cancel' || action === 'approve' || action === 'propose' || action === 'decline')
+      setPanel(action)
     else if (action === 'start' && booking.starts_on_another_day) setPanel('confirm-start')
     else void runStatus(action)
   }
@@ -139,13 +159,20 @@ export function BookingDetailPage(): JSX.Element {
           {message}
         </p>
       )}
+      {notice && (
+        <p role="status" className="team-notice">
+          {notice}
+        </p>
+      )}
       {panel === null && booking.actions.length > 0 && (
         <div className="staff-buttons" role="group" aria-label="Actions">
           {booking.actions.map((action) => (
             <button
               key={action}
               type="button"
-              className={action === 'cancel' ? 'staff-button staff-button-danger' : 'staff-button'}
+              className={
+                action === 'cancel' || action === 'decline' ? 'staff-button staff-button-danger' : 'staff-button'
+              }
               disabled={busy}
               onClick={() => press(booking, action)}
             >
@@ -169,6 +196,21 @@ export function BookingDetailPage(): JSX.Element {
       )}
       {panel === 'move' && (
         <MovePanel booking={booking} onMoved={updated} onStale={stale} onClose={() => setPanel(null)} />
+      )}
+      {panel === 'approve' && (
+        <ApprovePanel booking={booking} onDone={answered} onStale={stale} onClose={() => setPanel(null)} />
+      )}
+      {panel === 'decline' && (
+        <DeclinePanel booking={booking} onDone={answered} onStale={stale} onClose={() => setPanel(null)} />
+      )}
+      {panel === 'propose' && (
+        <MovePanel
+          booking={booking}
+          mode="propose"
+          onMoved={(proposed) => answered(proposed, 'New time proposed — the customer has been emailed')}
+          onStale={stale}
+          onClose={() => setPanel(null)}
+        />
       )}
       {panel === 'cancel' && (
         <CancelPanel booking={booking} onCancelled={updated} onStale={stale} onClose={() => setPanel(null)} />

@@ -10,11 +10,12 @@ Lock order everywhere: the booking row first, then its payment rows. Nothing her
 import logging
 from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.email.queue import queue_email
-from app.models import Booking, Payment
+from app.models import Booking, EmailLog, Payment
 from app.payments.provider import PaymentProvider, RefundStatus
 from app.payments.rules import CancelledBy, deposit_refundable
 from app.repositories.availability import load_policy
@@ -101,7 +102,7 @@ def complete_deposit(
         # Past its time but not released yet. It stopped counting at its expiry, so a bay or
         # hours change may have gone ahead since: release it and treat it as a late payment.
         release_hold(session, booking)
-    if booking.status == "held":
+    if booking.status in ("held", "awaiting_deposit"):
         # Its reservation is still active: nobody else could take it.
         _confirm(session, booking, now)
     elif booking.status == "expired":
@@ -112,14 +113,34 @@ def complete_deposit(
                 "late payment for %s: its time, bay or hours are gone, refunding", booking.reference
             )
             refund_deposit(session, provider, deposit)
+            _tell_about_late_refund(session, booking)
             session.flush()
             return None
     else:
-        log.warning("payment for booking %s in status %s", booking.reference, booking.status)
+        # Cancelled, declined, moved on, or already paid through another form: the money
+        # isn't for anything, so it goes back.
+        log.warning(
+            "payment for booking %s in status %s, refunding", booking.reference, booking.status
+        )
+        refund_deposit(session, provider, deposit)
         session.flush()
         return None
     session.flush()
     return booking
+
+
+def _tell_about_late_refund(session: Session, booking: Booking) -> None:
+    """An approval paid after it was released: its customer paid from an emailed link and
+    may not be on the page, so the "time released" email says about the refund. One still
+    waiting to go out says it already (it reads the deposit status when sent); one already
+    sent is followed by another. A plain hold's customer is on the page: no email."""
+    emails = session.scalars(
+        select(EmailLog.status).where(
+            EmailLog.booking_id == booking.id, EmailLog.template == "deposit_expired"
+        )
+    ).all()
+    if emails and "queued" not in emails:
+        queue_email(session, "deposit_expired", booking)
 
 
 def refund_deposit(session: Session, provider: PaymentProvider, deposit: Payment) -> Payment:

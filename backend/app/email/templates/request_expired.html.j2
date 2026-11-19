@@ -1,0 +1,7 @@
+{% extends "_layout.html.j2" %}
+{% block content %}
+<p>We're sorry: we couldn't reply to your booking request with {{ c.garage.name }} in time, so the time we were keeping for you has been released.</p>
+{% endblock %}
+{% block after %}
+<p>Nothing has been charged. To find another time, please call us on {{ c.garage.phone }}.</p>
+{% endblock %}

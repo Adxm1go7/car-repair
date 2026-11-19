@@ -24,6 +24,12 @@ EMAIL_TEMPLATES: Final[tuple[str, ...]] = (
     "garage_cancellation",
     "staff_invite",
     "password_reset",
+    "request_received",
+    "approved",
+    "proposed",
+    "declined",
+    "request_expired",
+    "deposit_expired",
 )
 # skipped: the booking changed before it went out (a reminder for a cancelled booking).
 EMAIL_STATUSES: Final[tuple[str, ...]] = ("queued", "sent", "failed", "skipped")

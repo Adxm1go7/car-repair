@@ -38,6 +38,9 @@ class EmailContext:
     previous_start: datetime | None = None
     previous_end: datetime | None = None
     previous_bay: str | None = None
+    # Requests and approvals: when staff will answer by, or when the deposit is due by.
+    deadline: datetime | None = None
+    deposit_due_pence: int = 0  # the deposit an approval asks for
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,12 @@ SUBJECTS: dict[EmailTemplate, str] = {
     "cancellation": "Your booking is cancelled — {reference}",
     "moved": "Your booking has moved — {reference}",
     "garage_cancellation": "We've had to cancel your booking — {reference}",
+    "request_received": "We've got your request — {reference}",
+    "approved": "Your booking is approved — pay the deposit to confirm — {reference}",
+    "proposed": "We've suggested a new time — {reference}",
+    "declined": "We can't take your booking — {reference}",
+    "request_expired": "Your request has lapsed — {reference}",
+    "deposit_expired": "Your booking time has been released — {reference}",
 }
 
 
@@ -106,6 +115,8 @@ def render_email(template: EmailTemplate, to: str, context: EmailContext) -> Out
         "was_ends": f"{context.previous_end.astimezone(zone):%H:%M}"
         if context.previous_end
         else "",
+        "deadline": format_moment(context.deadline, zone) if context.deadline else "",
+        "deposit_due": format_pounds(context.deposit_due_pence),
     }
     subject = SUBJECTS[template].format(
         reference=context.reference, day=format_day(context.start, zone)

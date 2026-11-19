@@ -11,6 +11,7 @@ import { TeamPage } from './admin/TeamPage.tsx'
 import { BookingDetailPage } from './booking/BookingDetailPage.tsx'
 import { NewBlockPage } from './forms/NewBlockPage.tsx'
 import { NewBookingPage } from './forms/NewBookingPage.tsx'
+import { RequestsPage } from './requests/RequestsPage.tsx'
 import { DayView } from './schedule/DayView.tsx'
 import { WeekView } from './schedule/WeekView.tsx'
 import { SettingsPage } from './settings/SettingsPage.tsx'
@@ -106,6 +107,7 @@ export function StaffApp(): JSX.Element {
         <Route path="bookings/new" element={<NewBookingPage />} />
         <Route path="blocks/new" element={<NewBlockPage />} />
         <Route path="bookings/:reference" element={<BookingDetailPage />} />
+        <Route path="requests" element={<RequestsPage />} />
         <Route
           path="team"
           element={

@@ -48,7 +48,9 @@ accounts. The seed adds them everywhere except production:
 Staff see every bay's bookings by day or week, book customers in over the phone (no deposit,
 email optional), move or cancel a booking (the customer is emailed, and a cancellation
 refunds the deposit), block time, and move a job through in progress and completed, or mark a
-no show. Admins can also invite staff, change roles, remove or restore access, send password
+no show. Online requests for services that need approval wait on **Requests** (the menu shows
+how many): staff approve one, decline it, or phone the customer and propose another time, and
+the customer then pays the deposit from the link in their email. Admins can also invite staff, change roles, remove or restore access, send password
 resets (**Team**), and read the log of every staff change (**Audit**). Invite and reset emails
 land in Mailpit like the rest.
 
@@ -155,7 +157,9 @@ starts and completes the job, then checks the admin's audit log and removes the 
 has staff move a paid booking (checking the "moved" email and the customer's page) and then
 cancel it (checking the email and the refund). Flow 7 has the admin add a service (and see it
 on the home page), hide it, be refused new hours that would close the day of a phone booking,
-then add and delete future hours that clash with nothing. They need
+then add and delete future hours that clash with nothing. Flow 2 has a customer request a
+diagnostic check without paying, staff approve it from the Requests page, and the customer pay
+the deposit from the link in the approval email. They need
 the stack running with Stripe test keys ([docs/stripe-setup.md](docs/stripe-setup.md)) and
 fail at once, with a clear message, in demo mode. Start the stack first:
 

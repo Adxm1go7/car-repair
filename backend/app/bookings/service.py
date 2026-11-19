@@ -1,4 +1,4 @@
-"""Holding a slot, moving it on to payment, and releasing it.
+"""Holding a slot, moving it on to payment (or sending it as a request), and releasing it.
 
 Routes call these; they call the repositories.
 
@@ -14,7 +14,9 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.bookings.approval import needs_approval
 from app.bookings.rules import hash_token, new_hold_token, new_reference, token_matches
+from app.email.queue import queue_email
 from app.models import Booking, BookingItem, Payment, Service
 from app.payments.provider import PaymentProvider, PaymentUnavailable
 from app.payments.service import close_open_deposit, complete_deposit
@@ -116,6 +118,23 @@ class AlreadyConfirmed(Exception):
     """The booking is confirmed (paid), so a hold action can't change it."""
 
 
+class NeedsApproval(Exception):
+    """A needs-approval visit is sent as a request, not paid for straight away."""
+
+
+class NoApprovalNeeded(Exception):
+    """An instant visit is paid for, not sent as a request."""
+
+
+class AlreadySent(Exception):
+    """The request has been sent already: the hold is a request now."""
+
+
+def is_request(booking: Booking) -> bool:
+    """A visit with a needs-approval service. A service's approval mode never changes."""
+    return needs_approval([item.service for item in booking.items])
+
+
 @dataclass(frozen=True)
 class CustomerDetails:
     """Already cleaned by the `clean_*` rules."""
@@ -187,6 +206,8 @@ def start_checkout(
     booking = _locked(session, reference, token)
     if booking.status == "confirmed":
         raise AlreadyConfirmed
+    if is_request(booking):
+        raise NeedsApproval
     if hold_has_expired(booking, now):
         release_hold(session, booking)
         if _close_quietly(session, provider, booking, now) is not None:
@@ -195,30 +216,52 @@ def start_checkout(
     if booking.status != "held":
         raise HoldExpired
 
+    if get_open_deposit(session, booking.id) is None:
+        booking.customer_name = details.name
+        booking.customer_phone = details.phone
+        booking.customer_email = details.email
+        booking.car_registration = details.registration
+        booking.car_make = details.make
+        booking.car_model = details.model
+        booking.notes = details.notes
+        booking.hold_expires_at = now + timedelta(minutes=payment_hold_minutes)
+    return open_deposit_form(session, provider, booking, now, amount_pence=amount_pence, zone=zone)
+
+
+def open_deposit_form(
+    session: Session,
+    provider: PaymentProvider,
+    booking: Booking,
+    now: datetime,
+    *,
+    amount_pence: int,
+    zone: ZoneInfo,
+) -> CheckoutResult:
+    """The booking's open payment form, or a new one. It never moves the booking's deadline:
+    the time left to pay is whatever hold_expires_at says. A form the provider has already
+    closed (Stripe ends one after about half an hour) is replaced.
+
+    The booking row must be locked. PaymentUnavailable propagates: the caller must roll back.
+    """
     open_deposit = get_open_deposit(session, booking.id)
     if open_deposit is not None:
         state = provider.get_checkout(open_deposit.provider_ref)
-        return CheckoutResult(
-            client_secret=state.client_secret,
-            demo_session=open_deposit.provider_ref if provider.name == "demo" else None,
-            expires_in_seconds=_seconds_left(booking, now),
-            amount_pence=open_deposit.amount_pence,
-        )
+        if state.status != "expired":
+            return CheckoutResult(
+                client_secret=state.client_secret,
+                demo_session=open_deposit.provider_ref if provider.name == "demo" else None,
+                expires_in_seconds=_seconds_left(booking, now),
+                amount_pence=open_deposit.amount_pence,
+            )
+        open_deposit.status = "expired"
+        session.flush()
 
-    booking.customer_name = details.name
-    booking.customer_phone = details.phone
-    booking.customer_email = details.email
-    booking.car_registration = details.registration
-    booking.car_make = details.make
-    booking.car_model = details.model
-    booking.notes = details.notes
-    booking.hold_expires_at = now + timedelta(minutes=payment_hold_minutes)
     when = booking.start_at.astimezone(zone).strftime("%a %d %b %H:%M")
     attempt = count_payments(session, booking_id=booking.id)
     started = provider.start_checkout(
         reference=booking.reference,
         amount_pence=amount_pence,
-        customer_email=details.email,
+        customer_email=booking.customer_email or "",
         description=f"Deposit for booking {booking.reference}, {when}",
         # Stripe remembers keys per account for 24 hours, so they must be unique across every
         # database that shares the account: the random reference is, a row id isn't.
@@ -238,9 +281,66 @@ def start_checkout(
     return CheckoutResult(
         client_secret=started.client_secret,
         demo_session=started.session_ref if provider.name == "demo" else None,
-        expires_in_seconds=payment_hold_minutes * 60,
+        expires_in_seconds=_seconds_left(booking, now),
         amount_pence=amount_pence,
     )
+
+
+def send_request(
+    session: Session,
+    reference: str,
+    token: str,
+    details: CustomerDetails,
+    now: datetime,
+    *,
+    deadline_for: Callable[[datetime], datetime],
+) -> Booking:
+    """Save the details and turn the hold into a request for staff to answer, keeping its
+    time until `deadline_for(start)`. Queues the "request received" email.
+
+    Raises HoldNotFound, NoApprovalNeeded, HoldExpired (the caller must commit the release)
+    or AlreadySent."""
+    booking = _locked(session, reference, token)
+    if not is_request(booking):
+        raise NoApprovalNeeded
+    if hold_has_expired(booking, now):
+        release_hold(session, booking)
+        raise HoldExpired
+    if booking.status == "expired":
+        raise HoldExpired
+    if booking.status != "held":
+        raise AlreadySent
+
+    booking.customer_name = details.name
+    booking.customer_phone = details.phone
+    booking.customer_email = details.email
+    booking.car_registration = details.registration
+    booking.car_make = details.make
+    booking.car_model = details.model
+    booking.notes = details.notes
+    booking.status = "pending_approval"
+    booking.hold_expires_at = deadline_for(booking.start_at)
+    session.flush()
+    queue_email(session, "request_received", booking)
+    return booking
+
+
+def settle_waiting(
+    session: Session, provider: PaymentProvider, booking: Booking, now: datetime
+) -> None:
+    """Bring a locked request or approval up to date: complete a payment the provider
+    already has (so the page doesn't depend on the webhook), and release it, closing its
+    form, if its deadline has passed. Never fails on the provider."""
+    open_deposit = get_open_deposit(session, booking.id)
+    if open_deposit is not None and booking.status in ("awaiting_deposit", "expired"):
+        try:
+            with session.begin_nested():  # see _close_quietly: a failure must undo it all
+                complete_deposit(session, provider, open_deposit.provider_ref, now)
+        except PaymentUnavailable:
+            log.warning("couldn't ask the provider about %s; still waiting", booking.reference)
+    if hold_has_expired(booking, now):
+        release_hold(session, booking)
+        _close_quietly(session, provider, booking, now)
 
 
 def hold_status(

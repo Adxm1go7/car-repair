@@ -123,13 +123,14 @@ it('ticking services shows the bar with count and total time', async () => {
   expect(screen.queryByRole('link', { name: /Choose a time/ })).not.toBeInTheDocument()
 })
 
-it('needs-approval services have no tick box', async () => {
+it('needs-approval services can be chosen, to send as a request', async () => {
   stubApi()
   renderApp()
   await screen.findByRole('heading', { level: 1 })
   const clutch = within(cardFor('Clutch replacement'))
-  expect(clutch.queryByRole('checkbox')).not.toBeInTheDocument()
-  expect(clutch.getByText('Needs approval — call us')).toBeInTheDocument()
+  expect(clutch.getByRole('checkbox', { name: 'Clutch replacement' })).toBeInTheDocument()
+  expect(clutch.getByText('Needs approval')).toBeInTheDocument()
+  expect(clutch.queryByText(/call us/)).not.toBeInTheDocument()
 })
 
 it('pre-ticks services from the URL', async () => {

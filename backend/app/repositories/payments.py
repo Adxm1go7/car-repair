@@ -63,12 +63,18 @@ def record_event(session: Session, provider: str, event_id: str, type: str) -> b
 
 
 def stale_open_deposits(session: Session) -> list[Payment]:
-    """Payment forms still open for bookings that are no longer held: close them."""
+    """Payment forms still open for bookings no longer waiting to pay: close them. A held
+    booking or an approval waiting for its deposit can still be paid; once either runs out it
+    is released first, and then its form is stale."""
     return list(
         session.scalars(
             select(Payment)
             .join(Booking, Booking.id == Payment.booking_id)
-            .where(Payment.kind == "deposit", Payment.status == "open", Booking.status != "held")
+            .where(
+                Payment.kind == "deposit",
+                Payment.status == "open",
+                Booking.status.not_in(("held", "awaiting_deposit")),
+            )
             .order_by(Payment.id)
         )
     )

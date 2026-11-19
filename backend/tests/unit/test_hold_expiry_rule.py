@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from app.models import Booking
 from app.repositories.bookings import hold_has_expired
 
@@ -27,3 +29,9 @@ def test_confirmed_booking_never_expired() -> None:
 def test_already_expired_booking_is_not_a_hold_to_expire_again() -> None:
     # "Expired" here means a held booking past its time; one already released isn't held.
     assert not hold_has_expired(booking("expired"), EXPIRES + timedelta(days=1))
+
+
+@pytest.mark.parametrize("status", ["pending_approval", "awaiting_deposit"])
+def test_request_and_approval_expire_at_their_deadline(status: str) -> None:
+    assert hold_has_expired(booking(status), EXPIRES)
+    assert not hold_has_expired(booking(status), EXPIRES - timedelta(seconds=1))

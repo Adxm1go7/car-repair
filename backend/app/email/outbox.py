@@ -18,7 +18,11 @@ from app.email.message import EmailTemplate, OutgoingEmail, StaffTemplate
 from app.email.render import EmailContext, StaffEmailContext, render_email, render_staff_email
 from app.email.sender import EmailSender, EmailUnavailable
 from app.models import Booking, EmailLog, StaffUser
-from app.repositories.availability import load_free_cancellation_hours, load_policy
+from app.repositories.availability import (
+    load_deposit_pence,
+    load_free_cancellation_hours,
+    load_policy,
+)
 from app.repositories.catalogue import get_setting
 from app.repositories.payments import paid_deposit
 from app.staff.links import VALID_FOR, Purpose, issue_password_token, set_password_url
@@ -39,8 +43,16 @@ _APPLIES_TO: Final[dict[EmailTemplate, str]] = {
     "cancellation": "cancelled",
     "moved": "confirmed",
     "garage_cancellation": "cancelled",
+    "request_received": "pending_approval",
+    "approved": "awaiting_deposit",
+    "proposed": "awaiting_deposit",
+    "declined": "cancelled",
+    "request_expired": "expired",
+    "deposit_expired": "expired",
 }
-_HAS_LINK: Final[frozenset[EmailTemplate]] = frozenset({"confirmation", "reminder", "moved"})
+_HAS_LINK: Final[frozenset[EmailTemplate]] = frozenset(
+    {"confirmation", "reminder", "moved", "request_received", "approved", "proposed"}
+)
 _PURPOSE: Final[dict[StaffTemplate, Purpose]] = {
     "staff_invite": "invite",
     "password_reset": "reset",
@@ -100,6 +112,8 @@ def _context(
         previous_start=_when(saved, "previous_start"),
         previous_end=_when(saved, "previous_end"),
         previous_bay=previous_bay if isinstance(previous_bay, str) else None,
+        deadline=booking.hold_expires_at,
+        deposit_due_pence=load_deposit_pence(session),
     )
 
 

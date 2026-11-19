@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, JSX } from 'react'
-import { startCheckout } from './api.ts'
+import { sendRequest, startCheckout } from './api.ts'
 import { formatLongDate, formatTimeRange } from './format.ts'
-import type { Checkout, CustomerDetails, Hold } from './types.ts'
+import type { BookingSummary, Checkout, CustomerDetails, Hold } from './types.ts'
 import { formatCountdown, useCountdown } from './useCountdown.ts'
+import { formatPrice } from '../catalogue/format.ts'
 import { validateDetails } from './validation.ts'
 import type { FieldErrors } from './validation.ts'
 
@@ -14,6 +15,10 @@ import type { FieldErrors } from './validation.ts'
 type Props = {
   hold: Hold
   zone: string
+  /** A needs-approval visit: send it to the garage instead of paying. */
+  request?: boolean
+  /** The deposit a request will ask for once approved, in pence. */
+  depositPence?: number
   values: CustomerDetails
   onValuesChange: (values: CustomerDetails) => void
   onSubmittingChange: (submitting: boolean) => void
@@ -21,6 +26,8 @@ type Props = {
   onCheckout: (checkout: Checkout) => void
   /** The server says it's already paid (a double tap after paying): the page checks status. */
   onAlreadyPaid: () => void
+  /** The request was sent. */
+  onRequested?: (summary: BookingSummary) => void
 }
 
 type Field = {
@@ -57,6 +64,7 @@ function fieldError(detail: string | null): FieldErrors | null {
 
 export function DetailsForm(props: Props): JSX.Element {
   const { hold, zone, values, onValuesChange, onSubmittingChange, onExpired, onCheckout, onAlreadyPaid } = props
+  const { request = false, depositPence = 2000, onRequested } = props
   const [errors, setErrors] = useState<FieldErrors>({})
   const [problem, setProblem] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -111,6 +119,10 @@ export function DetailsForm(props: Props): JSX.Element {
     }
 
     setSending(true)
+    if (request) {
+      await sendIt()
+      return
+    }
     const result = await startCheckout(hold.reference, hold.hold_token, values)
     if (finished.current) return
     if (result.ok) {
@@ -131,6 +143,24 @@ export function DetailsForm(props: Props): JSX.Element {
     const forField = fieldError(result.detail)
     if (forField) setErrors(forField)
     else setProblem(result.detail ?? "Sorry, we couldn't start the payment. Please try again.")
+  }
+
+  async function sendIt(): Promise<void> {
+    const result = await sendRequest(hold.reference, hold.hold_token, values)
+    if (finished.current) return
+    if (result.ok) {
+      finished.current = true
+      onRequested?.(result.data)
+      return
+    }
+    setSending(false)
+    if (result.kind === 'expired' || timeUp.current) {
+      expire()
+      return
+    }
+    const forField = fieldError(result.detail)
+    if (forField) setErrors(forField)
+    else setProblem(result.detail ?? "Sorry, we couldn't send your request. Please try again.")
   }
 
   function describedBy(key: keyof CustomerDetails): string | undefined {
@@ -194,6 +224,12 @@ export function DetailsForm(props: Props): JSX.Element {
         )}
       </div>
 
+      {request && (
+        <p className="request-note">
+          {`The garage will check your request and email you within 48 hours. The ${formatPrice(depositPence, null)} deposit is only asked for once it's approved.`}
+        </p>
+      )}
+
       {problem && (
         <p role="alert" className="notice">
           {problem}
@@ -201,7 +237,13 @@ export function DetailsForm(props: Props): JSX.Element {
       )}
 
       <button type="submit" className="button" disabled={submitting}>
-        {submitting ? 'Starting payment…' : 'Continue to payment'}
+        {request
+          ? submitting
+            ? 'Sending…'
+            : 'Send request'
+          : submitting
+            ? 'Starting payment…'
+            : 'Continue to payment'}
       </button>
     </form>
   )

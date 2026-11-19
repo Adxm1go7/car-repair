@@ -1,0 +1,10 @@
+{% extends "_layout.html.j2" %}
+{% block content %}
+<p>Good news: we've approved your booking with {{ c.garage.name }}.</p>
+{% endblock %}
+{% block after %}
+<p>To confirm it, please pay the {{ deposit_due }} deposit by <strong>{{ deadline }}</strong>. If it isn't paid by then, the time is released.</p>
+{% set link_label = "Pay the deposit" %}
+{% include "_link.html.j2" %}
+<p>Can't make this time? Please call us on {{ c.garage.phone }}.</p>
+{% endblock %}

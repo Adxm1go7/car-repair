@@ -41,15 +41,13 @@ function ServiceCard({ service, chosen, onToggle }: CardProps): JSX.Element {
   return (
     <li className={chosen ? 'card card-chosen' : 'card'}>
       <div className="card-title">
-        {instant && (
-          <input
-            type="checkbox"
-            className="pick"
-            aria-labelledby={headingId}
-            checked={chosen}
-            onChange={() => onToggle(service.slug)}
-          />
-        )}
+        <input
+          type="checkbox"
+          className="pick"
+          aria-labelledby={headingId}
+          checked={chosen}
+          onChange={() => onToggle(service.slug)}
+        />
         <h3 id={headingId}>{service.name}</h3>
         {!instant && <span className="badge">Needs approval</span>}
       </div>
@@ -58,7 +56,6 @@ function ServiceCard({ service, chosen, onToggle }: CardProps): JSX.Element {
         <span>{formatDuration(service.duration_minutes)}</span>
         <span className="price">{formatPrice(service.price_from_pence, service.price_to_pence)}</span>
       </p>
-      {!instant && <p className="call-us">Needs approval — call us</p>}
     </li>
   )
 }
@@ -100,9 +97,10 @@ function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }):
   const [searchParams, setSearchParams] = useSearchParams()
   // The choice starts from the URL and is copied back to it, so Back from the time picker
   // keeps it. It is held here too, so a tick shows at once rather than after the URL
-  // updates. Only instant services can be chosen; anything else in the URL is ignored.
+  // updates. Any listed service can be chosen; anything else in the URL is ignored. A visit
+  // with a needs-approval service is sent as a request.
   const [chosen, setChosen] = useState(() => {
-    const bookable = new Set(services.filter((s) => s.approval_mode === 'instant').map((s) => s.slug))
+    const bookable = new Set(services.map((s) => s.slug))
     return parseSelection(`?${searchParams.toString()}`).filter((slug) => bookable.has(slug))
   })
 

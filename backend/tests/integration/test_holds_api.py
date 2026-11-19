@@ -122,10 +122,10 @@ def test_mixed_bay_types_gives_422(client: TestClient) -> None:
     assert "book them separately" in response.json()["detail"]
 
 
-def test_needs_approval_service_gives_422(client: TestClient) -> None:
+def test_needs_approval_service_too_soon_gives_422(client: TestClient) -> None:
     response = hold(client, ["diagnostic-check"], MOT_0800)
     assert response.status_code == 422
-    assert "needs approval" in response.json()["detail"]
+    assert "24 hours' notice" in response.json()["detail"]
 
 
 def test_start_without_offset_gives_422(client: TestClient) -> None:

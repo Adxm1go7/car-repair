@@ -1,7 +1,7 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
-import { DAY_SCHEDULE, scheduleUrl } from '../../testing/schedule.ts'
+import { DAY_SCHEDULE, bookingItem, scheduleUrl } from '../../testing/schedule.ts'
 import { STAFF_ME, renderAt, stubFetch } from '../../testing/staffApi.tsx'
 
 /** Makes matchMedia answer as a phone (narrow) or a desktop. */
@@ -125,7 +125,8 @@ it("defaults to today in the garage's zone", async () => {
   const mock = stubDay()
   renderAt('/staff')
   expect(await screen.findByRole('heading', { level: 1, name: 'Tue 17 Nov' })).toBeInTheDocument()
-  expect(scheduleCalls(mock)).toContain(scheduleUrl('2026-11-17', 1))
+  // The heading comes from the date alone, so it can show before the schedule is asked for.
+  await waitFor(() => expect(scheduleCalls(mock)).toContain(scheduleUrl('2026-11-17', 1)))
 })
 
 it('refreshes after 30 seconds', async () => {
@@ -222,4 +223,30 @@ it('narrow day view marks an out-of-use bay tab', async () => {
   renderAt('/staff?date=2026-11-17')
   const tabs = await screen.findAllByRole('tab')
   expect(tabs.map((t) => t.textContent)).toEqual(['MOT bay', 'Bay 1 (out of use)'])
+})
+
+
+it('marks requests and approvals waiting for a deposit', async () => {
+  stubScreen(false)
+  const schedule = {
+    ...DAY_SCHEDULE,
+    items: [
+      bookingItem({ reference: 'REQU-ESTA', status: 'pending_approval', registration: 'RE01QST' }),
+      bookingItem({
+        reference: 'APPR-OVED',
+        status: 'awaiting_deposit',
+        registration: 'AP01PRV',
+        start: '2026-11-17T13:00:00+00:00',
+        end: '2026-11-17T14:00:00+00:00',
+      }),
+    ],
+  }
+  stubDay({ [scheduleUrl('2026-11-17', 1)]: { status: 200, body: schedule } })
+  renderAt('/staff?date=2026-11-17')
+  const request = await screen.findByRole('link', { name: /RE01QST/ })
+  expect(request).toHaveTextContent('Request')
+  expect(request).toHaveClass('entry-pending_approval')
+  const approval = screen.getByRole('link', { name: /AP01PRV/ })
+  expect(approval).toHaveTextContent('Awaiting deposit')
+  expect(approval).toHaveClass('entry-awaiting_deposit')
 })

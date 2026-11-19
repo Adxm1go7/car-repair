@@ -153,3 +153,25 @@ it('audit describes settings changes', async () => {
     expect(within(rows[index]).getByText(words)).toBeInTheDocument()
   })
 })
+
+
+it('describes answers to requests', async () => {
+  stubAudit({
+    'GET /api/staff/audit?page=1': {
+      status: 200,
+      body: page(
+        [
+          entry({ action: 'booking.approve' }),
+          entry({ action: 'booking.propose' }),
+          entry({ action: 'booking.decline' }),
+        ],
+        1,
+        false,
+      ),
+    },
+  })
+  renderAt('/staff/audit')
+  expect(await screen.findByText('Approved request')).toBeInTheDocument()
+  expect(screen.getByText('Proposed a new time')).toBeInTheDocument()
+  expect(screen.getByText('Declined request')).toBeInTheDocument()
+})

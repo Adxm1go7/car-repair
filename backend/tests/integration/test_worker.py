@@ -10,7 +10,7 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from app.db import make_engine
-from app.models import Booking, LoginAttempt, Payment, StaffSession
+from app.models import Booking, EmailLog, LoginAttempt, Payment, StaffSession
 from app.seed import seed
 from app.staff.sessions import create_session, find_session_user
 from app.staff.throttle import record_attempt
@@ -68,10 +68,10 @@ def worker_database(url: str) -> Engine:
     return engine
 
 
-def paying_hold(engine: Engine, expires_at: datetime) -> str:
-    """A hold whose payment form cs_fake_1 is open. Returns its reference."""
+def paying_hold(engine: Engine, expires_at: datetime, status: str = "held") -> str:
+    """A hold (or an approval) whose payment form cs_fake_1 is open. Returns its reference."""
     with Session(engine) as session:
-        booking = make_hold(session, START, expires_at, details=True)
+        booking = make_hold(session, START, expires_at, status=status, details=True)
         make_deposit(session, booking, ref="cs_fake_1")
         session.commit()
         return booking.reference
@@ -158,5 +158,34 @@ def test_run_once_clears_expired_sessions_and_old_attempts(fresh_database_url: s
             assert session.scalar(select(func.count()).select_from(StaffSession)) == 1
             assert session.scalar(select(func.count()).select_from(LoginAttempt)) == 1
             assert find_session_user(session, live, NOW) is not None
+    finally:
+        engine.dispose()
+
+
+def test_worker_leaves_an_approvals_live_payment_form_open(fresh_database_url: str) -> None:
+    engine = worker_database(fresh_database_url)
+    try:
+        reference = paying_hold(engine, NOW + timedelta(hours=5), status="awaiting_deposit")
+        provider = FakeProvider()
+        with Session(engine) as session:
+            assert run_once(session, NOW, provider) == 0
+        assert provider.calls == []
+        assert state(engine, reference) == ("awaiting_deposit", "unpaid", "open")
+    finally:
+        engine.dispose()
+
+
+def test_worker_expires_an_unpaid_approval_and_tells_the_customer(fresh_database_url: str) -> None:
+    engine = worker_database(fresh_database_url)
+    try:
+        reference = paying_hold(engine, NOW - timedelta(minutes=1), status="awaiting_deposit")
+        provider = FakeProvider()
+        with Session(engine) as session:
+            assert run_once(session, NOW, provider) == 1
+        assert provider.called("close_checkout") == [{"session_ref": "cs_fake_1"}]
+        assert state(engine, reference) == ("expired", "unpaid", "expired")
+        with Session(engine) as session:
+            templates = list(session.scalars(select(EmailLog.template)))
+        assert templates == ["deposit_expired"]
     finally:
         engine.dispose()

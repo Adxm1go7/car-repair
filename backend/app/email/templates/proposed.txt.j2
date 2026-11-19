@@ -1,0 +1,24 @@
+Hello {{ c.customer_name }},
+
+We can't do the time you asked for at {{ c.garage.name }}, but we can do another one, as we discussed on the phone.
+{% if c.reason %}
+Reason: {{ c.reason }}
+{% endif %}
+
+{% if was %}
+You asked for: {{ was }} – {{ was_ends }}
+{% endif %}
+We can do: {{ when }} – {{ ends }}
+
+{% include "_booking.txt.j2" %}
+
+To take the new time, please pay the {{ deposit_due }} deposit by {{ deadline }}. If it isn't paid by then, the time is released.
+{% if c.link_url %}
+
+Pay the deposit:
+{{ c.link_url }}
+{% endif %}
+
+If the new time doesn't suit, please call us on {{ c.garage.phone }}.
+
+{% include "_footer.txt.j2" %}

@@ -12,10 +12,12 @@ from app.models import (
     Bay,
     Block,
     Booking,
+    BookingItem,
     OpeningHours,
     OpeningHoursBreak,
     Payment,
     Reservation,
+    Service,
     StaffUser,
     Timetable,
 )
@@ -46,7 +48,8 @@ def make_hold(
     """A one-hour booking at `start` (aware, any zone) with its reservation, flushed.
 
     Its token is TEST_TOKEN. A "confirmed" booking gets customer details and a paid deposit,
-    so it's valid. `details=True` gives any booking them, as if payment had started.
+    so it's valid. A request or an approval (pending_approval, awaiting_deposit) gets
+    customer details too. `details=True` gives any booking them, as if payment had started.
     """
     bay = session.scalars(select(Bay.id).where(Bay.slug == bay_slug)).one()
     end = start + timedelta(hours=1)
@@ -54,7 +57,7 @@ def make_hold(
         bay_id=bay,
         kind="booking",
         during=Range(start, end + BUFFER),
-        active=status in ("held", "confirmed"),
+        active=status in ("held", "pending_approval", "awaiting_deposit", "confirmed"),
     )
     session.add(reservation)
     session.flush()
@@ -66,10 +69,36 @@ def make_hold(
         end_at=end,
         hold_expires_at=expires_at,
         hold_token_hash=hash_token(TEST_TOKEN),
-        **(CUSTOMER if status == "confirmed" or details else {}),
+        **(CUSTOMER if status != "held" or details else {}),
         deposit_status="paid" if status == "confirmed" else "unpaid",
     )
     session.add(booking)
+    session.flush()
+    return booking
+
+
+def make_request(
+    session: Session,
+    start: datetime,
+    deadline: datetime,
+    *,
+    status: str = "pending_approval",
+    bay_slug: str = "bay-1",
+) -> Booking:
+    """A one-hour diagnostic check (needs approval) waiting for staff, or with status
+    "awaiting_deposit" for its deposit, with customer details. Flushed."""
+    booking = make_hold(session, start, deadline, bay_slug=bay_slug, status=status)
+    check = session.scalars(select(Service).where(Service.slug == "diagnostic-check")).one()
+    booking.items = [
+        BookingItem(
+            service_id=check.id,
+            service_name=check.name,
+            price_from_pence=check.price_from_pence,
+            price_to_pence=check.price_to_pence,
+            duration_minutes=60,
+            position=0,
+        )
+    ]
     session.flush()
     return booking
 

@@ -5,6 +5,7 @@ import { formatLongDate, formatTime, formatTimeRange } from '../booking/format.t
 import { formatPrice } from '../catalogue/format.ts'
 import type { Garage } from '../catalogue/types.ts'
 import { cancelBooking, viewBooking } from './api.ts'
+import { PayDeposit } from './PayDeposit.tsx'
 import type { MyBooking } from './types.ts'
 
 // Customers can't reschedule: the garage wants a call for a different time. So nothing on
@@ -27,6 +28,19 @@ const OTHER_STATUS: Record<string, string> = {
   in_progress: 'Your car is being worked on',
   completed: 'This booking is complete',
   no_show: 'This booking was missed',
+  expired: 'The time we were keeping for you has been released',
+}
+
+/** Bookings the customer can still cancel from the link (a request or an approval at any
+ * time, nothing being paid; a confirmed one while the API says so). */
+const CANCELLABLE = new Set(['confirmed', 'pending_approval', 'awaiting_deposit'])
+const WAITING = new Set(['pending_approval', 'awaiting_deposit'])
+/** An approval paid after its time was released: the payment goes back. */
+const LATE_REFUND = new Set(['refund_pending', 'refunded'])
+
+/** "Wednesday 18 November at 09:00". */
+function formatDeadline(iso: string, zone: string): string {
+  return `${formatLongDate(iso, zone)} at ${formatTime(iso, zone)}`
 }
 
 function telHref(phone: string): string {
@@ -76,6 +90,7 @@ type DialogProps = {
 function ConfirmCancel({ booking, zone, phone, busy, onConfirm, onKeep }: DialogProps): JSX.Element {
   const keepRef = useRef<HTMLButtonElement>(null)
   const { summary } = booking
+  const what = summary.status === 'pending_approval' ? 'request' : 'booking'
 
   useEffect(() => {
     keepRef.current?.focus()
@@ -94,7 +109,7 @@ function ConfirmCancel({ booking, zone, phone, busy, onConfirm, onKeep }: Dialog
       onKeyDown={onKeyDown}
     >
       <h2 id="cancel-title">
-        {`Cancel your booking on ${formatLongDate(summary.start, zone)} at ${formatTime(summary.start, zone)}?`}
+        {`Cancel your ${what} on ${formatLongDate(summary.start, zone)} at ${formatTime(summary.start, zone)}?`}
       </h2>
       <div id="cancel-description">
         {booking.refund_if_cancelled && summary.deposit_paid_pence > 0 && (
@@ -107,20 +122,24 @@ function ConfirmCancel({ booking, zone, phone, busy, onConfirm, onKeep }: Dialog
           {busy ? 'Cancelling…' : 'Yes, cancel it'}
         </button>
         <button type="button" className="button button-secondary" ref={keepRef} onClick={onKeep} disabled={busy}>
-          Keep my booking
+          {`Keep my ${what}`}
         </button>
       </div>
     </div>
   )
 }
 
-export function ManageBookingPage({ garage }: { garage: Garage }): JSX.Element {
+type PageProps = { garage: Garage; pollMs?: number }
+
+export function ManageBookingPage({ garage, pollMs }: PageProps): JSX.Element {
   const { reference = '' } = useParams()
   const token = tokenFrom(useLocation().hash)
   const [state, setState] = useState<PageState>(token === null ? { kind: 'invalid' } : { kind: 'loading' })
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [cancelFailed, setCancelFailed] = useState(false)
+  const [justPaid, setJustPaid] = useState(false)
+  const [payGone, setPayGone] = useState(false)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const returnFocus = useRef(false)
   const zone = garage.timezone
@@ -201,11 +220,25 @@ export function ManageBookingPage({ garage }: { garage: Garage }): JSX.Element {
     )
   }
 
+  async function reload(): Promise<void> {
+    if (token === null) return
+    const fresh = await viewBooking(reference, token)
+    setState(fresh.ok ? { kind: 'ready', booking: fresh.data } : { kind: fresh.kind === 'invalid' ? 'invalid' : 'error' })
+  }
+
   const { booking } = state
   const status = booking.summary.status
+  const canCancel = CANCELLABLE.has(status) && booking.can_cancel
+  const what = status === 'pending_approval' ? 'request' : 'booking'
   return (
     <main className="page booked">
       <h1 className="step-title">Your booking</h1>
+      {justPaid && status === 'confirmed' && <p className="booking-state">Your booking is confirmed</p>}
+      {payGone && (
+        <p role="alert" className="error">
+          This booking can&apos;t be paid for any more. Please call us on {phone}.
+        </p>
+      )}
       {status === 'cancelled' && (
         <div className="booking-state">
           <p className="booking-cancelled">This booking is cancelled</p>
@@ -213,11 +246,39 @@ export function ManageBookingPage({ garage }: { garage: Garage }): JSX.Element {
         </div>
       )}
       {OTHER_STATUS[status] && <p className="booking-state">{OTHER_STATUS[status]}</p>}
+      {status === 'expired' && LATE_REFUND.has(booking.deposit_status) && (
+        <p>
+          Your payment came in after the time was released, so we&apos;re refunding it. It can take 5–10 days to
+          reach your card.
+        </p>
+      )}
       <Summary booking={booking} zone={zone} />
 
-      {status === 'confirmed' && booking.can_cancel && (
+      {status === 'pending_approval' && booking.deadline && (
+        <p>{`We're checking your request and will email you by ${formatDeadline(booking.deadline, zone)}.`}</p>
+      )}
+      {status === 'awaiting_deposit' && booking.deadline && token !== null && (
+        <PayDeposit
+          reference={reference}
+          token={token}
+          deadline={formatDeadline(booking.deadline, zone)}
+          phone={phone}
+          pollMs={pollMs}
+          onPaid={(paid) => {
+            setJustPaid(true)
+            setState({ kind: 'ready', booking: paid })
+          }}
+          onGone={() => {
+            setPayGone(true)
+            void reload()
+          }}
+          onSettled={(settled) => setState({ kind: 'ready', booking: settled })}
+        />
+      )}
+
+      {canCancel && (
         <>
-          <p>Need a different time? Call us on {phone} and we&apos;ll sort it out.</p>
+          {status === 'confirmed' && <p>Need a different time? Call us on {phone} and we&apos;ll sort it out.</p>}
           {cancelFailed && (
             <p role="alert" className="error">
               We couldn&apos;t cancel just now. Please try again, or call us on {phone}.
@@ -242,13 +303,14 @@ export function ManageBookingPage({ garage }: { garage: Garage }): JSX.Element {
                 setConfirming(true)
               }}
             >
-              Cancel booking
+              {`Cancel ${what}`}
             </button>
           )}
         </>
       )}
       {status === 'confirmed' && !booking.can_cancel && <p>To change or cancel, please call us on {phone}.</p>}
-      {status !== 'confirmed' && <p>Questions about your booking? Call us on {phone}.</p>}
+      {status !== 'confirmed' && !WAITING.has(status) && <p>Questions about your booking? Call us on {phone}.</p>}
+      {WAITING.has(status) && <p>Questions? Call us on {phone}.</p>}
       <p>{garage.address}</p>
     </main>
   )

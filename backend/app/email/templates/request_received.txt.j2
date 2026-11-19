@@ -1,0 +1,16 @@
+Hello {{ c.customer_name }},
+
+Thanks for your booking request with {{ c.garage.name }}. We'll check it and email you by {{ deadline }}.
+
+{% include "_booking.txt.j2" %}
+
+We keep this time for you while we check. There's nothing to pay yet: we'll ask for the {{ deposit_due }} deposit once your request is approved.
+
+{% if c.link_url %}
+View or cancel your request:
+{{ c.link_url }}
+
+{% endif %}
+Questions? Please call us on {{ c.garage.phone }}.
+
+{% include "_footer.txt.j2" %}

@@ -42,10 +42,15 @@ export type ChosenSlot = { day: string; start: string }
  * `earliest` ("YYYY-MM-DD"). Returns that day and the slot's start ("HH:MM").
  */
 export async function chooseMotSlot(page: Page, earliest = londonDate()): Promise<ChosenSlot> {
+  return chooseSlot(page, 'MOT test', earliest)
+}
+
+/** Like chooseMotSlot, for the service named `service` on the services page. */
+export async function chooseSlot(page: Page, service: string, earliest = londonDate()): Promise<ChosenSlot> {
   const lastDate = trackAvailabilityDate(page)
 
   await page.goto('/')
-  await page.getByRole('checkbox', { name: 'MOT test' }).check()
+  await page.getByRole('checkbox', { name: service }).check()
   await page.getByRole('link', { name: /^Choose a time/ }).click()
   await expect(page.getByRole('heading', { name: 'Choose a time' })).toBeVisible()
 
@@ -73,7 +78,7 @@ export async function chooseMotSlot(page: Page, earliest = londonDate()): Promis
       break
     }
   }
-  expect(found, `no free MOT time on or after ${earliest}`).toBe(true)
+  expect(found, `no free ${service} time on or after ${earliest}`).toBe(true)
 
   const slot = slots.first()
   const start = (await slot.textContent())?.slice(0, 5) ?? ''
@@ -84,8 +89,8 @@ export async function chooseMotSlot(page: Page, earliest = londonDate()): Promis
   return chosen
 }
 
-/** Fill in the customer's details and open the payment step. */
-export async function enterDetails(page: Page, email = 'sam@example.com'): Promise<void> {
+/** Fill in the customer's details on the details step. */
+export async function fillDetails(page: Page, email = 'sam@example.com'): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Your details' })).toBeVisible()
   await page.getByLabel('Name').fill('Sam Driver')
   await page.getByLabel('Phone').fill('07700 900123')
@@ -93,6 +98,11 @@ export async function enterDetails(page: Page, email = 'sam@example.com'): Promi
   await page.getByLabel('Registration').fill('ab12 cde')
   await page.getByLabel('Make').fill('Ford')
   await page.getByLabel('Model').fill('Focus')
+}
+
+/** Fill in the customer's details and open the payment step. */
+export async function enterDetails(page: Page, email = 'sam@example.com'): Promise<void> {
+  await fillDetails(page, email)
   await page.getByRole('button', { name: 'Continue to payment' }).click()
 
   // If Stripe refuses to start the payment, the page shows why: fail with that, not a timeout.

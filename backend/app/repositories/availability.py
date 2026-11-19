@@ -1,6 +1,7 @@
 """Load what the availability engine needs from the database, then run it."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -80,6 +81,28 @@ def load_free_cancellation_hours(session: Session) -> int:
 
 def load_reminder_hours_before(session: Session) -> int:
     return _int_setting(session, "reminder_hours_before", 1, 365 * 24)
+
+
+HOURS_PER_YEAR = 365 * 24
+
+
+@dataclass(frozen=True)
+class ApprovalRules:
+    """How long a request and an approval wait, in hours. Setup data, not admin settings."""
+
+    hold_hours: int  # staff have this long to answer a request
+    payment_hours: int  # the customer has this long to pay after approval
+    lead_hours: int  # a request's slot starts at least this far ahead
+    min_payment_hours: int  # approving must leave the customer at least this long to pay
+
+
+def load_approval_rules(session: Session) -> ApprovalRules:
+    return ApprovalRules(
+        hold_hours=_int_setting(session, "approval_hold_hours", 1, HOURS_PER_YEAR),
+        payment_hours=_int_setting(session, "approval_payment_hours", 1, HOURS_PER_YEAR),
+        lead_hours=_int_setting(session, "approval_lead_hours", 0, HOURS_PER_YEAR),
+        min_payment_hours=_int_setting(session, "approval_min_payment_hours", 1, HOURS_PER_YEAR),
+    )
 
 
 def find_active_services(session: Session, slugs: Sequence[str]) -> list[Service]:

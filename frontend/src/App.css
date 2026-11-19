@@ -213,10 +213,12 @@ a {
   box-shadow: 0 0 0 1px var(--accent);
 }
 
-.call-us {
-  margin: 0;
+.request-note {
+  margin: 16px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--badge-bg, #fef3c7);
   color: var(--badge-text);
-  font-size: 0.9rem;
 }
 
 .choose-bar {

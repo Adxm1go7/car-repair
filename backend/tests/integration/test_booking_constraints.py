@@ -80,6 +80,15 @@ def test_held_booking_needs_expiry_and_token_hash(seeded: Session, missing: str)
     rejected(seeded, booking(seeded, **{missing: None}))
 
 
+@pytest.mark.parametrize("status", ["pending_approval", "awaiting_deposit"])
+def test_waiting_booking_needs_expiry(seeded: Session, status: str) -> None:
+    rejected(seeded, booking(seeded, status=status, hold_expires_at=None, **DETAILS))
+
+
+def test_awaiting_deposit_booking_can_be_stored(seeded: Session) -> None:
+    flush(seeded, booking(seeded, status="awaiting_deposit", **DETAILS))
+
+
 def test_confirmed_booking_can_be_stored(seeded: Session) -> None:
     flush(seeded, booking(seeded, status="confirmed", deposit_status="paid", **DETAILS))
 

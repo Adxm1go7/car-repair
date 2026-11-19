@@ -1,0 +1,12 @@
+Hello {{ c.customer_name }},
+
+We're sorry: we can't take your booking request with {{ c.garage.name }} for {{ when }}.
+{% if c.reason %}
+Reason: {{ c.reason }}
+{% endif %}
+
+{% include "_booking.txt.j2" %}
+
+Nothing has been charged. If you'd like to talk it through, please call us on {{ c.garage.phone }}.
+
+{% include "_footer.txt.j2" %}
