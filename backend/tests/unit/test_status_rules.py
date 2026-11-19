@@ -60,7 +60,7 @@ def test_no_undo_without_a_recorded_change() -> None:
     assert booking_actions("completed", START, None, CHANGED) == []
 
 
-@pytest.mark.parametrize("status", ["held", "pending_approval", "cancelled", "expired"])
+@pytest.mark.parametrize("status", ["held", "cancelled", "expired"])
 def test_nothing_for_other_statuses(status: str) -> None:
     assert booking_actions(status, START, CHANGED, CHANGED) == []
 
@@ -82,3 +82,15 @@ def test_another_day_uses_garage_local_dates() -> None:
     just_after_midnight = datetime(2027, 3, 28, 23, 30, tzinfo=UTC)  # 00:30 BST on Monday
     assert starts_on_another_day(start, late_sunday, LONDON)
     assert not starts_on_another_day(start, just_after_midnight, LONDON)
+
+
+def test_a_request_can_be_approved_proposed_or_declined() -> None:
+    assert booking_actions("pending_approval", START, None, BEFORE) == [
+        "approve",
+        "propose",
+        "decline",
+    ]
+
+
+def test_an_approval_can_be_proposed_again_or_cancelled() -> None:
+    assert booking_actions("awaiting_deposit", START, None, BEFORE) == ["propose", "cancel"]
