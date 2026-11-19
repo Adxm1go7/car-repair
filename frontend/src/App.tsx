@@ -7,8 +7,9 @@ import { BookPage } from './booking/BookPage.tsx'
 import { parseSelection, selectionQuery, totalMinutes } from './booking/selection.ts'
 import { fetchCatalogue } from './catalogue/api.ts'
 import { formatDuration, formatPrice } from './catalogue/format.ts'
+import { shortDate } from './catalogue/hours.ts'
 import { openTodayText } from './catalogue/openToday.ts'
-import type { Catalogue, Service } from './catalogue/types.ts'
+import type { Catalogue, OpeningDay, Service } from './catalogue/types.ts'
 import { ManageBookingPage } from './manage/ManageBookingPage.tsx'
 import { StaffApp } from './staff/StaffApp.tsx'
 
@@ -74,8 +75,28 @@ function ChooseTimeBar({ services, chosen }: { services: Service[]; chosen: stri
   )
 }
 
+/** A week of opening hours, Monday first, with breaks. */
+function WeekHours({ days }: { days: OpeningDay[] }): JSX.Element {
+  return (
+    <dl className="hours">
+      {days.map((day) => (
+        <div key={day.weekday} className="hours-row">
+          <dt>{DAY_NAMES[day.weekday]}</dt>
+          <dd>
+            {day.open && day.close ? `${day.open}–${day.close}` : 'Closed'}
+            {day.breaks.map((b) => (
+              <span key={b.start} className="break">{`Closed ${b.start}–${b.end}`}</span>
+            ))}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }): JSX.Element {
-  const { services, hours, garage } = catalogue
+  const { services, timetables, garage } = catalogue
+  const [current, ...upcoming] = timetables
   const [searchParams, setSearchParams] = useSearchParams()
   // The choice starts from the URL and is copied back to it, so Back from the time picker
   // keeps it. It is held here too, so a tick shows at once rather than after the URL
@@ -95,7 +116,7 @@ function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }):
     <>
       <header className="site-header">
         <h1>{garage.name}</h1>
-        <p className="open-today">{openTodayText(hours, now, garage.timezone)}</p>
+        <p className="open-today">{openTodayText(timetables, now, garage.timezone)}</p>
       </header>
       <main className="page">
         {groupByCategory(services).map(([category, items]) => (
@@ -116,19 +137,13 @@ function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }):
 
         <section>
           <h2>Opening hours</h2>
-          <dl className="hours">
-            {hours.map((day) => (
-              <div key={day.weekday} className="hours-row">
-                <dt>{DAY_NAMES[day.weekday]}</dt>
-                <dd>
-                  {day.open && day.close ? `${day.open}–${day.close}` : 'Closed'}
-                  {day.breaks.map((b) => (
-                    <span key={b.start} className="break">{`Closed ${b.start}–${b.end}`}</span>
-                  ))}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          {current && <WeekHours days={current.days} />}
+          {upcoming.map((timetable) => (
+            <div key={timetable.starts_on} className="hours-upcoming">
+              <h3>{`New hours from ${shortDate(timetable.starts_on)}`}</h3>
+              <WeekHours days={timetable.days} />
+            </div>
+          ))}
         </section>
 
         <section>

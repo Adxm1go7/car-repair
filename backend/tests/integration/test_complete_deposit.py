@@ -1,9 +1,9 @@
 """complete_deposit is the only way to a paid booking: it confirms, re-takes or refunds, once."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 import pytest
-from factories import make_deposit, make_hold
+from factories import make_deposit, make_hold, make_timetable
 from fakes import FakeProvider
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -129,6 +129,82 @@ def test_late_payment_time_taken_refunds_once(seeded: Session, provider: FakePro
     (call,) = provider.called("refund")
     assert call["payment_intent_ref"] == f"pi_{REF}"
     assert call["idempotency_key"] == f"refund-{REF}-0"  # the provider's session id: unique
+
+
+def late_payment(session: Session) -> Booking:
+    """A released hold, with its deposit, whose payment is about to arrive."""
+    late = make_hold(session, START, NOW - timedelta(minutes=1), status="expired", details=True)
+    make_deposit(session, late, ref=REF)
+    return late
+
+
+def assert_refunded_not_booked(session: Session, late: Booking) -> None:
+    late = reload(session, late)
+    assert (late.status, late.deposit_status) == ("expired", "refund_pending")
+    assert late.reservation.active is False
+    assert len(refunds(session)) == 1
+
+
+def test_late_payment_into_out_of_use_bay_is_refunded(
+    seeded: Session, provider: FakeProvider
+) -> None:
+    late = late_payment(seeded)
+    late.reservation.bay.active = False  # taken out of use while the hold was released
+    seeded.flush()
+    provider.mark_paid(REF)
+    assert complete_deposit(seeded, provider, REF, NOW) is None
+    assert_refunded_not_booked(seeded, late)
+
+
+def test_late_payment_outside_new_hours_is_refunded(
+    seeded: Session, provider: FakeProvider
+) -> None:
+    late = late_payment(seeded)  # Tue 10 Nov 08:00
+    make_timetable(seeded, date(2026, 11, 10), {1: (time(9), time(17))})  # Tuesdays from 09:00
+    provider.mark_paid(REF)
+    assert complete_deposit(seeded, provider, REF, NOW) is None
+    assert_refunded_not_booked(seeded, late)
+
+
+def unreleased_late_payment(session: Session) -> Booking:
+    """A hold past its time that nothing has released yet (the worker sweeps every minute),
+    with its deposit, whose payment is about to arrive."""
+    booking, _ = held_with_deposit(session, expires_at=NOW - timedelta(seconds=30))
+    return booking
+
+
+def test_payment_for_unreleased_hold_into_out_of_use_bay_is_refunded(
+    seeded: Session, provider: FakeProvider
+) -> None:
+    late = unreleased_late_payment(seeded)
+    # Taking the bay out of use ignored the hold: it was past its time.
+    late.reservation.bay.active = False
+    seeded.flush()
+    provider.mark_paid(REF)
+    assert complete_deposit(seeded, provider, REF, NOW) is None
+    assert_refunded_not_booked(seeded, late)
+
+
+def test_payment_for_unreleased_hold_outside_new_hours_is_refunded(
+    seeded: Session, provider: FakeProvider
+) -> None:
+    late = unreleased_late_payment(seeded)  # Tue 10 Nov 08:00
+    make_timetable(seeded, date(2026, 11, 10), {1: (time(9), time(17))})  # Tuesdays from 09:00
+    provider.mark_paid(REF)
+    assert complete_deposit(seeded, provider, REF, NOW) is None
+    assert_refunded_not_booked(seeded, late)
+
+
+def test_payment_for_unreleased_hold_that_still_fits_is_confirmed(
+    seeded: Session, provider: FakeProvider
+) -> None:
+    late = unreleased_late_payment(seeded)
+    provider.mark_paid(REF)
+    assert complete_deposit(seeded, provider, REF, NOW) is not None
+    late = reload(seeded, late)
+    assert (late.status, late.deposit_status) == ("confirmed", "paid")
+    assert late.reservation.active is True
+    assert refunds(seeded) == []
 
 
 def test_refund_failure_rolls_back(seeded: Session, provider: FakeProvider) -> None:

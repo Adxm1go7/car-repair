@@ -13,7 +13,7 @@ function dayMonth(date: string): string {
 }
 
 function WeekDays({ schedule, monday }: { schedule: Schedule; monday: string }): JSX.Element {
-  const bayName = new Map(schedule.bays.map((b) => [b.id, b.name]))
+  const bayName = new Map(schedule.bays.map((b) => [b.id, b.active ? b.name : `${b.name} (out of use)`]))
   const dates = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
   return (
     <div className="week-grid">

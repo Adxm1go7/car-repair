@@ -1,3 +1,5 @@
+import type { Timetable } from '../catalogue/types.ts'
+
 export type StaffRole = 'admin' | 'staff'
 
 /** The logged-in staff user, from GET /api/staff/me. */
@@ -15,7 +17,8 @@ export type BookingStatus =
   | 'no_show'
   | 'expired'
 
-export type ScheduleBay = { id: number; slug: string; name: string; bay_type: string }
+/** `active` false: out of use, listed only on days where it has bookings or blocks. */
+export type ScheduleBay = { id: number; slug: string; name: string; bay_type: string; active: boolean }
 
 /** One day's opening, as garage-local "HH:MM". open/close are null on a closed day. */
 export type ScheduleDay = {
@@ -112,3 +115,44 @@ export type AuditEntry = {
 }
 
 export type AuditPage = { entries: AuditEntry[]; page: number; has_more: boolean }
+
+// --- admin: settings --------------------------------------------------------------
+
+export type ApprovalMode = 'instant' | 'needs_approval'
+
+/** GET /api/staff/settings/services: every service, shown and hidden, in display order. */
+export type AdminService = {
+  id: number
+  slug: string
+  name: string
+  category: string
+  description: string
+  duration_minutes: number
+  price_from_pence: number
+  price_to_pence: number | null
+  bay_type_id: number
+  bay_type: string
+  approval_mode: ApprovalMode
+  active: boolean
+  sort_order: number
+}
+
+/** The fields an edit can change. Bay type and approval mode are fixed once added. */
+export type ServiceFields = Pick<
+  AdminService,
+  'name' | 'category' | 'description' | 'duration_minutes' | 'price_from_pence' | 'price_to_pence'
+>
+
+export type NewService = ServiceFields & { bay_type_id: number; approval_mode: ApprovalMode }
+
+export type BayType = { id: number; slug: string; name: string }
+
+/** GET /api/staff/settings/bays */
+export type AdminBay = { id: number; slug: string; name: string; bay_type_id: number; bay_type: string; active: boolean }
+
+/** A booking in the way of a settings change. `start` is garage-local ISO; `held` means a
+ * customer is paying for it right now, so it clears by itself in a few minutes. */
+export type Clash = { reference: string; start: string; bay: string; held: boolean }
+
+/** GET /api/staff/settings/hours: one timetable. Only future ones can be edited or deleted. */
+export type AdminTimetable = Timetable & { id: number; state: 'past' | 'current' | 'future' }

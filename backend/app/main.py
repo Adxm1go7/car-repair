@@ -19,6 +19,7 @@ from app.api import (
     staff_blocks,
     staff_bookings,
     staff_schedule,
+    staff_settings,
     staff_team,
     stripe_webhook,
 )
@@ -80,6 +81,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(staff_bookings.router, prefix="/api")
     app.include_router(staff_blocks.router, prefix="/api")
     app.include_router(staff_audit.router, prefix="/api")
+    app.include_router(staff_settings.router, prefix="/api")
     if config.payment_provider == "demo":  # never with Stripe keys, so never in production
         app.include_router(demo_payments.router, prefix="/api")
     return app

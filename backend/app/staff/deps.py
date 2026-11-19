@@ -23,7 +23,7 @@ PUBLIC_STAFF_PATHS: Final = frozenset(
     {"/api/staff/login", "/api/staff/forgot-password", "/api/staff/set-password"}
 )
 # Every admin-only route lives under one of these, behind require_admin at router level.
-ADMIN_STAFF_PREFIXES: Final = ("/api/staff/team", "/api/staff/audit")
+ADMIN_STAFF_PREFIXES: Final = ("/api/staff/team", "/api/staff/audit", "/api/staff/settings")
 _WRITE_METHODS: Final = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 SessionDep = Annotated[Session, Depends(get_session)]

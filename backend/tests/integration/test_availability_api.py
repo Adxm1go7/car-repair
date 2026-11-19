@@ -4,7 +4,7 @@ from datetime import UTC, datetime, time, timedelta
 from typing import Any, cast
 
 import pytest
-from factories import make_block_reservation
+from factories import first_day, make_block_reservation
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.orm import Session
 
 from app.clock import utc_now
-from app.models import Bay, OpeningHours, Reservation, Service, Setting
+from app.models import Bay, Reservation, Service, Setting
 from app.seed import seed
 
 NOW = datetime(2026, 11, 9, 9, tzinfo=UTC)  # Monday 09:00 in London (GMT)
@@ -88,7 +88,7 @@ def test_mixed_bay_types(client: TestClient) -> None:
 
 
 def test_closed_day_has_no_slots(client: TestClient, db_session: Session) -> None:
-    tuesday = db_session.get(OpeningHours, 1)
+    tuesday = first_day(db_session, 1)
     assert tuesday is not None
     tuesday.open_time = tuesday.close_time = None
     db_session.flush()
@@ -111,7 +111,7 @@ def test_buffer_past_midnight_respects_next_days_reservation(
 ) -> None:
     # Open late on Tuesday; a block starts at midnight. A 22:50 MOT ends 23:50, but its
     # 15-minute buffer runs to 00:05 and would overlap the block, so it mustn't be offered.
-    tuesday = db_session.get(OpeningHours, 1)
+    tuesday = first_day(db_session, 1)
     assert tuesday is not None
     tuesday.open_time, tuesday.close_time = time(8, 20), time(23, 50)
     mot_bay = db_session.scalars(select(Bay.id).where(Bay.slug == "mot-bay")).one()

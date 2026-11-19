@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import type { OpeningDay } from '../catalogue/types.ts'
+import { onlyWeek } from '../testing/fixtures.ts'
 import { bookableDays, todayInZone } from './days.ts'
 import { formatDayLabel, formatTime } from './format.ts'
 
@@ -18,14 +19,14 @@ it('uses the garage date, not the device date, in winter', () => {
 })
 
 it('covers today through the last window day', () => {
-  const days = bookableDays('2026-11-10', 60, HOURS)
+  const days = bookableDays('2026-11-10', 60, onlyWeek(HOURS))
   expect(days[0]).toEqual({ date: '2026-11-10', weekday: 1, open: true })
   expect(days).toHaveLength(61)
   expect(days.at(-1)?.date).toBe('2027-01-09')
 })
 
 it('marks closed weekdays', () => {
-  const days = bookableDays('2026-11-14', 2, HOURS) // Saturday, Sunday, Monday
+  const days = bookableDays('2026-11-14', 2, onlyWeek(HOURS)) // Saturday, Sunday, Monday
   expect(days.map((d) => [d.date, d.weekday, d.open])).toEqual([
     ['2026-11-14', 5, true],
     ['2026-11-15', 6, false],
@@ -34,11 +35,11 @@ it('marks closed weekdays', () => {
 })
 
 it('treats a weekday missing from the hours as closed', () => {
-  expect(bookableDays('2026-11-16', 0, [])).toEqual([{ date: '2026-11-16', weekday: 0, open: false }])
+  expect(bookableDays('2026-11-16', 0, onlyWeek([]))).toEqual([{ date: '2026-11-16', weekday: 0, open: false }])
 })
 
 it('steps over the October clock change without repeating a day', () => {
-  expect(bookableDays('2026-10-24', 2, HOURS).map((d) => d.date)).toEqual([
+  expect(bookableDays('2026-10-24', 2, onlyWeek(HOURS)).map((d) => d.date)).toEqual([
     '2026-10-24',
     '2026-10-25',
     '2026-10-26',
@@ -46,7 +47,7 @@ it('steps over the October clock change without repeating a day', () => {
 })
 
 it('steps over the March clock change without skipping a day', () => {
-  expect(bookableDays('2027-03-27', 2, HOURS).map((d) => d.date)).toEqual([
+  expect(bookableDays('2027-03-27', 2, onlyWeek(HOURS)).map((d) => d.date)).toEqual([
     '2027-03-27',
     '2027-03-28',
     '2027-03-29',
@@ -60,4 +61,15 @@ it('formats a time in the garage zone', () => {
 
 it('labels a day with its short weekday and date', () => {
   expect(formatDayLabel('2026-11-16')).toEqual({ weekday: 'Mon', day: '16 Nov' })
+})
+
+it('bookable days follow the timetable in force on each date', () => {
+  // Saturdays are open until the new hours from Tue 1 Dec close them.
+  const noSaturdays = HOURS.map((day) => (day.weekday === 5 ? { ...day, open: null, close: null } : day))
+  const timetables = [...onlyWeek(HOURS), { starts_on: '2026-12-01', days: noSaturdays }]
+  const days = bookableDays('2026-11-27', 8, timetables) // Fri 27 Nov to Sat 5 Dec
+  const open = Object.fromEntries(days.map((d) => [d.date, d.open]))
+  expect(open['2026-11-28']).toBe(true) // Saturday, before the change
+  expect(open['2026-12-05']).toBe(false) // Saturday, after it
+  expect(open['2026-12-01']).toBe(true)
 })

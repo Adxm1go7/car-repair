@@ -50,7 +50,7 @@ function releaseHold(unreleased: RefObject<Hold | null>): void {
 
 /** Choose a time, enter details, then pay the deposit. The chosen services come from the URL. */
 export function BookPage({ catalogue, now }: Props): JSX.Element {
-  const { services, hours, garage } = catalogue
+  const { services, timetables, garage } = catalogue
   const location = useLocation()
   const [policy, setPolicy] = useState<Result<BookingPolicy> | null>(null)
   const [step, setStep] = useState<Step>({ kind: 'picking' })
@@ -222,7 +222,7 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
         <TimePicker
           initialNotice={step.notice}
           services={chosen}
-          days={bookableDays(todayInZone(now(), zone), policy.data.booking_window_days, hours)}
+          days={bookableDays(todayInZone(now(), zone), policy.data.booking_window_days, timetables)}
           zone={zone}
           onHeld={(hold) => {
             unreleased.current = hold

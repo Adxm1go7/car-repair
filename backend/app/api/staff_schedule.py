@@ -22,6 +22,7 @@ class BayOut(BaseModel):
     slug: str
     name: str
     bay_type: str
+    active: bool  # false: out of use, shown only on days it has bookings or blocks
 
 
 class BreakOut(BaseModel):
@@ -113,7 +114,8 @@ def schedule(
     return ScheduleOut(
         timezone=zone.key,
         bays=[
-            BayOut(id=b.id, slug=b.slug, name=b.name, bay_type=b.bay_type.name) for b in loaded.bays
+            BayOut(id=b.id, slug=b.slug, name=b.name, bay_type=b.bay_type.name, active=b.active)
+            for b in loaded.bays
         ],
         days=[
             DayOut(

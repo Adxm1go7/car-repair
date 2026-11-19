@@ -314,6 +314,19 @@ def test_no_show_keeps_deposit_and_reservation(
     assert emails(db_session) == []
 
 
+def test_undo_no_show_refused_in_out_of_use_bay(client: TestClient, db_session: Session) -> None:
+    booking = paid_mot(db_session)
+    at(client, START + timedelta(minutes=20))
+    assert status(client, booking, "no_show").status_code == 200
+    booking.reservation.bay.active = False  # the MOT ramp broke since
+    db_session.flush()
+    response = status(client, booking, "undo_no_show")
+    assert response.status_code == 409
+    assert response.json() == {"detail": "not_allowed"}
+    db_session.expire_all()
+    assert booking.status == "no_show"
+
+
 def test_unknown_action_is_422(client: TestClient, db_session: Session) -> None:
     booking = paid_mot(db_session)
     assert status(client, booking, "move").status_code == 422

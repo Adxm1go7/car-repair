@@ -20,7 +20,14 @@ from app.config import AppConfig
 from app.models import StaffUser
 from app.staff.deps import ADMIN_STAFF_PREFIXES, PUBLIC_STAFF_PATHS
 
-PATH_VALUES = {"reference": "ABCD-EFGH", "user_id": "1", "block_id": "1"}
+PATH_VALUES = {
+    "reference": "ABCD-EFGH",
+    "user_id": "1",
+    "block_id": "1",
+    "service_id": "1",
+    "bay_id": "1",
+    "timetable_id": "1",
+}
 WRITES = {"POST", "PATCH", "PUT", "DELETE"}
 
 
@@ -56,6 +63,12 @@ def test_staff_get_403_on_every_admin_route(staff_client: TestClient) -> None:
     assert admin  # the team routes at least: the walk can't pass by finding nothing
     for method, path in admin:
         assert call(staff_client, method, path) == 403, (method, path)
+
+
+def test_settings_routes_are_admin_only(staff_client: TestClient) -> None:
+    admin = {p for _, p in staff_routes(staff_client) if p.startswith(ADMIN_STAFF_PREFIXES)}
+    assert {"/api/staff/settings/services", "/api/staff/settings/bays"} <= admin
+    assert {"/api/staff/settings/bay-types", "/api/staff/settings/hours"} <= admin
 
 
 def test_expired_session_cookie_is_401(staff_client: TestClient) -> None:

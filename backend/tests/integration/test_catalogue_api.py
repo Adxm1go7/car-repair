@@ -1,10 +1,15 @@
+from datetime import UTC, date, datetime, time
+from typing import Any, cast
 from unittest.mock import ANY
 
+from factories import first_day, make_timetable
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import OpeningHours, Service, Setting
+from app.clock import utc_now
+from app.models import Service, Setting
 from app.seed import seed
 
 # --- /api/services --------------------------------------------------------------
@@ -47,11 +52,25 @@ def test_services_does_not_expose_bay_details(api_client: TestClient, db_session
 # --- /api/opening-hours ---------------------------------------------------------
 
 
+def opening_hours(client: TestClient, now: datetime) -> list[dict[str, Any]]:
+    """The timetables listed at `now`."""
+    cast(FastAPI, client.app).dependency_overrides[utc_now] = lambda: now
+    response = client.get("/api/opening-hours")
+    assert response.status_code == 200, response.text
+    timetables: list[dict[str, Any]] = response.json()["timetables"]
+    return timetables
+
+
+NOV_9 = datetime(2026, 11, 9, 9, tzinfo=UTC)  # the booking window (60 days) ends 8 Jan 2027
+
+
 def test_opening_hours_returns_seven_days_with_breaks(
     api_client: TestClient, db_session: Session
 ) -> None:
     seed(db_session)
-    body = api_client.get("/api/opening-hours").json()
+    (only,) = opening_hours(api_client, NOV_9)
+    assert only["starts_on"] == "2000-01-01"
+    body = only["days"]
     assert [d["weekday"] for d in body] == [0, 1, 2, 3, 4, 5, 6]
     assert body[0] == {
         "weekday": 0,
@@ -66,13 +85,38 @@ def test_opening_hours_shows_missing_day_as_closed(
     api_client: TestClient, db_session: Session
 ) -> None:
     seed(db_session)
-    wednesday = db_session.get(OpeningHours, 2)
+    wednesday = first_day(db_session, 2)
     assert wednesday is not None
     db_session.delete(wednesday)
     db_session.flush()
-    body = api_client.get("/api/opening-hours").json()
+    body = opening_hours(api_client, NOV_9)[0]["days"]
     assert len(body) == 7
     assert body[2] == {"weekday": 2, "open": None, "close": None, "breaks": []}
+
+
+def test_opening_hours_lists_current_and_upcoming_timetables(
+    api_client: TestClient, db_session: Session
+) -> None:
+    seed(db_session)
+    make_timetable(db_session, date(2026, 12, 1), {1: (time(9), time(12))})
+    timetables = opening_hours(api_client, NOV_9)
+    assert [t["starts_on"] for t in timetables] == ["2000-01-01", "2026-12-01"]
+    upcoming = timetables[1]["days"]
+    assert upcoming[1] == {"weekday": 1, "open": "09:00", "close": "12:00", "breaks": []}
+    assert upcoming[0] == {"weekday": 0, "open": None, "close": None, "breaks": []}
+    # Once 1 Dec has come, it's the one in force, and the old week isn't listed.
+    after = opening_hours(api_client, datetime(2026, 12, 5, 9, tzinfo=UTC))
+    assert [t["starts_on"] for t in after] == ["2026-12-01"]
+
+
+def test_opening_hours_omits_timetables_beyond_the_window(
+    api_client: TestClient, db_session: Session
+) -> None:
+    seed(db_session)
+    make_timetable(db_session, date(2027, 1, 8), {0: (time(8), time(12))})  # last window day
+    make_timetable(db_session, date(2027, 1, 9), {0: (time(8), time(13))})  # one day past it
+    timetables = opening_hours(api_client, NOV_9)
+    assert [t["starts_on"] for t in timetables] == ["2000-01-01", "2027-01-08"]
 
 
 # --- /api/garage ----------------------------------------------------------------

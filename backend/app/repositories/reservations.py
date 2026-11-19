@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Reservation, Service
 from app.repositories.availability import day_availability, load_policy
+from app.settings.lock import lock_shared
 
 EXCLUSION_VIOLATION = "23P01"
 # Two inserts racing for the same bay and time can each wait on the other's uncommitted row
@@ -48,6 +49,7 @@ def reserve(
     """
     if start.tzinfo is None or start.utcoffset() is None:
         raise ValueError("start must be timezone-aware")
+    lock_shared(session)  # take turns with bay and opening-hours changes
     wanted = set(service_ids)
     if len(wanted) != len(service_ids):
         raise ValueError("Duplicate service")

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { openTodayText } from './openToday.ts'
+import { onlyWeek } from '../testing/fixtures.ts'
 import type { OpeningDay } from './types.ts'
 
 const LUNCH = [{ start: '12:30', end: '13:00' }]
@@ -30,26 +31,39 @@ describe('openTodayText', () => {
     ['summer time, open (08:30 BST)', '2026-07-14T07:30:00Z', 'Open today 08:00–17:30'],
     ['summer time, closed (17:45 BST)', '2026-07-14T16:45:00Z', 'Closed now, opens tomorrow at 08:00'],
   ])('%s', (_label, now, expected) => {
-    expect(openTodayText(DEMO_HOURS, new Date(now), LONDON)).toBe(expected)
+    expect(openTodayText(onlyWeek(DEMO_HOURS), new Date(now), LONDON)).toBe(expected)
   })
 
   it('on a closed day, names the next open day', () => {
     const hours = DEMO_HOURS.map((day) => (day.weekday === 2 || day.weekday === 3 ? closed(day.weekday) : day))
     // Wednesday 2026-11-11, with Wednesday and Thursday closed.
-    expect(openTodayText(hours, new Date('2026-11-11T12:00:00Z'), LONDON)).toBe(
+    expect(openTodayText(onlyWeek(hours), new Date('2026-11-11T12:00:00Z'), LONDON)).toBe(
       'Closed today, opens Fri at 08:00',
     )
   })
 
   it('uses the given time zone, not the device clock', () => {
     // 23:30 UTC on Tuesday is already Wednesday 08:30 in Tokyo.
-    expect(openTodayText(DEMO_HOURS, new Date('2026-11-10T23:30:00Z'), 'Asia/Tokyo')).toBe(
+    expect(openTodayText(onlyWeek(DEMO_HOURS), new Date('2026-11-10T23:30:00Z'), 'Asia/Tokyo')).toBe(
       'Open today 08:00–17:30',
     )
   })
 
   it('says Closed when no day is open', () => {
     const hours = [0, 1, 2, 3, 4, 5, 6].map(closed)
-    expect(openTodayText(hours, new Date('2026-11-10T10:00:00Z'), LONDON)).toBe('Closed')
+    expect(openTodayText(onlyWeek(hours), new Date('2026-11-10T10:00:00Z'), LONDON)).toBe('Closed')
+  })
+
+  it("open today uses today's timetable", () => {
+    // New hours from Tue 10 Nov close Tuesdays.
+    const noTuesdays = DEMO_HOURS.map((day) => (day.weekday === 1 ? closed(1) : day))
+    const timetables = [...onlyWeek(DEMO_HOURS), { starts_on: '2026-11-10', days: noTuesdays }]
+    expect(openTodayText(timetables, new Date('2026-11-10T10:00:00Z'), LONDON)).toBe(
+      'Closed today, opens tomorrow at 08:00',
+    )
+    // Monday evening, the day before: tomorrow is a Tuesday under the new hours.
+    expect(openTodayText(timetables, new Date('2026-11-09T18:00:00Z'), LONDON)).toBe(
+      'Closed now, opens Wed at 08:00',
+    )
   })
 })

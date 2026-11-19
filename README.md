@@ -52,6 +52,14 @@ no show. Admins can also invite staff, change roles, remove or restore access, s
 resets (**Team**), and read the log of every staff change (**Audit**). Invite and reset emails
 land in Mailpit like the rest.
 
+Admins also change the garage's details under **Settings**: add, edit, hide or show, and
+reorder services; add and rename bays, take a bay out of use or put it back, and add bay types;
+line up opening hours from a future date (tomorrow at the earliest); and edit the contact
+details shown on the site and in emails. A change that would leave a booking outside the hours,
+or in a bay that's out of use, is refused with those bookings listed, so staff can move or
+cancel them first. The booking rules (deposit, booking window, cut-off and so on) stay in setup
+data.
+
 On a fresh database with no sample accounts (production), create the first admin. The command
 prints a set-password link that works once, for 72 hours, and sends no email:
 
@@ -90,16 +98,10 @@ docker compose exec api python -m app.seed
 The demo garage (Hillside Motors: its services, bays, opening hours and contact details) is
 fictional. Its values live in one file, `backend/app/demo_data.py`.
 
-The seed only adds what's missing. It never overwrites a value or brings back something that
-was removed, so edits to `demo_data.py` don't reach a database that already exists. To load
-your edited values, reset the database:
-
-```bash
-docker compose down -v
-docker compose up --build
-```
-
-Admin screens for editing the catalogue arrive in Milestone 8.
+The seed fills a new, empty database from it. It only adds what's missing: it never
+overwrites a value or brings back something that was removed. Once the garage is running,
+admins change its services, bays, opening hours and contact details from **Settings** in the
+staff pages instead.
 
 ## Local development
 
@@ -151,7 +153,9 @@ email and that the time is free again. A made-up link must show the safe message
 in as the sample staff member, books a customer in over the phone, blocks an hour on Bay 1,
 starts and completes the job, then checks the admin's audit log and removes the block. Flow 6
 has staff move a paid booking (checking the "moved" email and the customer's page) and then
-cancel it (checking the email and the refund). They need
+cancel it (checking the email and the refund). Flow 7 has the admin add a service (and see it
+on the home page), hide it, be refused new hours that would close the day of a phone booking,
+then add and delete future hours that clash with nothing. They need
 the stack running with Stripe test keys ([docs/stripe-setup.md](docs/stripe-setup.md)) and
 fail at once, with a clear message, in demo mode. Start the stack first:
 
@@ -163,7 +167,8 @@ npx playwright install chromium
 npm test
 ```
 
-Each run makes a real booking in the local database. `docker compose down -v` clears them.
+Each run makes real bookings in the local database, and flow 7 leaves a hidden test service
+(services can't be deleted). `docker compose down -v` clears them.
 Set `BASE_URL` to test another address.
 
 In CI the `compose` job runs the same test. It reads `STRIPE_SECRET_KEY` and

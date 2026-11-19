@@ -1,8 +1,16 @@
 import { post } from '../booking/api.ts'
+import type { OpeningDay } from '../catalogue/types.ts'
 import type {
+  AdminBay,
+  AdminTimetable,
+  AdminService,
   AuditPage,
+  BayType,
+  Clash,
   Message,
+  NewService,
   Schedule,
+  ServiceFields,
   StaffAvailability,
   StaffBooking,
   StaffMe,
@@ -196,4 +204,91 @@ export function fetchAudit(filters: AuditFilters): Promise<StaffResult<AuditPage
   }
   params.set('page', String(filters.page))
   return staffRequest<AuditPage>(`/audit?${params.toString()}`)
+}
+
+// --- admin: settings ---------------------------------------------------------------
+
+const SETTINGS = '/settings'
+
+export function fetchAdminServices(): Promise<StaffResult<AdminService[]>> {
+  return staffRequest<AdminService[]>(`${SETTINGS}/services`)
+}
+
+/** A 409 means the name is already used; its detail says so. */
+export function addService(service: NewService): Promise<StaffResult<AdminService>> {
+  return staffRequest<AdminService>(`${SETTINGS}/services`, post(service))
+}
+
+/** Hide or show with `{ active }`; only the fields given change. */
+export function updateService(
+  id: number,
+  change: ServiceFields | { active: boolean },
+): Promise<StaffResult<AdminService>> {
+  return staffRequest<AdminService>(`${SETTINGS}/services/${id}`, post(change, 'PATCH'))
+}
+
+/** Swaps it with its neighbour; answers with the whole list in its new order. */
+export function moveService(id: number, direction: 'up' | 'down'): Promise<StaffResult<AdminService[]>> {
+  return staffRequest<AdminService[]>(`${SETTINGS}/services/${id}/move`, post({ direction }))
+}
+
+export function fetchBayTypes(): Promise<StaffResult<BayType[]>> {
+  return staffRequest<BayType[]>(`${SETTINGS}/bay-types`)
+}
+
+export function fetchAdminBays(): Promise<StaffResult<AdminBay[]>> {
+  return staffRequest<AdminBay[]>(`${SETTINGS}/bays`)
+}
+
+/** A 409 means the name is already used; its detail says so. */
+export function addBay(bay: { name: string; bay_type_id: number }): Promise<StaffResult<AdminBay>> {
+  return staffRequest<AdminBay>(`${SETTINGS}/bays`, post(bay))
+}
+
+/** Rename, or take out of use / put back. Out of use is refused with a 409 listing the
+ * bookings in the way (see `clashesOf`); a name already used is a 409 with a detail. */
+export function updateBay(id: number, change: { name: string } | { active: boolean }): Promise<StaffResult<AdminBay>> {
+  return staffRequest<AdminBay>(`${SETTINGS}/bays/${id}`, post(change, 'PATCH'))
+}
+
+/** A 409 means the name is already used. */
+export function addBayType(name: string): Promise<StaffResult<BayType>> {
+  return staffRequest<BayType>(`${SETTINGS}/bay-types`, post({ name }))
+}
+
+/** The bookings a 409 lists as in the way of a bay or hours change, or null for another 409. */
+export function clashesOf(body: unknown): Clash[] | null {
+  const parsed = body as { detail?: unknown; bookings?: unknown } | null
+  return parsed?.detail === 'clashes' && Array.isArray(parsed.bookings) ? (parsed.bookings as Clash[]) : null
+}
+
+export function fetchTimetables(): Promise<StaffResult<AdminTimetable[]>> {
+  return staffRequest<AdminTimetable[]>(`${SETTINGS}/hours`)
+}
+
+/** New hours from `startsOn` (tomorrow at the earliest). A 409 lists the bookings the new
+ * hours would leave outside (see `clashesOf`); a 422's detail says what's wrong. */
+export function addTimetable(startsOn: string, days: OpeningDay[]): Promise<StaffResult<AdminTimetable>> {
+  return staffRequest<AdminTimetable>(`${SETTINGS}/hours`, post({ starts_on: startsOn, days }))
+}
+
+/** Replace a future timetable's week. A 409 lists clashes, or says "not_allowed" once it's in force. */
+export function replaceTimetable(id: number, days: OpeningDay[]): Promise<StaffResult<AdminTimetable>> {
+  return staffRequest<AdminTimetable>(`${SETTINGS}/hours/${id}`, post({ days }, 'PUT'))
+}
+
+/** Delete a future timetable; the one before carries on. A 409 as for replacing. */
+export function deleteTimetable(id: number): Promise<StaffResult<void>> {
+  return staffRequest<void>(`${SETTINGS}/hours/${id}`, { method: 'DELETE' })
+}
+
+export type Contact = { name: string; address: string; phone: string; email: string }
+
+export function fetchContact(): Promise<StaffResult<Contact>> {
+  return staffRequest<Contact>(`${SETTINGS}/contact`)
+}
+
+/** Answers with the details as saved (trimmed, email in lower case). A 422's detail says what's wrong. */
+export function saveContact(contact: Contact): Promise<StaffResult<Contact>> {
+  return staffRequest<Contact>(`${SETTINGS}/contact`, post(contact, 'PUT'))
 }

@@ -197,3 +197,29 @@ it('closing the block panel keeps the block', async () => {
   expect(screen.queryByRole('region', { name: 'Block' })).not.toBeInTheDocument()
   expect(mock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
 })
+
+it('day view marks an out-of-use bay', async () => {
+  stubScreen(false)
+  const bays = DAY_SCHEDULE.bays.map((bay) => (bay.id === 2 ? { ...bay, active: false } : bay))
+  stubFetch({
+    'GET /api/staff/me': { status: 200, body: STAFF_ME },
+    [scheduleUrl('2026-11-17', 1)]: { status: 200, body: { ...DAY_SCHEDULE, bays } },
+  })
+  renderAt('/staff?date=2026-11-17')
+  const bay1 = await screen.findByRole('region', { name: 'Bay 1' })
+  expect(within(bay1).getByText('Out of use')).toBeInTheDocument()
+  const mot = screen.getByRole('region', { name: 'MOT bay' })
+  expect(within(mot).queryByText('Out of use')).not.toBeInTheDocument()
+})
+
+it('narrow day view marks an out-of-use bay tab', async () => {
+  stubScreen(true)
+  const bays = DAY_SCHEDULE.bays.map((bay) => (bay.id === 2 ? { ...bay, active: false } : bay))
+  stubFetch({
+    'GET /api/staff/me': { status: 200, body: STAFF_ME },
+    [scheduleUrl('2026-11-17', 1)]: { status: 200, body: { ...DAY_SCHEDULE, bays } },
+  })
+  renderAt('/staff?date=2026-11-17')
+  const tabs = await screen.findAllByRole('tab')
+  expect(tabs.map((t) => t.textContent)).toEqual(['MOT bay', 'Bay 1 (out of use)'])
+})

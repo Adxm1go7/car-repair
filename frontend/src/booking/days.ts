@@ -1,4 +1,5 @@
-import type { OpeningDay } from '../catalogue/types.ts'
+import { hoursOn } from '../catalogue/hours.ts'
+import type { Timetable } from '../catalogue/types.ts'
 
 /** One day in the day strip. weekday: 0 = Monday … 6 = Sunday. */
 export type BookableDay = { date: string; weekday: number; open: boolean }
@@ -21,15 +22,17 @@ export function calendarNoon(date: string): Date {
   return new Date(Date.UTC(year, month - 1, day, 12))
 }
 
-/** `today` up to and including `today + windowDays`, each marked open or closed. */
-export function bookableDays(today: string, windowDays: number, hours: OpeningDay[]): BookableDay[] {
-  const openWeekdays = new Set(hours.filter((d) => d.open !== null && d.close !== null).map((d) => d.weekday))
+/** `today` up to and including `today + windowDays`, each marked open or closed by the
+ * timetable in force on that date. */
+export function bookableDays(today: string, windowDays: number, timetables: Timetable[]): BookableDay[] {
   const first = calendarNoon(today).getTime()
   const days: BookableDay[] = []
   for (let offset = 0; offset <= windowDays; offset++) {
     const day = new Date(first + offset * DAY_MS)
     const weekday = (day.getUTCDay() + 6) % 7 // JavaScript counts from Sunday
-    days.push({ date: day.toISOString().slice(0, 10), weekday, open: openWeekdays.has(weekday) })
+    const date = day.toISOString().slice(0, 10)
+    const hours = hoursOn(timetables, date)
+    days.push({ date, weekday, open: hours.open !== null && hours.close !== null })
   }
   return days
 }

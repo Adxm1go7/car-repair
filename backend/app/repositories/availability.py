@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import Range
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.availability.engine import (
     BayInfo,
@@ -17,9 +17,10 @@ from app.availability.engine import (
     ServiceInfo,
     find_slots,
 )
-from app.models import Bay, Booking, OpeningHours, Reservation, Service
+from app.models import Bay, Booking, Reservation, Service
 from app.repositories.bookings import expired_hold
 from app.repositories.catalogue import get_setting
+from app.repositories.hours import hours_on
 
 
 class SettingsUnavailable(Exception):
@@ -112,15 +113,10 @@ def day_availability_for(
     one reservation out of what's occupied, so a booking can move within its own time."""
     bays = session.scalars(select(Bay).where(Bay.active.is_(True)))
 
-    row = session.scalars(
-        select(OpeningHours)
-        .options(selectinload(OpeningHours.breaks))
-        .where(OpeningHours.weekday == day.weekday())
-    ).one_or_none()
+    opening = hours_on(session, [day])[day]
     hours = None
-    if row is not None and row.open_time is not None and row.close_time is not None:
-        breaks = tuple((b.start_time, b.end_time) for b in row.breaks)
-        hours = DayHours(open=row.open_time, close=row.close_time, breaks=breaks)
+    if opening.open is not None and opening.close is not None:
+        hours = DayHours(open=opening.open, close=opening.close, breaks=opening.breaks)
 
     # The whole local day, as a UTC range, so a 23- or 25-hour day is covered exactly.
     # It's extended by the buffer, because a late job's buffer can run past midnight.
