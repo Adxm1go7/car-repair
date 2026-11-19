@@ -5,6 +5,7 @@ import { formatLongDate, formatTimeRange } from './format.ts'
 import type { BookingSummary, Checkout, CustomerDetails, Hold } from './types.ts'
 import { formatCountdown, useCountdown } from './useCountdown.ts'
 import { formatPrice } from '../catalogue/format.ts'
+import { Honeypot } from './Honeypot.tsx'
 import { validateDetails } from './validation.ts'
 import type { FieldErrors } from './validation.ts'
 
@@ -68,6 +69,7 @@ export function DetailsForm(props: Props): JSX.Element {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [problem, setProblem] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [website, setWebsite] = useState('') // the honeypot
   // Expiry, a reply and leaving the form can race; only the first one counts.
   const finished = useRef(false)
 
@@ -123,7 +125,7 @@ export function DetailsForm(props: Props): JSX.Element {
       await sendIt()
       return
     }
-    const result = await startCheckout(hold.reference, hold.hold_token, values)
+    const result = await startCheckout(hold.reference, hold.hold_token, values, website)
     if (finished.current) return
     if (result.ok) {
       finished.current = true
@@ -146,7 +148,7 @@ export function DetailsForm(props: Props): JSX.Element {
   }
 
   async function sendIt(): Promise<void> {
-    const result = await sendRequest(hold.reference, hold.hold_token, values)
+    const result = await sendRequest(hold.reference, hold.hold_token, values, website)
     if (finished.current) return
     if (result.ok) {
       finished.current = true
@@ -235,6 +237,8 @@ export function DetailsForm(props: Props): JSX.Element {
           {problem}
         </p>
       )}
+
+      <Honeypot value={website} onChange={setWebsite} />
 
       <button type="submit" className="button" disabled={submitting}>
         {request

@@ -87,11 +87,13 @@ function DeclinePanel({
 export function EnquiryPage(): JSX.Element {
   const id = Number(useParams().id)
   const location = useLocation()
-  const [state, setState] = useState<State>({ kind: 'loading' })
+  const known = Number.isInteger(id) && id > 0
+  const [state, setState] = useState<State>({ kind: known ? 'loading' : 'missing' })
   const [declining, setDeclining] = useState(false)
   const [notice, setNotice] = useState<string | null>(() => noticeIn(location.state))
 
   useEffect(() => {
+    if (!known) return
     let cancelled = false
     void fetchEnquiry(id).then((result) => {
       if (cancelled) return
@@ -102,7 +104,7 @@ export function EnquiryPage(): JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [id, known])
 
   if (state.kind === 'loading') return <p>Loading…</p>
   if (state.kind === 'missing') return <p>No such enquiry.</p>

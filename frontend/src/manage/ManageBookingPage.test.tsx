@@ -238,3 +238,14 @@ it('shows no deposit line for a phone booking', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Cancel booking' }))
   expect(screen.queryByText(/deposit/i)).toBeNull()
 })
+
+it('a 429 when cancelling shows the server message and keeps the booking', async () => {
+  const user = userEvent.setup()
+  stubApi({ status: 200, body: CAN_CANCEL }, { status: 429, body: { detail: 'Too many attempts. Please wait a few minutes and try again.' } })
+  renderPage()
+  await user.click(await screen.findByRole('button', { name: 'Cancel booking' }))
+  await user.click(screen.getByRole('button', { name: 'Yes, cancel it' }))
+  expect(await screen.findByText('Too many attempts. Please wait a few minutes and try again.')).toBeInTheDocument()
+  expect(screen.queryByText('This booking is cancelled')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Cancel booking' })).toBeInTheDocument()
+})

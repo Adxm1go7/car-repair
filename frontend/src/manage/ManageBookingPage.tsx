@@ -138,6 +138,7 @@ export function ManageBookingPage({ garage, pollMs }: PageProps): JSX.Element {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [cancelFailed, setCancelFailed] = useState(false)
+  const [cancelProblem, setCancelProblem] = useState<string | null>(null) // the server's reason
   const [justPaid, setJustPaid] = useState(false)
   const [payGone, setPayGone] = useState(false)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
@@ -191,6 +192,8 @@ export function ManageBookingPage({ garage, pollMs }: PageProps): JSX.Element {
       // Already cancelled, perhaps in another tab: show how it stands now.
       const fresh = await viewBooking(reference, token)
       setState(fresh.ok ? { kind: 'ready', booking: fresh.data } : { kind: 'invalid' })
+    } else if (result.kind === 'error' && result.detail) {
+      setCancelProblem(result.detail) // e.g. too many attempts
     } else {
       setCancelFailed(true)
     }
@@ -279,6 +282,11 @@ export function ManageBookingPage({ garage, pollMs }: PageProps): JSX.Element {
       {canCancel && (
         <>
           {status === 'confirmed' && <p>Need a different time? Call us on {phone} and we&apos;ll sort it out.</p>}
+          {cancelProblem && (
+            <p role="alert" className="error">
+              {cancelProblem}
+            </p>
+          )}
           {cancelFailed && (
             <p role="alert" className="error">
               We couldn&apos;t cancel just now. Please try again, or call us on {phone}.
@@ -300,6 +308,7 @@ export function ManageBookingPage({ garage, pollMs }: PageProps): JSX.Element {
               ref={cancelButtonRef}
               onClick={() => {
                 setCancelFailed(false)
+                setCancelProblem(null)
                 setConfirming(true)
               }}
             >

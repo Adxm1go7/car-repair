@@ -77,6 +77,7 @@ function stubApi({ views, pay = 200 }: Stub): ReturnType<typeof vi.fn> {
     }
     if (url === '/api/booking-policy') return Promise.resolve(json(POLICY))
     if (url.endsWith('/pay')) {
+      if (pay === 429) return Promise.resolve(json({ detail: 'Too many attempts. Please wait a few minutes and try again.' }, 429))
       return Promise.resolve(pay === 200 ? json(CHECKOUT) : json({ detail: 'Nothing to pay' }, pay))
     }
     if (url === '/api/demo/checkout/demo_abc') return Promise.resolve(json({ status: 'confirmed' }))
@@ -165,4 +166,11 @@ it('a payment that came too late says it is being refunded, and stops waiting', 
   expect(screen.getByText('The time we were keeping for you has been released')).toBeInTheDocument()
   expect(screen.queryByText(/still confirming/)).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Pay deposit' })).not.toBeInTheDocument()
+})
+
+it('a 429 when opening the payment shows the server message', async () => {
+  stubApi({ views: [APPROVED], pay: 429 })
+  renderPage()
+  await userEvent.setup().click(await screen.findByRole('button', { name: 'Pay deposit' }))
+  expect(await screen.findByText('Too many attempts. Please wait a few minutes and try again.')).toBeInTheDocument()
 })

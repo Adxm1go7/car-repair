@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent, JSX } from 'react'
 import { Link } from 'react-router'
+import { Honeypot } from '../booking/Honeypot.tsx'
 import { checkDescription, validateDetails } from '../booking/validation.ts'
 import type { Garage } from '../catalogue/types.ts'
 import { sendEnquiry } from './api.ts'
@@ -50,6 +51,7 @@ export function EnquiryPage({ garage }: { garage: Garage }): JSX.Element {
   const [errors, setErrors] = useState<Errors>({})
   const [problem, setProblem] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [website, setWebsite] = useState('') // the honeypot
   const [sentTo, setSentTo] = useState<string | null>(null)
   const phone = <a href={telHref(garage.phone)}>{garage.phone}</a>
 
@@ -69,7 +71,7 @@ export function EnquiryPage({ garage }: { garage: Garage }): JSX.Element {
       return
     }
     setSending(true)
-    const result = await sendEnquiry(trimmed(values))
+    const result = await sendEnquiry(trimmed(values), website)
     setSending(false)
     if (result.ok) {
       setSentTo(result.data.email)
@@ -77,7 +79,7 @@ export function EnquiryPage({ garage }: { garage: Garage }): JSX.Element {
     }
     const forField = fieldError(result.detail)
     if (forField) setErrors(forField)
-    else setProblem(`Sorry, we couldn't send your enquiry. Please try again, or call us on ${garage.phone}.`)
+    else setProblem(result.detail ?? `Sorry, we couldn't send your enquiry. Please try again, or call us on ${garage.phone}.`)
   }
 
   if (sentTo !== null) {
@@ -159,6 +161,8 @@ export function EnquiryPage({ garage }: { garage: Garage }): JSX.Element {
             {problem}
           </p>
         )}
+
+        <Honeypot value={website} onChange={setWebsite} />
 
         <button type="submit" className="button" disabled={sending}>
           {sending ? 'Sending…' : 'Send enquiry'}

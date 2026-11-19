@@ -63,6 +63,7 @@ export function PayDeposit(props: Props): JSX.Element {
     }
     setPhase('ready')
     if (result.kind === 'gone' || result.kind === 'invalid') latest.current.onGone()
+    else if (result.kind === 'error' && result.detail) setProblem(result.detail)
     else setProblem("Sorry, we couldn't open the payment just now. Please try again.")
   }
 

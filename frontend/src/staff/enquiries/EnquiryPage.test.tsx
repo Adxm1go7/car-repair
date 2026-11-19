@@ -117,3 +117,10 @@ it('an unknown enquiry says so', async () => {
   renderAt('/staff/enquiries/7')
   expect(await screen.findByText('No such enquiry.')).toBeInTheDocument()
 })
+
+it('a non-number id says no such enquiry without asking the server', async () => {
+  const mock = stubFetch({ 'GET /api/staff/me': { status: 200, body: STAFF_ME } })
+  renderAt('/staff/enquiries/abc')
+  expect(await screen.findByText('No such enquiry.')).toBeInTheDocument()
+  expect(mock.mock.calls.some(([url]) => String(url).startsWith('/api/staff/enquiries/'))).toBe(false)
+})

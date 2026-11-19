@@ -110,7 +110,11 @@ function stubApi({
     }
     if (url === '/api/holds') {
       return Promise.resolve(
-        holdStatus === 201 ? json(HOLD, 201) : json({ detail: 'That time has just been taken' }, 409),
+        holdStatus === 201
+          ? json(HOLD, 201)
+          : holdStatus === 429
+            ? json({ detail: 'Too many attempts. Please wait a few minutes and try again.' }, 429)
+            : json({ detail: 'That time has just been taken' }, 409),
       )
     }
     if (url === '/api/holds/ABCD-EFGH' && init?.method === 'DELETE') {
@@ -547,4 +551,11 @@ it('says when a request could not be sent', async () => {
   await fillDetails(user)
   await user.click(screen.getByRole('button', { name: 'Send request' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Your hold has expired')
+})
+
+it('a 429 when picking a time shows the server message', async () => {
+  stubApi({ holdStatus: 429 })
+  renderAt('/book?services=mot-test')
+  await userEvent.setup().click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Too many attempts. Please wait a few minutes and try again.')
 })

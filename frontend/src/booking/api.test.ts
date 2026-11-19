@@ -45,7 +45,7 @@ it('startCheckout sends the token with the details', async () => {
   const [url, init] = vi.mocked(fetch).mock.calls[0]
   expect(url).toBe('/api/holds/ABCD-EFGH/checkout')
   expect(init?.method).toBe('POST')
-  expect(JSON.parse(String(init?.body))).toEqual({ hold_token: 'tok', ...DETAILS })
+  expect(JSON.parse(String(init?.body))).toEqual({ hold_token: 'tok', ...DETAILS, website: '' })
 })
 
 it('startCheckout maps a 410 to expired', async () => {

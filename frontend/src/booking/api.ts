@@ -72,8 +72,10 @@ export function startCheckout(
   reference: string,
   token: string,
   details: CustomerDetails,
+  website = '',
 ): Promise<Result<Checkout> | Expired | Paid> {
-  return request<Checkout, Expired | Paid>(holdUrl(reference, '/checkout'), post({ hold_token: token, ...details }), {
+  const body = { hold_token: token, ...details, website }
+  return request<Checkout, Expired | Paid>(holdUrl(reference, '/checkout'), post(body), {
     409: { ok: false, kind: 'paid' },
     410: { ok: false, kind: 'expired' },
   })
@@ -84,8 +86,10 @@ export function sendRequest(
   reference: string,
   token: string,
   details: CustomerDetails,
+  website = '',
 ): Promise<Result<BookingSummary> | Expired> {
-  return request<BookingSummary, Expired>(holdUrl(reference, '/request'), post({ hold_token: token, ...details }), {
+  const body = { hold_token: token, ...details, website }
+  return request<BookingSummary, Expired>(holdUrl(reference, '/request'), post(body), {
     410: { ok: false, kind: 'expired' },
   })
 }

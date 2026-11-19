@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { UserEvent } from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
@@ -82,6 +82,7 @@ it('sends the enquiry and shows it was sent', async () => {
     make: 'Ford',
     model: 'Focus',
     description: 'Rattle from the front left when braking',
+    website: '',
   })
 })
 
@@ -133,4 +134,28 @@ it('a failure to send says to try again or call', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(
     "Sorry, we couldn't send your enquiry. Please try again, or call us on 01632 960123.",
   )
+})
+
+it('a 429 shows the server message', async () => {
+  stub({ status: 429, body: { detail: 'Too many attempts. Please wait a few minutes and try again.' } })
+  renderAt('/enquiry')
+  const user = userEvent.setup()
+  await fillIn(user)
+  await user.click(screen.getByRole('button', { name: 'Send enquiry' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Too many attempts. Please wait a few minutes and try again.')
+})
+
+it('the enquiry honeypot is hidden and sent', async () => {
+  const mock = stub()
+  renderAt('/enquiry')
+  const user = userEvent.setup()
+  await fillIn(user)
+  const trap = document.querySelector('input[name="website"]') as HTMLInputElement
+  expect(trap).toHaveAttribute('tabindex', '-1')
+  expect(trap.closest('[aria-hidden="true"]')).not.toBeNull()
+  fireEvent.change(trap, { target: { value: 'spam' } })
+  await user.click(screen.getByRole('button', { name: 'Send enquiry' }))
+  await screen.findByRole('heading', { level: 1, name: 'Enquiry sent' })
+  const [call] = enquiryCalls(mock)
+  expect(JSON.parse((call[1] as RequestInit).body as string).website).toBe('spam')
 })
