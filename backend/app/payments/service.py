@@ -101,7 +101,7 @@ def complete_deposit(
         # Past its time but not released yet. It stopped counting at its expiry, so a bay or
         # hours change may have gone ahead since: release it and treat it as a late payment.
         release_hold(session, booking)
-    if booking.status == "held":
+    if booking.status in ("held", "awaiting_deposit"):
         # Its reservation is still active: nobody else could take it.
         _confirm(session, booking, now)
     elif booking.status == "expired":
@@ -115,7 +115,12 @@ def complete_deposit(
             session.flush()
             return None
     else:
-        log.warning("payment for booking %s in status %s", booking.reference, booking.status)
+        # Cancelled, declined, moved on, or already paid through another form: the money
+        # isn't for anything, so it goes back.
+        log.warning(
+            "payment for booking %s in status %s, refunding", booking.reference, booking.status
+        )
+        refund_deposit(session, provider, deposit)
         session.flush()
         return None
     session.flush()

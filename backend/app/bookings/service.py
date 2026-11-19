@@ -216,30 +216,52 @@ def start_checkout(
     if booking.status != "held":
         raise HoldExpired
 
+    if get_open_deposit(session, booking.id) is None:
+        booking.customer_name = details.name
+        booking.customer_phone = details.phone
+        booking.customer_email = details.email
+        booking.car_registration = details.registration
+        booking.car_make = details.make
+        booking.car_model = details.model
+        booking.notes = details.notes
+        booking.hold_expires_at = now + timedelta(minutes=payment_hold_minutes)
+    return open_deposit_form(session, provider, booking, now, amount_pence=amount_pence, zone=zone)
+
+
+def open_deposit_form(
+    session: Session,
+    provider: PaymentProvider,
+    booking: Booking,
+    now: datetime,
+    *,
+    amount_pence: int,
+    zone: ZoneInfo,
+) -> CheckoutResult:
+    """The booking's open payment form, or a new one. It never moves the booking's deadline:
+    the time left to pay is whatever hold_expires_at says. A form the provider has already
+    closed (Stripe ends one after about half an hour) is replaced.
+
+    The booking row must be locked. PaymentUnavailable propagates: the caller must roll back.
+    """
     open_deposit = get_open_deposit(session, booking.id)
     if open_deposit is not None:
         state = provider.get_checkout(open_deposit.provider_ref)
-        return CheckoutResult(
-            client_secret=state.client_secret,
-            demo_session=open_deposit.provider_ref if provider.name == "demo" else None,
-            expires_in_seconds=_seconds_left(booking, now),
-            amount_pence=open_deposit.amount_pence,
-        )
+        if state.status != "expired":
+            return CheckoutResult(
+                client_secret=state.client_secret,
+                demo_session=open_deposit.provider_ref if provider.name == "demo" else None,
+                expires_in_seconds=_seconds_left(booking, now),
+                amount_pence=open_deposit.amount_pence,
+            )
+        open_deposit.status = "expired"
+        session.flush()
 
-    booking.customer_name = details.name
-    booking.customer_phone = details.phone
-    booking.customer_email = details.email
-    booking.car_registration = details.registration
-    booking.car_make = details.make
-    booking.car_model = details.model
-    booking.notes = details.notes
-    booking.hold_expires_at = now + timedelta(minutes=payment_hold_minutes)
     when = booking.start_at.astimezone(zone).strftime("%a %d %b %H:%M")
     attempt = count_payments(session, booking_id=booking.id)
     started = provider.start_checkout(
         reference=booking.reference,
         amount_pence=amount_pence,
-        customer_email=details.email,
+        customer_email=booking.customer_email or "",
         description=f"Deposit for booking {booking.reference}, {when}",
         # Stripe remembers keys per account for 24 hours, so they must be unique across every
         # database that shares the account: the random reference is, a row id isn't.
@@ -259,7 +281,7 @@ def start_checkout(
     return CheckoutResult(
         client_secret=started.client_secret,
         demo_session=started.session_ref if provider.name == "demo" else None,
-        expires_in_seconds=payment_hold_minutes * 60,
+        expires_in_seconds=_seconds_left(booking, now),
         amount_pence=amount_pence,
     )
 
