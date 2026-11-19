@@ -82,3 +82,10 @@ def test_hours_refuse_zone_in_breaks(admin_client: TestClient, db_session: Sessi
 def test_api_sends_nosniff(public: TestClient) -> None:
     assert public.get("/api/health").headers["X-Content-Type-Options"] == "nosniff"
     assert public.get("/api/services").headers["X-Content-Type-Options"] == "nosniff"
+
+
+@pytest.mark.parametrize("path", ["/api/staff/login", "/api/staff/forgot-password"])
+def test_nul_in_staff_login_email_is_422(public: TestClient, path: str) -> None:
+    body = {"email": "a\x00@example.com", "password": "whatever"}
+    response = public.post(path, json=body, headers={"Origin": "http://localhost:8080"})
+    assert response.status_code == 422, response.text
