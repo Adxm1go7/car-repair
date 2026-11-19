@@ -4,10 +4,11 @@ and no payment; staff answer from the Enquiries page."""
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import AfterValidator, BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.validation import caught_bot
 from app.bookings.rules import (
     clean_email,
     clean_make_or_model,
@@ -35,6 +36,7 @@ class EnquiryIn(BaseModel):
     make: Annotated[str, AfterValidator(clean_make_or_model)]
     model: Annotated[str, AfterValidator(clean_make_or_model)]
     description: Annotated[str, AfterValidator(clean_description)]
+    website: str | None = None  # the honeypot: people never see it
 
 
 class EnquirySentOut(BaseModel):
@@ -42,7 +44,11 @@ class EnquirySentOut(BaseModel):
 
 
 @router.post("/enquiries", status_code=201, dependencies=[Depends(limited("enquiry"))])
-def send_enquiry(body: EnquiryIn, session: SessionDep, now: NowDep) -> EnquirySentOut:
+def send_enquiry(
+    body: EnquiryIn, incoming: Request, session: SessionDep, now: NowDep
+) -> EnquirySentOut:
+    if caught_bot(body.website, "/api/enquiries", incoming):
+        return EnquirySentOut(email=body.email)  # looks sent; nothing is stored or emailed
     details = EnquiryDetails(
         name=body.name,
         phone=body.phone,
