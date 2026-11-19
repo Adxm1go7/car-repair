@@ -7,9 +7,9 @@ from factories import make_hold
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Booking, Service
+from app.models import Booking, EmailLog, Service
 from app.repositories.availability import day_availability, load_hold_minutes, load_policy
-from app.repositories.bookings import release_expired_holds
+from app.repositories.bookings import release_expired_holds, release_hold
 from app.seed import seed
 
 NOW = datetime(2026, 11, 9, 9, tzinfo=UTC)  # Monday 09:00 in London (GMT)
@@ -74,3 +74,51 @@ def test_availability_respects_a_confirmed_booking_past_its_hold_time(seeded: Se
 
 def test_load_hold_minutes_reads_the_setting(seeded: Session) -> None:
     assert load_hold_minutes(seeded) == 5
+
+
+def queued(session: Session) -> list[tuple[int, str]]:
+    rows = session.scalars(select(EmailLog).order_by(EmailLog.id))
+    return [(row.booking_id or 0, row.template) for row in rows]
+
+
+def test_overdue_request_frees_slot_before_worker(seeded: Session) -> None:
+    make_hold(seeded, MOT_0800, NOW - timedelta(seconds=1), status="pending_approval")
+    assert MOT_0800 in mot_starts(seeded)
+
+
+def test_live_request_and_approval_keep_their_slots(seeded: Session) -> None:
+    make_hold(seeded, MOT_0800, NOW + timedelta(hours=1), status="pending_approval")
+    make_hold(
+        seeded, MOT_0800 + timedelta(hours=2), NOW + timedelta(hours=1), status="awaiting_deposit"
+    )
+    starts = mot_starts(seeded)
+    assert MOT_0800 not in starts
+    assert MOT_0800 + timedelta(hours=2) not in starts
+
+
+def test_release_queues_one_email_per_request(seeded: Session) -> None:
+    gone = NOW - timedelta(minutes=1)
+    request = make_hold(seeded, MOT_0800, gone, status="pending_approval")
+    approval = make_hold(seeded, MOT_0800 + timedelta(hours=2), gone, status="awaiting_deposit")
+    make_hold(seeded, MOT_0800 + timedelta(hours=4), gone)  # a plain hold: no email
+
+    assert release_expired_holds(seeded, NOW) == 3
+    assert queued(seeded) == [(request.id, "request_expired"), (approval.id, "deposit_expired")]
+    assert reload(seeded, request).status == "expired"
+    assert not reload(seeded, approval).reservation.active
+
+    assert release_expired_holds(seeded, NOW) == 0
+    assert len(queued(seeded)) == 2
+
+
+def test_release_hold_of_one_request_queues_its_email(seeded: Session) -> None:
+    request = make_hold(seeded, MOT_0800, NOW - timedelta(minutes=1), status="pending_approval")
+    release_hold(seeded, request)
+    assert queued(seeded) == [(request.id, "request_expired")]
+    assert request.status == "expired"
+
+
+def test_release_hold_of_a_plain_hold_queues_nothing(seeded: Session) -> None:
+    hold = make_hold(seeded, MOT_0800, NOW - timedelta(minutes=1), details=True)
+    release_hold(seeded, hold)
+    assert queued(seeded) == []

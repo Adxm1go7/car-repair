@@ -46,7 +46,8 @@ def make_hold(
     """A one-hour booking at `start` (aware, any zone) with its reservation, flushed.
 
     Its token is TEST_TOKEN. A "confirmed" booking gets customer details and a paid deposit,
-    so it's valid. `details=True` gives any booking them, as if payment had started.
+    so it's valid. A request or an approval (pending_approval, awaiting_deposit) gets
+    customer details too. `details=True` gives any booking them, as if payment had started.
     """
     bay = session.scalars(select(Bay.id).where(Bay.slug == bay_slug)).one()
     end = start + timedelta(hours=1)
@@ -54,7 +55,7 @@ def make_hold(
         bay_id=bay,
         kind="booking",
         during=Range(start, end + BUFFER),
-        active=status in ("held", "confirmed"),
+        active=status in ("held", "pending_approval", "awaiting_deposit", "confirmed"),
     )
     session.add(reservation)
     session.flush()
@@ -66,7 +67,7 @@ def make_hold(
         end_at=end,
         hold_expires_at=expires_at,
         hold_token_hash=hash_token(TEST_TOKEN),
-        **(CUSTOMER if status == "confirmed" or details else {}),
+        **(CUSTOMER if status != "held" or details else {}),
         deposit_status="paid" if status == "confirmed" else "unpaid",
     )
     session.add(booking)
