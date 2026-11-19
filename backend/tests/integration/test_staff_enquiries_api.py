@@ -144,7 +144,9 @@ def test_approve_route(client: TestClient, db_session: Session) -> None:
     assert (booking["status"], booking["source"]) == ("confirmed", "enquiry")
     assert booking["deposit_status"] == "not_required"
     assert booking["enquiry_id"] == enquiry.id
-    assert booking["history"][0]["text"] == "Booked from an enquiry by Sam Staff"
+    assert [entry["text"] for entry in booking["history"]] == [
+        "Booked from an enquiry by Sam Staff"
+    ]
 
 
 def test_phone_booking_has_no_enquiry(client: TestClient, db_session: Session) -> None:

@@ -229,6 +229,9 @@ def staff_booking_out(
     entries = session.scalars(
         select(AuditEntry)
         .where(AuditEntry.booking_reference == booking.reference)
+        # Booking an enquiry in is told by its booking.create line; the enquiry's own entry
+        # carries the reference for the audit page only.
+        .where(AuditEntry.action != "enquiry.approve")
         .options(selectinload(AuditEntry.staff_user))
         .order_by(AuditEntry.at, AuditEntry.id)
     )
