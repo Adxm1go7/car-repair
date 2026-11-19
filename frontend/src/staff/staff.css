@@ -644,3 +644,124 @@ button.entry {
   align-items: center;
   gap: 12px;
 }
+
+/* --- settings ------------------------------------------------------------------- */
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 960px;
+}
+
+.settings-page h1,
+.settings-heading h2,
+.settings-form h2 {
+  margin: 0;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-tabs a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-bottom: 3px solid transparent;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.settings-tabs a.active {
+  border-bottom-color: var(--accent);
+}
+
+.settings-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A phone stacks a row's parts; a wider screen lines them up in columns. */
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-order {
+  display: flex;
+  gap: 4px;
+}
+
+.settings-order button {
+  min-width: 44px;
+}
+
+.settings-name {
+  flex: 1 1 12em;
+  font-weight: 600;
+}
+
+.settings-off {
+  color: var(--muted);
+}
+
+.settings-wide {
+  flex-basis: 100%;
+}
+
+.settings-form {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.settings-form select {
+  min-height: 44px;
+}
+
+.settings-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  border: 0;
+  padding: 0;
+}
+
+.settings-choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+
+.settings-warning {
+  margin: 0;
+  font-weight: 600;
+}

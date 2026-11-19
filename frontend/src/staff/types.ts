@@ -112,3 +112,37 @@ export type AuditEntry = {
 }
 
 export type AuditPage = { entries: AuditEntry[]; page: number; has_more: boolean }
+
+// --- admin: settings --------------------------------------------------------------
+
+export type ApprovalMode = 'instant' | 'needs_approval'
+
+/** GET /api/staff/settings/services: every service, shown and hidden, in display order. */
+export type AdminService = {
+  id: number
+  slug: string
+  name: string
+  category: string
+  description: string
+  duration_minutes: number
+  price_from_pence: number
+  price_to_pence: number | null
+  bay_type_id: number
+  bay_type: string
+  approval_mode: ApprovalMode
+  active: boolean
+  sort_order: number
+}
+
+/** The fields an edit can change. Bay type and approval mode are fixed once added. */
+export type ServiceFields = Pick<
+  AdminService,
+  'name' | 'category' | 'description' | 'duration_minutes' | 'price_from_pence' | 'price_to_pence'
+>
+
+export type NewService = ServiceFields & { bay_type_id: number; approval_mode: ApprovalMode }
+
+export type BayType = { id: number; slug: string; name: string }
+
+/** GET /api/staff/settings/bays */
+export type AdminBay = { id: number; slug: string; name: string; bay_type_id: number; bay_type: string; active: boolean }

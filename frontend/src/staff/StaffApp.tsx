@@ -13,6 +13,7 @@ import { NewBlockPage } from './forms/NewBlockPage.tsx'
 import { NewBookingPage } from './forms/NewBookingPage.tsx'
 import { DayView } from './schedule/DayView.tsx'
 import { WeekView } from './schedule/WeekView.tsx'
+import { SettingsPage } from './settings/SettingsPage.tsx'
 import { LOGIN_PATH, StaffContext, loginUrl, useGarage, useStaff } from './StaffContext.ts'
 import { StaffLayout } from './StaffLayout.tsx'
 import type { StaffMe } from './types.ts'
@@ -118,6 +119,15 @@ export function StaffApp(): JSX.Element {
           element={
             <AdminOnly>
               <AuditPage />
+            </AdminOnly>
+          }
+        />
+        <Route path="settings" element={<Navigate to="/staff/settings/services" replace />} />
+        <Route
+          path="settings/:tab"
+          element={
+            <AdminOnly>
+              <SettingsPage />
             </AdminOnly>
           }
         />

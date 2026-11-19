@@ -1,8 +1,13 @@
 import { post } from '../booking/api.ts'
 import type {
+  AdminBay,
+  AdminService,
   AuditPage,
+  BayType,
   Message,
+  NewService,
   Schedule,
+  ServiceFields,
   StaffAvailability,
   StaffBooking,
   StaffMe,
@@ -196,4 +201,38 @@ export function fetchAudit(filters: AuditFilters): Promise<StaffResult<AuditPage
   }
   params.set('page', String(filters.page))
   return staffRequest<AuditPage>(`/audit?${params.toString()}`)
+}
+
+// --- admin: settings ---------------------------------------------------------------
+
+const SETTINGS = '/settings'
+
+export function fetchAdminServices(): Promise<StaffResult<AdminService[]>> {
+  return staffRequest<AdminService[]>(`${SETTINGS}/services`)
+}
+
+/** A 409 means the name is already used; its detail says so. */
+export function addService(service: NewService): Promise<StaffResult<AdminService>> {
+  return staffRequest<AdminService>(`${SETTINGS}/services`, post(service))
+}
+
+/** Hide or show with `{ active }`; only the fields given change. */
+export function updateService(
+  id: number,
+  change: ServiceFields | { active: boolean },
+): Promise<StaffResult<AdminService>> {
+  return staffRequest<AdminService>(`${SETTINGS}/services/${id}`, post(change, 'PATCH'))
+}
+
+/** Swaps it with its neighbour; answers with the whole list in its new order. */
+export function moveService(id: number, direction: 'up' | 'down'): Promise<StaffResult<AdminService[]>> {
+  return staffRequest<AdminService[]>(`${SETTINGS}/services/${id}/move`, post({ direction }))
+}
+
+export function fetchBayTypes(): Promise<StaffResult<BayType[]>> {
+  return staffRequest<BayType[]>(`${SETTINGS}/bay-types`)
+}
+
+export function fetchAdminBays(): Promise<StaffResult<AdminBay[]>> {
+  return staffRequest<AdminBay[]>(`${SETTINGS}/bays`)
 }

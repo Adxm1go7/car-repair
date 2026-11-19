@@ -26,6 +26,7 @@ export function StaffLayout(): JSX.Element {
           <NavLink to="/staff/week">Week</NavLink>
           {isAdmin && <NavLink to="/staff/team">Team</NavLink>}
           {isAdmin && <NavLink to="/staff/audit">Audit</NavLink>}
+          {isAdmin && <NavLink to="/staff/settings">Settings</NavLink>}
         </nav>
         <span className="staff-user">
           <span>{me.name}</span>
