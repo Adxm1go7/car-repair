@@ -859,3 +859,18 @@ button.entry {
 .booking-deadline {
   font-weight: 600;
 }
+
+.enquiry-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.enquiry-tabs [aria-selected='true'] {
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.enquiry-description {
+  white-space: pre-line;
+}

@@ -2,16 +2,10 @@ import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { Link } from 'react-router'
 import { fetchRequests } from '../api.ts'
-import { localDate, localTime } from '../labels.ts'
-import { shortDay } from '../schedule/layout.ts'
+import { shortMoment } from '../labels.ts'
 import type { StaffRequest } from '../types.ts'
 
 type State = { kind: 'loading' } | { kind: 'failed' } | { kind: 'ready'; requests: StaffRequest[] }
-
-/** "Wed 18 Nov, 09:00" for a garage-local ISO time. */
-function shortMoment(iso: string): string {
-  return `${shortDay(localDate(iso))}, ${localTime(iso)}`
-}
 
 /** `/staff/requests`: online requests waiting for an answer, oldest first. */
 export function RequestsPage(): JSX.Element {

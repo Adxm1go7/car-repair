@@ -7,12 +7,15 @@ import type {
   AuditPage,
   BayType,
   Clash,
+  EnquiryStatus,
   Message,
   NewService,
   Schedule,
   ServiceFields,
   StaffAvailability,
   StaffBooking,
+  StaffEnquiry,
+  StaffEnquiryRow,
   StaffMe,
   StaffRequest,
   StaffRole,
@@ -148,6 +151,28 @@ export function proposeBooking(
 
 export function declineBooking(reference: string, reason: string | null): Promise<StaffResult<StaffBooking>> {
   return staffRequest<StaffBooking>(bookingPath(reference, '/decline'), post({ reason }))
+}
+
+// --- enquiries ---------------------------------------------------------------------
+
+/** New ones oldest first; booked and declined ones newest first. */
+export function fetchEnquiries(status: EnquiryStatus = 'new'): Promise<StaffResult<StaffEnquiryRow[]>> {
+  return staffRequest<StaffEnquiryRow[]>(`/enquiries?status=${status}`)
+}
+
+export function fetchEnquiry(id: number): Promise<StaffResult<StaffEnquiry>> {
+  return staffRequest<StaffEnquiry>(`/enquiries/${id}`)
+}
+
+/** Book the enquiry in, the phone-booking way. A 409's detail is not_new, or the time was
+ * just taken. */
+export function approveEnquiry(id: number, booking: PhoneBookingIn & { email: string }): Promise<StaffResult<StaffEnquiry>> {
+  return staffRequest<StaffEnquiry>(`/enquiries/${id}/approve`, post(booking))
+}
+
+/** A 409 (not_new) means someone has already dealt with it. */
+export function declineEnquiry(id: number, reason: string | null): Promise<StaffResult<StaffEnquiry>> {
+  return staffRequest<StaffEnquiry>(`/enquiries/${id}/decline`, post({ reason }))
 }
 
 /** The bays, with names, from a day's schedule. */

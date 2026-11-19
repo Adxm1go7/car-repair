@@ -100,6 +100,39 @@ export type StaffRequest = {
   created_at: string
 }
 
+export type EnquiryStatus = 'new' | 'converted' | 'declined'
+
+/** One row of the Enquiries page. Times are garage-local ISO. */
+export type StaffEnquiryRow = {
+  id: number
+  status: EnquiryStatus
+  customer_name: string
+  registration: string
+  make: string
+  model: string
+  summary: string
+  created_at: string
+  handled_at: string | null
+}
+
+export type StaffEnquiry = {
+  id: number
+  status: EnquiryStatus
+  customer_name: string
+  customer_phone: string
+  customer_email: string
+  registration: string
+  make: string
+  model: string
+  description: string
+  created_at: string
+  handled_at: string | null
+  handled_by: string | null
+  decline_reason: string | null
+  booking_reference: string | null
+  actions: ('approve' | 'decline')[]
+}
+
 export type StaffSlot = { start: string; end: string; bay_ids: number[] }
 
 /** GET /api/staff/availability and /bookings/:reference/move-options. */

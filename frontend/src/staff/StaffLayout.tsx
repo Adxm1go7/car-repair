@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { fetchRequests, logout } from './api.ts'
+import { fetchEnquiries, fetchRequests, logout } from './api.ts'
 import { LOGIN_PATH, useStaff } from './StaffContext.ts'
 
 export function StaffLayout(): JSX.Element {
@@ -12,12 +12,17 @@ export function StaffLayout(): JSX.Element {
   const isAdmin = me.role === 'admin'
   const { pathname } = useLocation()
   const [waiting, setWaiting] = useState(0)
+  const [newEnquiries, setNewEnquiries] = useState(0)
 
-  // How many requests are waiting: asked again on every page change, which is often enough.
+  // How many requests and new enquiries are waiting: asked again on every page change,
+  // which is often enough.
   useEffect(() => {
     let cancelled = false
     void fetchRequests().then((result) => {
       if (!cancelled && result.ok) setWaiting(result.data.length)
+    })
+    void fetchEnquiries('new').then((result) => {
+      if (!cancelled && result.ok) setNewEnquiries(result.data.length)
     })
     return () => {
       cancelled = true
@@ -39,6 +44,7 @@ export function StaffLayout(): JSX.Element {
           </NavLink>
           <NavLink to="/staff/week">Week</NavLink>
           <NavLink to="/staff/requests">{waiting > 0 ? `Requests (${waiting})` : 'Requests'}</NavLink>
+          <NavLink to="/staff/enquiries">{newEnquiries > 0 ? `Enquiries (${newEnquiries})` : 'Enquiries'}</NavLink>
           {isAdmin && <NavLink to="/staff/team">Team</NavLink>}
           {isAdmin && <NavLink to="/staff/audit">Audit</NavLink>}
           {isAdmin && <NavLink to="/staff/settings">Settings</NavLink>}

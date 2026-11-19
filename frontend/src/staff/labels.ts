@@ -1,4 +1,5 @@
-import type { BookingAction, BookingStatus, DepositStatus, StaffRole, StaffState } from './types.ts'
+import { shortDay } from './schedule/layout.ts'
+import type { BookingAction, BookingStatus, DepositStatus, EnquiryStatus, StaffRole, StaffState } from './types.ts'
 
 export const STATUS_LABEL: Record<BookingStatus, string> = {
   held: 'Being booked',
@@ -36,6 +37,15 @@ export const DEPOSIT_LABEL: Record<DepositStatus, string> = {
   not_required: 'Phone booking · no deposit',
 }
 
+export const ENQUIRY_STATUS_LABEL: Record<EnquiryStatus, string> = {
+  new: 'New',
+  converted: 'Booked',
+  declined: 'Declined',
+}
+
+/** Said when staff try to handle an enquiry someone else just has. */
+export const ENQUIRY_HANDLED = 'This enquiry has already been dealt with'
+
 export const ROLE_LABEL: Record<StaffRole, string> = { admin: 'Admin', staff: 'Staff' }
 
 export const STATE_LABEL: Record<StaffState, string> = {
@@ -61,4 +71,9 @@ export function localDate(iso: string): string {
 
 export function localTime(iso: string): string {
   return iso.slice(11, 16)
+}
+
+/** "Wed 18 Nov, 09:00" for a garage-local ISO time. */
+export function shortMoment(iso: string): string {
+  return `${shortDay(localDate(iso))}, ${localTime(iso)}`
 }
