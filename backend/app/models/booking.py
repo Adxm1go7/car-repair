@@ -27,6 +27,7 @@ from app.models.reservation import Reservation
 BOOKING_STATUSES: Final[tuple[str, ...]] = (
     "held",
     "pending_approval",
+    "awaiting_deposit",  # approved by staff, waiting for the customer's deposit
     "confirmed",
     "in_progress",
     "completed",
@@ -34,6 +35,11 @@ BOOKING_STATUSES: Final[tuple[str, ...]] = (
     "no_show",
     "expired",
 )
+
+# Waiting for someone, with a deadline in hold_expires_at: the customer to pay (held), staff
+# to answer a request (pending_approval), or the customer to pay after approval.
+WAITING_STATUSES: Final[tuple[str, ...]] = ("held", "pending_approval", "awaiting_deposit")
+_WAITING_LIST = ", ".join(f"'{status}'" for status in WAITING_STATUSES)
 
 # "waived" is only for bookings confirmed before deposits existed (migration 0006).
 DEPOSIT_STATUSES: Final[tuple[str, ...]] = (
@@ -71,7 +77,10 @@ class Booking(Base):
     __table_args__ = (
         CheckConstraint(f"status IN ({_STATUS_LIST})", name="status_valid"),
         CheckConstraint("start_at < end_at", name="start_before_end"),
-        CheckConstraint("status <> 'held' OR hold_expires_at IS NOT NULL", name="held_has_expiry"),
+        CheckConstraint(
+            f"status NOT IN ({_WAITING_LIST}) OR hold_expires_at IS NOT NULL",
+            name="held_has_expiry",
+        ),
         CheckConstraint("status <> 'held' OR hold_token_hash IS NOT NULL", name="held_has_token"),
         CheckConstraint(CONFIRMED_HAS_DETAILS, name="confirmed_has_details"),
         CheckConstraint(f"deposit_status IN ({_DEPOSIT_LIST})", name="deposit_status_valid"),

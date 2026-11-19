@@ -61,6 +61,10 @@ def test_seed_inserts_default_settings(db_session: Session) -> None:
         "garage_timezone": "Europe/London",
         "slot_grid_minutes": 30,
         "bay_buffer_minutes": 15,
+        "approval_hold_hours": 48,
+        "approval_payment_hours": 24,
+        "approval_lead_hours": 24,
+        "approval_min_payment_hours": 2,
         "garage_contact": {
             "name": "Hillside Motors",
             "address": "12 Station Road, Anytown, AT1 2CD",

@@ -35,6 +35,24 @@ def email(booking: Booking, **changes: object) -> EmailLog:
     return EmailLog(**values)
 
 
+@pytest.mark.parametrize(
+    "template",
+    [
+        "request_received",
+        "approved",
+        "proposed",
+        "declined",
+        "request_expired",
+        "deposit_expired",
+    ],
+)
+def test_approval_templates_are_allowed(
+    db_session: Session, booking: Booking, template: str
+) -> None:
+    db_session.add(email(booking, template=template))
+    db_session.flush()
+
+
 def test_second_reminder_for_a_booking_is_rejected(db_session: Session, booking: Booking) -> None:
     db_session.add(email(booking))
     db_session.flush()
