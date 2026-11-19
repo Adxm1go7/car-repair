@@ -765,3 +765,18 @@ button.entry {
   margin: 0;
   font-weight: 600;
 }
+
+.bay-out-of-use {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 0.85em;
+  font-weight: 400;
+}
+
+.clash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 1.2em;
+}

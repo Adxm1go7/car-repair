@@ -64,7 +64,10 @@ function DayGrid({ schedule, day, placed, onSelectBlock }: ViewProps): JSX.Eleme
       </div>
       {schedule.bays.map((bay) => (
         <section key={bay.id} className="day-bay" aria-label={bay.name}>
-          <h2>{bay.name}</h2>
+          <h2>
+            {bay.name}
+            {!bay.active && <span className="bay-out-of-use">Out of use</span>}
+          </h2>
           <div className="day-bay-body" style={{ height }}>
             {day.breaks.map((b) => (
               <div
@@ -134,7 +137,7 @@ function DayList({ schedule, day, placed, onSelectBlock }: ViewProps): JSX.Eleme
             className="staff-button staff-button-quiet"
             onClick={() => setChosen(i)}
           >
-            {b.name}
+            {b.active ? b.name : `${b.name} (out of use)`}
           </button>
         ))}
       </div>

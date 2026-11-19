@@ -4,6 +4,7 @@ import type {
   AdminService,
   AuditPage,
   BayType,
+  Clash,
   Message,
   NewService,
   Schedule,
@@ -235,4 +236,26 @@ export function fetchBayTypes(): Promise<StaffResult<BayType[]>> {
 
 export function fetchAdminBays(): Promise<StaffResult<AdminBay[]>> {
   return staffRequest<AdminBay[]>(`${SETTINGS}/bays`)
+}
+
+/** A 409 means the name is already used; its detail says so. */
+export function addBay(bay: { name: string; bay_type_id: number }): Promise<StaffResult<AdminBay>> {
+  return staffRequest<AdminBay>(`${SETTINGS}/bays`, post(bay))
+}
+
+/** Rename, or take out of use / put back. Out of use is refused with a 409 listing the
+ * bookings in the way (see `clashesOf`); a name already used is a 409 with a detail. */
+export function updateBay(id: number, change: { name: string } | { active: boolean }): Promise<StaffResult<AdminBay>> {
+  return staffRequest<AdminBay>(`${SETTINGS}/bays/${id}`, post(change, 'PATCH'))
+}
+
+/** A 409 means the name is already used. */
+export function addBayType(name: string): Promise<StaffResult<BayType>> {
+  return staffRequest<BayType>(`${SETTINGS}/bay-types`, post({ name }))
+}
+
+/** The bookings a 409 lists as in the way of a bay or hours change, or null for another 409. */
+export function clashesOf(body: unknown): Clash[] | null {
+  const parsed = body as { detail?: unknown; bookings?: unknown } | null
+  return parsed?.detail === 'clashes' && Array.isArray(parsed.bookings) ? (parsed.bookings as Clash[]) : null
 }

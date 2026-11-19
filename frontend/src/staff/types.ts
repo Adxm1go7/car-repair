@@ -15,7 +15,8 @@ export type BookingStatus =
   | 'no_show'
   | 'expired'
 
-export type ScheduleBay = { id: number; slug: string; name: string; bay_type: string }
+/** `active` false: out of use, listed only on days where it has bookings or blocks. */
+export type ScheduleBay = { id: number; slug: string; name: string; bay_type: string; active: boolean }
 
 /** One day's opening, as garage-local "HH:MM". open/close are null on a closed day. */
 export type ScheduleDay = {
@@ -146,3 +147,7 @@ export type BayType = { id: number; slug: string; name: string }
 
 /** GET /api/staff/settings/bays */
 export type AdminBay = { id: number; slug: string; name: string; bay_type_id: number; bay_type: string; active: boolean }
+
+/** A booking in the way of a settings change. `start` is garage-local ISO; `held` means a
+ * customer is paying for it right now, so it clears by itself in a few minutes. */
+export type Clash = { reference: string; start: string; bay: string; held: boolean }

@@ -29,8 +29,8 @@ export function bookingItem(overrides: Partial<ScheduleBooking> = {}): ScheduleB
 export const DAY_SCHEDULE: Schedule = {
   timezone: 'Europe/London',
   bays: [
-    { id: 1, slug: 'mot-bay', name: 'MOT bay', bay_type: 'MOT' },
-    { id: 2, slug: 'bay-1', name: 'Bay 1', bay_type: 'General' },
+    { id: 1, slug: 'mot-bay', name: 'MOT bay', bay_type: 'MOT', active: true },
+    { id: 2, slug: 'bay-1', name: 'Bay 1', bay_type: 'General', active: true },
   ],
   days: [openDay('2026-11-17')],
   items: [
