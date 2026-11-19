@@ -100,11 +100,12 @@ def decline_enquiry(
 ) -> Enquiry:
     """Decline the enquiry and email the customer, with the reason if there is one. Raises
     LookupError or EnquiryNotNew."""
+    staff_id = staff.id  # read first: loading it mid-change would flush a half-made row
     enquiry = _locked_new(session, enquiry_id)
     enquiry.status = "declined"
     enquiry.decline_reason = reason
     enquiry.handled_at = now
-    enquiry.handled_by = staff.id
+    enquiry.handled_by = staff_id
     session.flush()
     queue_enquiry_email(session, "enquiry_declined", enquiry, {"reason": reason})
     record_audit(
