@@ -1,4 +1,4 @@
-"""Holding a slot, moving it on to payment, and releasing it.
+"""Holding a slot, moving it on to payment (or sending it as a request), and releasing it.
 
 Routes call these; they call the repositories.
 
@@ -14,7 +14,9 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.bookings.approval import needs_approval
 from app.bookings.rules import hash_token, new_hold_token, new_reference, token_matches
+from app.email.queue import queue_email
 from app.models import Booking, BookingItem, Payment, Service
 from app.payments.provider import PaymentProvider, PaymentUnavailable
 from app.payments.service import close_open_deposit, complete_deposit
@@ -116,6 +118,23 @@ class AlreadyConfirmed(Exception):
     """The booking is confirmed (paid), so a hold action can't change it."""
 
 
+class NeedsApproval(Exception):
+    """A needs-approval visit is sent as a request, not paid for straight away."""
+
+
+class NoApprovalNeeded(Exception):
+    """An instant visit is paid for, not sent as a request."""
+
+
+class AlreadySent(Exception):
+    """The request has been sent already: the hold is a request now."""
+
+
+def is_request(booking: Booking) -> bool:
+    """A visit with a needs-approval service. A service's approval mode never changes."""
+    return needs_approval([item.service for item in booking.items])
+
+
 @dataclass(frozen=True)
 class CustomerDetails:
     """Already cleaned by the `clean_*` rules."""
@@ -187,6 +206,8 @@ def start_checkout(
     booking = _locked(session, reference, token)
     if booking.status == "confirmed":
         raise AlreadyConfirmed
+    if is_request(booking):
+        raise NeedsApproval
     if hold_has_expired(booking, now):
         release_hold(session, booking)
         if _close_quietly(session, provider, booking, now) is not None:
@@ -241,6 +262,45 @@ def start_checkout(
         expires_in_seconds=payment_hold_minutes * 60,
         amount_pence=amount_pence,
     )
+
+
+def send_request(
+    session: Session,
+    reference: str,
+    token: str,
+    details: CustomerDetails,
+    now: datetime,
+    *,
+    deadline_for: Callable[[datetime], datetime],
+) -> Booking:
+    """Save the details and turn the hold into a request for staff to answer, keeping its
+    time until `deadline_for(start)`. Queues the "request received" email.
+
+    Raises HoldNotFound, NoApprovalNeeded, HoldExpired (the caller must commit the release)
+    or AlreadySent."""
+    booking = _locked(session, reference, token)
+    if not is_request(booking):
+        raise NoApprovalNeeded
+    if hold_has_expired(booking, now):
+        release_hold(session, booking)
+        raise HoldExpired
+    if booking.status == "expired":
+        raise HoldExpired
+    if booking.status != "held":
+        raise AlreadySent
+
+    booking.customer_name = details.name
+    booking.customer_phone = details.phone
+    booking.customer_email = details.email
+    booking.car_registration = details.registration
+    booking.car_make = details.make
+    booking.car_model = details.model
+    booking.notes = details.notes
+    booking.status = "pending_approval"
+    booking.hold_expires_at = deadline_for(booking.start_at)
+    session.flush()
+    queue_email(session, "request_received", booking)
+    return booking
 
 
 def hold_status(

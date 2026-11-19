@@ -123,9 +123,10 @@ def test_buffer_past_midnight_respects_next_days_reservation(
 
 
 def test_needs_approval_services_get_slots(client: TestClient) -> None:
-    body = get(client, "clutch-replacement").json()
+    body = get(client, "clutch-replacement", day="2026-11-11").json()
+    assert body["needs_approval"] is True
     assert len(body["slots"]) == 8
-    assert body["slots"][0]["end"] == "2026-11-10T14:00:00+00:00"
+    assert body["slots"][0]["end"] == "2026-11-11T14:00:00+00:00"
 
 
 # --- validation -----------------------------------------------------------------------

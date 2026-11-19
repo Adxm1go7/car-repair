@@ -11,6 +11,7 @@ from pydantic import AfterValidator, AwareDatetime, BaseModel, StringConstraints
 from sqlalchemy.orm import Session
 
 from app.api.validation import check_bookable_date, reject, resolve_services
+from app.bookings.approval import enough_notice, needs_approval, request_deadline
 from app.bookings.rules import (
     clean_email,
     clean_make_or_model,
@@ -21,12 +22,16 @@ from app.bookings.rules import (
 )
 from app.bookings.service import (
     AlreadyConfirmed,
+    AlreadySent,
     CustomerDetails,
     HoldExpired,
     HoldNotFound,
+    NeedsApproval,
+    NoApprovalNeeded,
     cancel_hold,
     create_hold,
     hold_status,
+    send_request,
     start_checkout,
     summary_services,
 )
@@ -37,6 +42,7 @@ from app.payments.deps import get_payment_provider
 from app.payments.provider import PaymentProvider, PaymentUnavailable
 from app.repositories.availability import (
     SettingsUnavailable,
+    load_approval_rules,
     load_booking_window_days,
     load_deposit_pence,
     load_hold_minutes,
@@ -96,11 +102,16 @@ def hold(body: HoldIn, session: SessionDep, now: NowDep) -> HoldOut:
         raise HTTPException(status_code=503, detail="Booking unavailable") from error
 
     services = resolve_services(session, body.services)
-    if any(service.approval_mode != "instant" for service in services):
-        raise reject("This service needs approval — please call us")
     if len({service.required_bay_type_id for service in services}) > 1:
         raise reject("These services can't be booked together — please book them separately")
     check_bookable_date(body.start.astimezone(policy.zone).date(), now, policy.zone, window_days)
+    if needs_approval(services):
+        try:
+            rules = load_approval_rules(session)
+        except SettingsUnavailable as error:
+            raise HTTPException(status_code=503, detail="Booking unavailable") from error
+        if not enough_notice(now, body.start, rules):
+            raise reject("Requests need 24 hours' notice — please choose a later time")
 
     try:
         created = create_hold(session, services, body.start, now, hold_minutes)
@@ -237,12 +248,57 @@ def checkout(
     except AlreadyConfirmed as error:
         session.commit()  # a payment that got in may have just been completed
         raise HTTPException(status_code=409, detail="This booking is already paid") from error
+    except NeedsApproval as error:
+        raise HTTPException(status_code=409, detail="This visit needs approval") from error
     except PaymentUnavailable as error:
         session.rollback()  # nothing saved: the hold keeps its old expiry
         log.warning("checkout for %s: payment provider failed: %s", reference, error)
         raise HTTPException(status_code=503, detail=UNAVAILABLE) from error
     session.commit()
     return CheckoutOut(**asdict(result))
+
+
+@router.post("/holds/{reference}/request", status_code=201)
+def request(
+    reference: str, body: CheckoutIn, session: SessionDep, now: NowDep
+) -> BookingSummaryOut:
+    """Save the details and send a needs-approval visit to staff. Nothing is paid yet."""
+    _check_reference(reference)
+    try:
+        policy = load_policy(session)
+        rules = load_approval_rules(session)
+    except SettingsUnavailable as error:
+        raise HTTPException(status_code=503, detail="Booking unavailable") from error
+    details = CustomerDetails(
+        name=body.name,
+        phone=body.phone,
+        email=body.email,
+        registration=body.registration,
+        make=body.make,
+        model=body.model,
+        notes=body.notes,
+    )
+    try:
+        booking = send_request(
+            session,
+            reference,
+            body.hold_token,
+            details,
+            now,
+            deadline_for=lambda start: request_deadline(now, start, rules, policy.cutoff_minutes),
+        )
+    except HoldNotFound as error:
+        raise NOT_FOUND from error
+    except HoldExpired as error:
+        session.commit()  # keep the release send_request just made
+        raise HTTPException(status_code=410, detail="Your hold has expired") from error
+    except NoApprovalNeeded as error:
+        raise HTTPException(status_code=409, detail="This visit doesn't need approval") from error
+    except AlreadySent as error:
+        raise HTTPException(status_code=409, detail="This request has been sent") from error
+    summary = booking_summary(session, booking, policy.zone)
+    session.commit()
+    return summary
 
 
 @router.post("/holds/{reference}/status")

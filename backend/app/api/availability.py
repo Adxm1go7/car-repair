@@ -1,5 +1,6 @@
 """Public, read-only availability: which start times are free for some services on one day."""
 
+from dataclasses import replace
 from datetime import date, datetime
 from typing import Annotated, Literal
 
@@ -8,11 +9,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.validation import check_bookable_date, resolve_services
+from app.bookings.approval import needs_approval
 from app.clock import utc_now
 from app.db import get_session
 from app.repositories.availability import (
     SettingsUnavailable,
     day_availability,
+    load_approval_rules,
     load_booking_window_days,
     load_policy,
 )
@@ -34,6 +37,8 @@ class AvailabilityOut(BaseModel):
     timezone: str
     duration_minutes: int
     unavailable_reason: Literal["mixed_bay_types"] | None
+    # A request: staff check it before the customer pays, so it needs more notice.
+    needs_approval: bool
     slots: list[SlotOut]
 
 
@@ -53,6 +58,13 @@ def availability(
 
     found = resolve_services(session, services)
     check_bookable_date(day, now, policy.zone, window_days)
+    request = needs_approval(found)
+    if request:
+        try:
+            lead_minutes = load_approval_rules(session).lead_hours * 60
+        except SettingsUnavailable as error:
+            raise HTTPException(status_code=503, detail="Availability unavailable") from error
+        policy = replace(policy, cutoff_minutes=max(policy.cutoff_minutes, lead_minutes))
 
     result = day_availability(session, found, day, now, policy)
     return AvailabilityOut(
@@ -60,5 +72,6 @@ def availability(
         timezone=policy.zone.key,
         duration_minutes=result.duration_minutes,
         unavailable_reason=result.unavailable_reason,
+        needs_approval=request,
         slots=[SlotOut(start=s.start.isoformat(), end=s.end.isoformat()) for s in result.slots],
     )
