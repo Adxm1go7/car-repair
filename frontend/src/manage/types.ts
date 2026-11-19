@@ -8,6 +8,8 @@ export type MyBooking = {
   can_cancel: boolean
   refund_if_cancelled: boolean
   free_cancellation_until: string
+  /** A request: when the garage will answer by. An approval: when the deposit is due by. */
+  deadline?: string | null
 }
 
 export type RefusalReason = 'too_late' | 'not_cancellable'
