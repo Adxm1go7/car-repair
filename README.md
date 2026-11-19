@@ -185,6 +185,19 @@ In CI the `compose` job runs the same test. It reads `STRIPE_SECRET_KEY` and
 missing. GitHub doesn't pass secrets to pull requests from forks or to Dependabot, so that
 check fails there.
 
+## Security
+
+- **Rate limits:** the public forms (picking a time, paying, sending a request or an enquiry,
+  and cancelling from a booking link) are rate-limited per visitor IP, counted in the database.
+  A visitor over the limit gets "Too many attempts". The limits are off when `ENVIRONMENT` is
+  `development`, which is what the local stack runs as, so local testing never trips them.
+- **Honeypot:** the details step and the enquiry form carry a hidden field. A bot that fills it
+  in gets nowhere.
+- **Headers:** nginx sends the security headers, including a content policy that allows only
+  the site itself and Stripe ([frontend/security-headers.conf](frontend/security-headers.conf)).
+- **Scans:** the CI `scan` job audits the Python and npm packages and scans the built images
+  with Trivy. Allowed exceptions go in `.trivyignore`, each with its reason.
+
 ## Documentation
 
 - [Specification](docs/SPEC.md)

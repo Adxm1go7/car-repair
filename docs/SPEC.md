@@ -282,10 +282,10 @@ These are the items that usually come only with experience. Each should map to a
 - [ ] Staff passwords hashed with a modern algorithm, with login throttling and secure session or token handling.
 - [ ] Role check on every staff endpoint, tested for each role.
 - [x] Token links are random, hashed in storage, expiring, and limited to one booking.
-- [ ] Rate limiting and a honeypot or CAPTCHA on the booking and enquiry forms.
+- [x] Rate limiting and a honeypot or CAPTCHA on the booking and enquiry forms.
 - [ ] Input validation on every field, with output escaping in emails and pages.
 - [ ] CORS, security headers and HTTPS settings in the deployed environment.
-- [ ] Dependency and container image scanning in CI.
+- [x] Dependency and container image scanning in CI.
 - [ ] No secrets in the repository; separate configuration per environment.
 
 **Privacy**

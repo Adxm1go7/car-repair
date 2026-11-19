@@ -43,6 +43,40 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  scan:
+    # Known vulnerabilities: any with a fix in the Python packages; high or critical with a
+    # fix in the npm packages and the built images. Allowed exceptions go in .trivyignore
+    # (images) or as --ignore-vuln flags here (Python), each with its reason.
+    runs-on: ubuntu-latest
+    env:
+      TRIVY_IMAGE: aquasec/trivy:0.65.0
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - name: Python packages
+        working-directory: backend
+        run: |
+          uv export --frozen --no-dev --format requirements-txt > requirements.txt
+          uvx pip-audit --requirement requirements.txt --strict
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: npm packages (frontend)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: npm packages (e2e)
+        working-directory: e2e
+        run: npm audit --omit=dev --audit-level=high
+      - name: Build the images
+        run: docker compose build api web
+      - name: Scan the images
+        run: |
+          for image in $(docker compose config --images | grep -E -- '-(api|web)$'); do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/src:ro" \
+              "$TRIVY_IMAGE" image --quiet --severity HIGH,CRITICAL --ignore-unfixed \
+              --ignorefile /src/.trivyignore --exit-code 1 "$image"
+          done
+
   compose:
     needs: [backend, frontend]
     runs-on: ubuntu-latest
@@ -88,6 +122,15 @@ jobs:
           if ! kill -0 $! 2>/dev/null; then cat stripe-listen.log; exit 1; fi
       - run: docker compose up --build -d --wait --wait-timeout 180
       - run: curl -fsS http://localhost:8080/api/health | grep '"status":"ok"'
+      - name: The site sends its security headers
+        run: |
+          for url in http://localhost:8080/ http://localhost:8080/api/services; do
+            headers=$(curl -fsS -D - -o /dev/null "$url")
+            for header in Content-Security-Policy X-Frame-Options X-Content-Type-Options \
+                Referrer-Policy Permissions-Policy; do
+              echo "$headers" | grep -qi "^$header:" || { echo "$url is missing $header"; exit 1; }
+            done
+          done
       - run: curl -fsS http://localhost:8080/api/services | grep '"slug":"mot-test"'
       - name: Availability returns slots for tomorrow
         run: |

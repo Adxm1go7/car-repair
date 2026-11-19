@@ -7,7 +7,9 @@ RUN uv sync --frozen --no-dev
 
 # Runtime stage: just Python, the virtualenv and our code.
 FROM python:3.13-slim-bookworm
-RUN useradd --create-home --uid 1000 app
+# pip isn't used at runtime, and its bundled libraries (urllib3, msgpack) lag behind their
+# security fixes, so leave it out.
+RUN useradd --create-home --uid 1000 app && python -m pip uninstall --yes pip
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY alembic.ini ./
