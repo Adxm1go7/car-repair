@@ -2,6 +2,7 @@
 answering online requests (the queue, approve, propose another time, decline)."""
 
 import logging
+from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Annotated, Final
 from zoneinfo import ZoneInfo
@@ -23,7 +24,7 @@ from app.bookings.rules import (
     clean_registration,
 )
 from app.email.render import format_moment
-from app.models import AuditEntry, Booking
+from app.models import AuditEntry, Booking, Enquiry, Service
 from app.payments.deps import get_payment_provider
 from app.payments.provider import PaymentProvider, PaymentUnavailable
 from app.repositories.availability import (
@@ -75,6 +76,14 @@ class PhoneBookingIn(BaseModel):
     notes: Annotated[str | None, AfterValidator(clean_notes)] = None
 
 
+def check_new_booking(services: Sequence[Service], start: datetime, now: datetime) -> None:
+    """What every staff-made booking must be: one kind of bay, and not in the past."""
+    if len({service.required_bay_type_id for service in services}) > 1:
+        raise reject("These services can't be booked together — please book them separately")
+    if start < now:
+        raise reject("That time has already passed")
+
+
 class CreatedOut(BaseModel):
     reference: str
 
@@ -86,10 +95,7 @@ def create_booking(
     """Book a customer who phoned. Any active service, needs-approval ones included: staff
     booking it is the approval."""
     services = resolve_services(session, body.services)
-    if len({service.required_bay_type_id for service in services}) > 1:
-        raise reject("These services can't be booked together — please book them separately")
-    if body.start < now:
-        raise reject("That time has already passed")
+    check_new_booking(services, body.start, now)
     details = PhoneDetails(
         name=body.name,
         phone=body.phone,
@@ -153,6 +159,7 @@ class StaffBookingOut(BaseModel):
     deposit_status: str
     # A request: when it must be answered by. An approval: when the deposit is due by.
     deadline: str | None
+    enquiry_id: int | None  # the enquiry this booking was made from
     actions: list[Action]
     starts_on_another_day: bool
     history: list[HistoryOut]
@@ -172,7 +179,7 @@ class StatusIn(BaseModel):
     action: StatusAction
 
 
-def _zone(session: Session) -> ZoneInfo:
+def zone_or_503(session: Session) -> ZoneInfo:
     try:
         return load_policy(session).zone
     except SettingsUnavailable as error:
@@ -192,11 +199,12 @@ def _find(session: Session, reference: str) -> Booking:
     return booking
 
 
-def _history_text(entry: AuditEntry, zone: ZoneInfo) -> str:
+def _history_text(entry: AuditEntry, zone: ZoneInfo, source: str) -> str:
     who = entry.staff_user.name if entry.staff_user is not None else "Setup"
     before, after = entry.before or {}, entry.after or {}
     if entry.action == "booking.create":
-        text = f"Booked by phone by {who}"
+        how = "from an enquiry" if source == "enquiry" else "by phone"
+        text = f"Booked {how} by {who}"
     elif entry.action == "booking.move":
         was = datetime.fromisoformat(before["start"])
         text = f"Moved from {format_moment(was, zone).replace(',', '')} by {who}"
@@ -221,10 +229,16 @@ def staff_booking_out(
     entries = session.scalars(
         select(AuditEntry)
         .where(AuditEntry.booking_reference == booking.reference)
+        # Booking an enquiry in is told by its booking.create line; the enquiry's own entry
+        # carries the reference for the audit page only.
+        .where(AuditEntry.action != "enquiry.approve")
         .options(selectinload(AuditEntry.staff_user))
         .order_by(AuditEntry.at, AuditEntry.id)
     )
-    history = [HistoryOut(at=local_iso(e.at, zone), text=_history_text(e, zone)) for e in entries]
+    history = [
+        HistoryOut(at=local_iso(e.at, zone), text=_history_text(e, zone, booking.source))
+        for e in entries
+    ]
     if booking.source == "online" and booking.confirmed_at is not None:
         history.insert(
             0, HistoryOut(at=local_iso(booking.confirmed_at, zone), text="Booked online")
@@ -250,6 +264,7 @@ def staff_booking_out(
         if booking.status in ("pending_approval", "awaiting_deposit")
         and booking.hold_expires_at is not None
         else None,
+        enquiry_id=session.scalar(select(Enquiry.id).where(Enquiry.booking_id == booking.id)),
         actions=booking_actions(booking.status, booking.start_at, booking.status_changed_at, now),
         starts_on_another_day=starts_on_another_day(booking.start_at, now, zone),
         history=history,
@@ -258,7 +273,7 @@ def staff_booking_out(
 
 @router.get("/bookings/{reference}")
 def booking_detail(reference: str, session: SessionDep, now: NowDep) -> StaffBookingOut:
-    zone = _zone(session)
+    zone = zone_or_503(session)
     return staff_booking_out(session, _find(session, reference), now, zone)
 
 
@@ -270,7 +285,7 @@ def move_options(
     day: Annotated[date, Query(alias="date")],
 ) -> StaffAvailabilityOut:
     """Where this booking could go on `day`: its own time isn't counted as taken."""
-    zone = _zone(session)
+    zone = zone_or_503(session)
     booking = _find(session, reference)
     result = staff_free_times(
         session, infos_for_booking(booking), day, now, exclude_reservation_id=booking.reservation_id
@@ -296,7 +311,7 @@ def _refused(session: Session, detail: str) -> HTTPException:
 def move(
     reference: str, body: MoveIn, staff: StaffDep, session: SessionDep, now: NowDep
 ) -> StaffBookingOut:
-    zone = _zone(session)
+    zone = zone_or_503(session)
     try:
         booking = move_booking(session, staff, reference, body.start, body.bay_id, body.reason, now)
     except LookupError as error:
@@ -318,7 +333,7 @@ def cancel(
     now: NowDep,
     provider: ProviderDep,
 ) -> StaffBookingOut:
-    zone = _zone(session)
+    zone = zone_or_503(session)
     hours = load_free_cancellation_hours(session)
     try:
         booking = garage_cancel(session, provider, staff, reference, body.reason, now, hours)
@@ -338,7 +353,7 @@ def cancel(
 def set_status(
     reference: str, body: StatusIn, staff: StaffDep, session: SessionDep, now: NowDep
 ) -> StaffBookingOut:
-    zone = _zone(session)
+    zone = zone_or_503(session)
     try:
         booking = change_status(session, staff, reference, body.action, now)
     except LookupError as error:
@@ -366,7 +381,7 @@ class RequestOut(BaseModel):
 def requests(session: SessionDep, now: NowDep) -> list[RequestOut]:
     """Requests waiting for an answer, oldest first. One past its deadline is left out: it
     has already lapsed, and the worker is about to release it."""
-    zone = _zone(session)
+    zone = zone_or_503(session)
     waiting = session.scalars(
         select(Booking)
         .where(Booking.status == "pending_approval", ~expired_hold(now))
@@ -393,7 +408,7 @@ def _settings_or_503(error: SettingsUnavailable) -> HTTPException:
 
 @router.post("/bookings/{reference}/approve")
 def approve(reference: str, staff: StaffDep, session: SessionDep, now: NowDep) -> StaffBookingOut:
-    zone = _zone(session)
+    zone = zone_or_503(session)
     try:
         booking = approve_booking(session, staff, reference, now)
     except LookupError as error:
@@ -418,7 +433,7 @@ def propose(
 ) -> StaffBookingOut:
     """Move a request (or an unpaid approval) to a time agreed on the phone, and ask for
     the deposit for it."""
-    zone = _zone(session)
+    zone = zone_or_503(session)
     try:
         booking = propose_booking(
             session, provider, staff, reference, body.start, body.bay_id, body.reason, now
@@ -444,7 +459,7 @@ def propose(
 def decline(
     reference: str, body: CancelIn, staff: StaffDep, session: SessionDep, now: NowDep
 ) -> StaffBookingOut:
-    zone = _zone(session)
+    zone = zone_or_503(session)
     try:
         booking = decline_booking(session, staff, reference, body.reason, now)
     except LookupError as error:

@@ -11,6 +11,7 @@ from app.models.booking import (
 from app.models.booking_link import BookingLink
 from app.models.catalogue import Bay, BayType, OpeningHours, OpeningHoursBreak, Service, Timetable
 from app.models.email import EMAIL_STATUSES, EMAIL_TEMPLATES, EmailLog
+from app.models.enquiry import ENQUIRY_STATUSES, Enquiry
 from app.models.payment import Payment, PaymentEvent
 from app.models.reservation import Reservation
 from app.models.setting import Setting
@@ -44,6 +45,8 @@ __all__ = [
     "EMAIL_STATUSES",
     "EMAIL_TEMPLATES",
     "EmailLog",
+    "ENQUIRY_STATUSES",
+    "Enquiry",
     "OpeningHours",
     "OpeningHoursBreak",
     "Payment",

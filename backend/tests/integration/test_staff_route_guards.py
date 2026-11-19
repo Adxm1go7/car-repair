@@ -27,6 +27,7 @@ PATH_VALUES = {
     "service_id": "1",
     "bay_id": "1",
     "timetable_id": "1",
+    "enquiry_id": "1",
 }
 WRITES = {"POST", "PATCH", "PUT", "DELETE"}
 

@@ -7,7 +7,14 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.email.message import EmailTemplate
-from app.email.render import EmailContext, StaffEmailContext, render_email, render_staff_email
+from app.email.render import (
+    EmailContext,
+    EnquiryEmailContext,
+    StaffEmailContext,
+    render_email,
+    render_enquiry_email,
+    render_staff_email,
+)
 
 LONDON = ZoneInfo("Europe/London")
 START = datetime(2026, 11, 20, 9, tzinfo=UTC)  # Fri 20 Nov, 09:00 in London (GMT)
@@ -293,3 +300,50 @@ def test_released_approval_paid_late_says_the_payment_is_refunded() -> None:
     for body in (message.text, message.html):
         assert "Your £20 payment came in after the time was released, so we're refunding it" in body
         assert "Nothing has been charged" not in body
+
+
+ENQUIRY = EnquiryEmailContext(
+    customer_name="Sam Driver",
+    registration="AB12CDE",
+    make="Ford",
+    model="Focus",
+    description="Rattle from the front left when braking",
+    reason=None,
+    garage=GARAGE,
+)
+
+
+def test_render_enquiry_received() -> None:
+    message = render_enquiry_email("enquiry_received", "sam@example.com", ENQUIRY)
+    assert message.subject == "We've got your enquiry"
+    assert message.to == "sam@example.com"
+    for body in (message.text, message.html):
+        assert "Sam Driver" in body
+        assert "AB12CDE · Ford Focus" in body
+        assert "Rattle from the front left when braking" in body
+        assert "/booking/" not in body
+
+
+def test_render_enquiry_declined_with_and_without_reason() -> None:
+    with_reason = replace(ENQUIRY, reason="Too busy this month")
+    message = render_enquiry_email("enquiry_declined", "sam@example.com", with_reason)
+    assert message.subject == "We can't take on your enquiry"
+    assert "Reason: Too busy this month" in message.text
+    assert "Too busy this month" in message.html
+    without = render_enquiry_email("enquiry_declined", "sam@example.com", ENQUIRY)
+    assert "Reason" not in without.text
+    assert "Reason" not in without.html
+    for body in (message.text, message.html, without.text, without.html):
+        assert "call us on 000 111" in body
+        assert "/booking/" not in body
+
+
+def test_enquiry_email_escapes_description() -> None:
+    sneaky = replace(
+        ENQUIRY, customer_name="<b>Sam</b>", description="<script>alert(1)</script> noise"
+    )
+    message = render_enquiry_email("enquiry_received", "sam@example.com", sneaky)
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in message.html
+    assert "<script>" not in message.html
+    assert "&lt;b&gt;Sam&lt;/b&gt;" in message.html
+    assert "<script>alert(1)</script>" in message.text  # plain text is never escaped

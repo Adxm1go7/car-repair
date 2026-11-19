@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { CSSProperties, JSX } from 'react'
 import { Link } from 'react-router'
-import { DEPOSIT_LABEL, FAILED, NO_EMAIL, STATUS_LABEL } from '../labels.ts'
+import { FAILED, NO_DEPOSIT_NOTE, NO_EMAIL, STATUS_LABEL } from '../labels.ts'
 import type { ScheduleBlock, ScheduleItem } from '../types.ts'
 import { removeBlock } from '../api.ts'
 import { localParts, shortDay, timeRange } from './layout.ts'
@@ -57,7 +57,7 @@ export function ScheduleEntry({ item, zone, bayName, style, onSelectBlock }: Ent
       <span className="entry-time">{`${time} · ${item.registration}`}</span>
       <span>{item.services.join(', ')}</span>
       <span className="entry-status">{STATUS_LABEL[item.status]}</span>
-      {item.source === 'phone' && <span className="entry-note">{DEPOSIT_LABEL.not_required}</span>}
+      {item.source !== 'online' && <span className="entry-note">{NO_DEPOSIT_NOTE[item.source]}</span>}
       {!item.has_email && <span className="entry-note">{NO_EMAIL}</span>}
       {bay}
     </Link>

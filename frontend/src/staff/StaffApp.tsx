@@ -9,6 +9,9 @@ import { SetPasswordPage } from './SetPasswordPage.tsx'
 import { AuditPage } from './admin/AuditPage.tsx'
 import { TeamPage } from './admin/TeamPage.tsx'
 import { BookingDetailPage } from './booking/BookingDetailPage.tsx'
+import { EnquiriesPage } from './enquiries/EnquiriesPage.tsx'
+import { BookEnquiryPage } from './enquiries/BookEnquiryPage.tsx'
+import { EnquiryPage } from './enquiries/EnquiryPage.tsx'
 import { NewBlockPage } from './forms/NewBlockPage.tsx'
 import { NewBookingPage } from './forms/NewBookingPage.tsx'
 import { RequestsPage } from './requests/RequestsPage.tsx'
@@ -108,6 +111,9 @@ export function StaffApp(): JSX.Element {
         <Route path="blocks/new" element={<NewBlockPage />} />
         <Route path="bookings/:reference" element={<BookingDetailPage />} />
         <Route path="requests" element={<RequestsPage />} />
+        <Route path="enquiries" element={<EnquiriesPage />} />
+        <Route path="enquiries/:id" element={<EnquiryPage />} />
+        <Route path="enquiries/:id/book" element={<BookEnquiryPage />} />
         <Route
           path="team"
           element={

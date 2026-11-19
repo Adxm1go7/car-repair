@@ -1,0 +1,10 @@
+{% extends "_enquiry_layout.html.j2" %}
+{% block content %}
+<p>We're sorry: {{ c.garage.name }} can't take on the work you asked about.</p>
+{% if c.reason %}
+<p>Reason: {{ c.reason }}</p>
+{% endif %}
+{% endblock %}
+{% block after %}
+<p>If you'd like to talk it through, please call us on {{ c.garage.phone }}.</p>
+{% endblock %}

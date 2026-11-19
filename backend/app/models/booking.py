@@ -49,12 +49,12 @@ DEPOSIT_STATUSES: Final[tuple[str, ...]] = (
     "refunded",
     "refund_failed",
     "waived",
-    "not_required",  # phone bookings: staff book them in with no deposit
+    "not_required",  # phone and enquiry bookings: staff book them in with no deposit
 )
 
 _STATUS_LIST = ", ".join(f"'{status}'" for status in BOOKING_STATUSES)
 _DEPOSIT_LIST = ", ".join(f"'{status}'" for status in DEPOSIT_STATUSES)
-BOOKING_SOURCES: Final[tuple[str, ...]] = ("online", "phone")
+BOOKING_SOURCES: Final[tuple[str, ...]] = ("online", "phone", "enquiry")
 
 _SOURCE_LIST = ", ".join(f"'{source}'" for source in BOOKING_SOURCES)
 # A phone booking's email is optional; every other detail is always needed.
@@ -89,7 +89,7 @@ class Booking(Base):
             name="confirmed_has_deposit",
         ),
         CheckConstraint(
-            "deposit_status <> 'not_required' OR source = 'phone'",
+            "deposit_status <> 'not_required' OR source IN ('phone', 'enquiry')",
             name="not_required_only_by_phone",
         ),
         CheckConstraint(f"source IN ({_SOURCE_LIST})", name="source_valid"),

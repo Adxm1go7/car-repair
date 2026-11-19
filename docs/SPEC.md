@@ -34,7 +34,7 @@ These decisions are settled. Rows marked *proposed* are my defaults that you acc
 | Opening hours | Open all week, shorter hours on Saturday and Sunday. *Proposed*: Mon to Fri 08:00 to 17:30, Sat 09:00 to 14:00, Sun 10:00 to 13:00, all editable by the admin. |
 | Services | Public prices, fixed or a range. Each has a duration, a required bay type, and an instant or needs-approval flag. |
 | Multi-service visits | Allowed. If any selected service needs approval, the whole booking goes to staff. |
-| Unknown issues | A separate enquiry flow with structured fields and a description, no photos. Staff approve, decline or ask for more information (photos dropped Nov 19). |
+| Unknown issues | A separate enquiry flow: contact and car details plus a free-text description, no photos, symptoms or urgency fields. Staff approve with a slot or decline; any questions are asked by phone (simplified Nov 19). |
 | Deposit | Flat £20 per booking in Stripe test mode, balance paid in person. Refundable when cancelled 24 hours or more ahead. For approval bookings it is requested after approval. |
 | Notifications | Email only in v1: confirmation, reminder, cancellation, garage-initiated change. SMS can be added later behind the same interface. There is no "car ready" message: when the work is done, the mechanic phones the customer if they've gone away, and payment is settled outside the system (decided Nov 16). |
 | Garage-initiated changes | Staff phone the customer first, then cancel or move the booking, optionally giving a reason. Each change records who made it. The system emails the customer: a move gives the new time staff chose, and a cancellation refunds the deposit. A moved booking keeps its deposit and follows the normal refund rules: if the customer then cancels inside the free-cancellation period, the deposit isn't refunded, even though the garage did the moving. The garage is trusted to move bookings fairly (decided Nov 16). |
@@ -69,7 +69,7 @@ Version 1 is the complete demonstration. Everything in the second list is delibe
 
 - Public site: services page with prices, booking flow, issue-enquiry form, contact details.
 - Booking: pick one or more services, enter car details (registration, make, model, notes), choose an open slot, pay the deposit, receive a confirmation email.
-- Enquiry: structured fields (registration, make and model, symptoms, urgency) and a free-text description, with a staff approval queue.
+- Enquiry: contact details, registration, make and model, and a free-text description, with a staff approval queue.
 - Token self-service: view and cancel from an emailed link, cancelling only within the policy window. No customer rescheduling: they call the garage.
 - Back office: login, staff accounts, shared day and week schedule, phone bookings (no deposit, email optional), move and cancel, blocked time, job status, booking and enquiry management, service and price editing, opening hours and contact details.
 - Emails: confirmation, reminder, cancellation, garage-initiated change (move or cancel), staff invite and password reset.
@@ -100,9 +100,9 @@ Seven flows cover the whole product. Each should become at least one end-to-end 
 
 **3. Diagnosis enquiry (unknown issue)**
 
-1. The customer fills in the structured form (registration, make and model, symptoms, urgency) and describes the problem.
+1. The customer fills in the form (contact details, registration, make and model) and describes the problem in their own words.
 2. The enquiry appears in the staff queue as new.
-3. Staff reply by email to approve and offer a slot, ask for more information, or decline. An approved enquiry converts into a pending booking.
+3. Staff approve and offer a slot, or decline. Each outcome sends an email. An approved enquiry converts into a booking. If staff need more information they phone the customer, outside the app.
 
 **4. Customer self-service through the token link**
 
@@ -141,7 +141,7 @@ This is the conceptual model, not yet a schema. Customer details live on the boo
 | Block | bays (one or all), start, end, note, created by | Holidays, breakdowns, one-off closures. Removing one is audited. |
 | Booking | customer name, phone, email (optional for phone bookings), car registration, make, model, notes, bay, start, end, status, deposit status, source (online or phone), created by, token hash, expiry of hold | One continuous block in one bay. Deposit status includes `not_required` for phone bookings. |
 | BookingItem | booking, service, price at time of booking, duration at time of booking | Snapshots, so later price edits do not rewrite history. |
-| Enquiry | same car and contact fields, symptoms, urgency, description, status, linked booking | No photos (decided Nov 19). |
+| Enquiry | same car and contact fields, description, status, linked booking | No photos, symptoms or urgency (decided Nov 19). |
 | Payment | booking, provider reference, amount, kind (deposit or refund), status | Webhook events are stored to make handling idempotent. |
 | StaffUser | name, email, password hash, role, active, last login | Roles: admin, staff. A removed account is kept inactive so the audit log can still name it. |
 | StaffSession | staff user, token hash, created, last used, expires | Server-side login sessions, carried by a cookie. |
@@ -153,7 +153,7 @@ This is the conceptual model, not yet a schema. Customer details live on the boo
 
 **Booking statuses:** held, pending approval, awaiting deposit (approved, not paid yet), confirmed, in progress, completed, cancelled, no show, expired.
 
-**Enquiry statuses:** new, needs information, approved, declined, converted to booking.
+**Enquiry statuses:** new, converted to booking, declined.
 
 **Rules that belong in the model**
 
@@ -313,7 +313,7 @@ There is no deadline, so each milestone has a definition of done and the next on
 8. **Admin settings.** Editing services, bays, bay types, opening hours, breaks and contact details, with clashing changes refused until the bookings in the way are moved or cancelled. *Done when* an admin can make each kind of change from the Settings page; a clashing change (a bay out of use with bookings, or hours that leave bookings outside opening time) is refused with those bookings listed, and nothing changes; the public site and the staff schedule show the right hours for every date, across a change of timetable; every change is in the audit log; and flow 7 passes end to end in CI.
 9. **Approval bookings and enquiries**, split in two (Nov 19):
    - **9a. Approval bookings.** Online requests for needs-approval services, the staff Requests page, approve, propose another time and decline, and the deposit paid from the booking link. *Done when* flow 2 passes end to end in CI.
-   - **9b. Enquiries.** The enquiry form (no photos), the staff queue, approve, decline, ask for more information, and convert to a booking. *Done when* flow 3 passes end to end.
+   - **9b. Enquiries.** The enquiry form (description only, no photos), the staff queue, approve with a slot (converting to a booking), and decline. *Done when* flow 3 passes end to end.
 10. **Hardening and polish.** Rate limiting, accessibility pass, error pages, load test of the availability endpoint, security scans, documentation. *Done when* the checklist section is fully ticked.
 11. **Deployment.** Cloud environment from the same images, environment configuration, a seeded live demo, and a short walkthrough or recording. *Done when* the live demo passes the end-to-end suite.
 

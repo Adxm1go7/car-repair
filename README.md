@@ -50,7 +50,10 @@ email optional), move or cancel a booking (the customer is emailed, and a cancel
 refunds the deposit), block time, and move a job through in progress and completed, or mark a
 no show. Online requests for services that need approval wait on **Requests** (the menu shows
 how many): staff approve one, decline it, or phone the customer and propose another time, and
-the customer then pays the deposit from the link in their email. Admins can also invite staff, change roles, remove or restore access, send password
+the customer then pays the deposit from the link in their email. Customers who don't know
+what's wrong describe the problem from the services page, and it waits on **Enquiries** (the
+menu shows how many are new): staff phone the customer if they need to, then book it in (a
+confirmed booking with no deposit, emailed to the customer) or decline it. Admins can also invite staff, change roles, remove or restore access, send password
 resets (**Team**), and read the log of every staff change (**Audit**). Invite and reset emails
 land in Mailpit like the rest.
 
@@ -159,7 +162,9 @@ cancel it (checking the email and the refund). Flow 7 has the admin add a servic
 on the home page), hide it, be refused new hours that would close the day of a phone booking,
 then add and delete future hours that clash with nothing. Flow 2 has a customer request a
 diagnostic check without paying, staff approve it from the Requests page, and the customer pay
-the deposit from the link in the approval email. They need
+the deposit from the link in the approval email. Flow 3 has a customer send an enquiry,
+staff book it in from the Enquiries page, and the customer open the confirmed booking from
+the email; it needs no Stripe keys. The others need
 the stack running with Stripe test keys ([docs/stripe-setup.md](docs/stripe-setup.md)) and
 fail at once, with a clear message, in demo mode. Start the stack first:
 

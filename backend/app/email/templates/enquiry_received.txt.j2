@@ -1,0 +1,9 @@
+Hello {{ c.customer_name }},
+
+Thanks for telling {{ c.garage.name }} about the problem with your car. We'll look at it and get back to you by phone or email, usually within a working day.
+
+{% include "_enquiry.txt.j2" %}
+
+If it's urgent, please call us on {{ c.garage.phone }}.
+
+{% include "_footer.txt.j2" %}

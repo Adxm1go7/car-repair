@@ -11,6 +11,7 @@ from app.api import (
     availability,
     catalogue,
     demo_payments,
+    enquiries,
     health,
     holds,
     my_booking,
@@ -18,6 +19,7 @@ from app.api import (
     staff_auth,
     staff_blocks,
     staff_bookings,
+    staff_enquiries,
     staff_schedule,
     staff_settings,
     staff_team,
@@ -73,6 +75,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(availability.router, prefix="/api")
     app.include_router(holds.router, prefix="/api")
     app.include_router(my_booking.router, prefix="/api")
+    app.include_router(enquiries.router, prefix="/api")
     app.include_router(stripe_webhook.router, prefix="/api")
     app.include_router(staff_auth.public_router, prefix="/api")
     app.include_router(staff_auth.router, prefix="/api")
@@ -80,6 +83,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(staff_schedule.router, prefix="/api")
     app.include_router(staff_bookings.router, prefix="/api")
     app.include_router(staff_blocks.router, prefix="/api")
+    app.include_router(staff_enquiries.router, prefix="/api")
     app.include_router(staff_audit.router, prefix="/api")
     app.include_router(staff_settings.router, prefix="/api")
     if config.payment_provider == "demo":  # never with Stripe keys, so never in production

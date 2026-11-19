@@ -49,7 +49,7 @@ function describe(entry: AuditEntry): string {
   const account = text(entry.after, 'name') ?? text(entry.before, 'name') ?? 'an account'
   switch (entry.action) {
     case 'booking.create':
-      return 'Phone booking'
+      return text(entry.after, 'source') === 'enquiry' ? 'Booking from an enquiry' : 'Phone booking'
     case 'booking.move':
       return 'Moved booking'
     case 'booking.cancel':
@@ -60,6 +60,10 @@ function describe(entry: AuditEntry): string {
       return 'Proposed a new time'
     case 'booking.decline':
       return 'Declined request'
+    case 'enquiry.approve':
+      return 'Booked enquiry'
+    case 'enquiry.decline':
+      return 'Declined enquiry'
     case 'booking.status': {
       const status = text(entry.after, 'status')
       const label = status ? STATUS_LABEL[status as BookingStatus] : undefined

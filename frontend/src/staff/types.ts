@@ -31,13 +31,15 @@ export type ScheduleDay = {
 
 type ItemTimes = { bay_id: number; start: string; end: string } // garage-local ISO
 
+export type BookingSource = 'online' | 'phone' | 'enquiry'
+
 export type ScheduleBooking = ItemTimes & {
   kind: 'booking'
   reference: string
   status: BookingStatus
   registration: string
   services: string[]
-  source: 'online' | 'phone'
+  source: BookingSource
   has_email: boolean
 }
 
@@ -69,7 +71,7 @@ export type DepositStatus = 'unpaid' | 'paid' | 'refund_pending' | 'refunded' | 
 export type StaffBooking = {
   reference: string
   status: BookingStatus
-  source: 'online' | 'phone'
+  source: BookingSource
   start: string
   end: string
   bay: { id: number; name: string }
@@ -86,6 +88,8 @@ export type StaffBooking = {
   deadline?: string | null
   actions: BookingAction[]
   starts_on_another_day: boolean
+  /** The enquiry this booking was made from. */
+  enquiry_id?: number | null
   history: { at: string; text: string }[]
 }
 
@@ -98,6 +102,39 @@ export type StaffRequest = {
   bay: string
   deadline: string
   created_at: string
+}
+
+export type EnquiryStatus = 'new' | 'converted' | 'declined'
+
+/** One row of the Enquiries page. Times are garage-local ISO. */
+export type StaffEnquiryRow = {
+  id: number
+  status: EnquiryStatus
+  customer_name: string
+  registration: string
+  make: string
+  model: string
+  summary: string
+  created_at: string
+  handled_at: string | null
+}
+
+export type StaffEnquiry = {
+  id: number
+  status: EnquiryStatus
+  customer_name: string
+  customer_phone: string
+  customer_email: string
+  registration: string
+  make: string
+  model: string
+  description: string
+  created_at: string
+  handled_at: string | null
+  handled_by: string | null
+  decline_reason: string | null
+  booking_reference: string | null
+  actions: ('approve' | 'decline')[]
 }
 
 export type StaffSlot = { start: string; end: string; bay_ids: number[] }

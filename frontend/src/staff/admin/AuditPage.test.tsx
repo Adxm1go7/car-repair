@@ -175,3 +175,26 @@ it('describes answers to requests', async () => {
   expect(screen.getByText('Proposed a new time')).toBeInTheDocument()
   expect(screen.getByText('Declined request')).toBeInTheDocument()
 })
+
+it('describes enquiries handled', async () => {
+  stubAudit({
+    'GET /api/staff/audit?page=1': {
+      status: 200,
+      body: page(
+        [
+          entry({ action: 'enquiry.approve', entity_type: 'enquiry' }),
+          entry({ action: 'enquiry.decline', entity_type: 'enquiry' }),
+          entry({ action: 'booking.create', after: { source: 'enquiry' } }),
+          entry({ action: 'booking.create', after: { source: 'phone' } }),
+        ],
+        1,
+        false,
+      ),
+    },
+  })
+  renderAt('/staff/audit')
+  expect(await screen.findByText('Booked enquiry')).toBeInTheDocument()
+  expect(screen.getByText('Declined enquiry')).toBeInTheDocument()
+  expect(screen.getByText('Booking from an enquiry')).toBeInTheDocument()
+  expect(screen.getByText('Phone booking')).toBeInTheDocument()
+})

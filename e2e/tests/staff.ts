@@ -62,6 +62,10 @@ function hhmm(total: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
+// A booking keeps its bay this long after it ends (the seeded bay_buffer_minutes), so a block
+// can't start until then.
+const BOOKING_BUFFER_MINUTES = 15
+
 /** The first whole hour ("HH:MM") inside opening hours with nothing booked or blocked on `bayId`. */
 export function freeHour(schedule: Schedule, day: string, bayId: number): string | null {
   const opening = schedule.days.find((d) => d.date === day)
@@ -71,7 +75,10 @@ export function freeHour(schedule: Schedule, day: string, bayId: number): string
     .filter((item) => item.bay_id === bayId)
     .map((item) => ({
       from: item.start.slice(0, 10) < day ? 0 : minutes(item.start.slice(11, 16)),
-      to: item.end.slice(0, 10) > day ? 24 * 60 : minutes(item.end.slice(11, 16)),
+      to:
+        item.end.slice(0, 10) > day
+          ? 24 * 60
+          : minutes(item.end.slice(11, 16)) + (item.kind === 'booking' ? BOOKING_BUFFER_MINUTES : 0),
     }))
   for (let from = Math.ceil(minutes(opening.open) / 60) * 60; from + 60 <= minutes(opening.close); from += 60) {
     if (taken.every((t) => t.to <= from || t.from >= from + 60)) return hhmm(from)

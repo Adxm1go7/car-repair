@@ -125,3 +125,11 @@ it('says so when the booking does not exist', async () => {
   renderAt('/staff/bookings/NOPE-NOPE')
   expect(await screen.findByRole('alert')).toHaveTextContent("couldn't find that booking")
 })
+
+it('a booking from an enquiry links back to it', async () => {
+  stubBooking({ ...STAFF_BOOKING, source: 'enquiry', enquiry_id: 7, deposit_status: 'not_required' })
+  renderAt('/staff/bookings/ABCD-EFGH')
+  expect(await screen.findByRole('link', { name: 'From enquiry' })).toHaveAttribute('href', '/staff/enquiries/7')
+  expect(screen.getByText('From enquiry · no deposit')).toBeInTheDocument()
+  expect(screen.queryByText('Phone booking · no deposit')).not.toBeInTheDocument()
+})

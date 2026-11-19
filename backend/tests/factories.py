@@ -13,6 +13,7 @@ from app.models import (
     Block,
     Booking,
     BookingItem,
+    Enquiry,
     OpeningHours,
     OpeningHoursBreak,
     Payment,
@@ -170,6 +171,48 @@ def make_staff(
     session.add(user)
     session.flush()
     return user
+
+
+def make_enquiry(
+    session: Session,
+    *,
+    status: str = "new",
+    created_at: datetime | None = None,
+    handled_at: datetime | None = None,
+    description: str = "Rattle from the front left when braking",
+    name: str = "Sam Driver",
+    reason: str | None = None,
+) -> Enquiry:
+    """An enquiry, flushed. A handled one (converted or declined) is handled by "Sam Staff",
+    made if needed; a converted one gets a confirmed, no-deposit booking from an enquiry."""
+    enquiry = Enquiry(
+        status=status,
+        customer_name=name,
+        customer_phone=CUSTOMER["customer_phone"],
+        customer_email=CUSTOMER["customer_email"],
+        car_registration=CUSTOMER["car_registration"],
+        car_make=CUSTOMER["car_make"],
+        car_model=CUSTOMER["car_model"],
+        description=description,
+        decline_reason=reason,
+    )
+    if created_at is not None:
+        enquiry.created_at = created_at
+    if status != "new":
+        staff = session.scalars(
+            select(StaffUser).where(StaffUser.email == "sam.staff@example.com")
+        ).one_or_none() or make_staff(session)
+        enquiry.handled_by = staff.id
+        enquiry.handled_at = handled_at or created_at or datetime.now().astimezone()
+    if status == "converted":
+        start = (created_at or datetime.now().astimezone()) + timedelta(days=3)
+        booking = make_hold(session, start, start, status="confirmed")
+        booking.source = "enquiry"
+        booking.deposit_status = "not_required"
+        enquiry.booking_id = booking.id
+    session.add(enquiry)
+    session.flush()
+    return enquiry
 
 
 def make_timetable(

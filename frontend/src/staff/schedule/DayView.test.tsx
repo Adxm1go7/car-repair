@@ -250,3 +250,18 @@ it('marks requests and approvals waiting for a deposit', async () => {
   expect(approval).toHaveTextContent('Awaiting deposit')
   expect(approval).toHaveClass('entry-awaiting_deposit')
 })
+
+it('a booking from an enquiry says so on the day view', async () => {
+  stubScreen(false)
+  stubFetch({
+    'GET /api/staff/me': { status: 200, body: STAFF_ME },
+    [scheduleUrl('2026-11-17', 1)]: {
+      status: 200,
+      body: { ...DAY_SCHEDULE, items: [bookingItem({ source: 'enquiry', reference: 'ENQU-IRYB' })] },
+    },
+  })
+  renderAt('/staff?date=2026-11-17')
+  const entry = await screen.findByRole('link', { name: /AB12CDE/ })
+  expect(entry).toHaveTextContent('From enquiry · no deposit')
+  expect(entry).not.toHaveTextContent('Phone booking')
+})
