@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { DAY_SCHEDULE, bookingItem, scheduleUrl } from '../../testing/schedule.ts'
@@ -125,7 +125,8 @@ it("defaults to today in the garage's zone", async () => {
   const mock = stubDay()
   renderAt('/staff')
   expect(await screen.findByRole('heading', { level: 1, name: 'Tue 17 Nov' })).toBeInTheDocument()
-  expect(scheduleCalls(mock)).toContain(scheduleUrl('2026-11-17', 1))
+  // The heading comes from the date alone, so it can show before the schedule is asked for.
+  await waitFor(() => expect(scheduleCalls(mock)).toContain(scheduleUrl('2026-11-17', 1)))
 })
 
 it('refreshes after 30 seconds', async () => {
