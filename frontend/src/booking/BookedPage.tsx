@@ -16,9 +16,17 @@ function summaryFor(state: unknown, reference: string): BookingSummary | null {
   return summary.reference === reference && typeof summary.start === 'string' ? (summary as BookingSummary) : null
 }
 
+/** The email a request was sent with, handed over by the booking page. */
+function emailIn(state: unknown): string | null {
+  if (typeof state !== 'object' || state === null) return null
+  const email = (state as { email?: unknown }).email
+  return typeof email === 'string' && email !== '' ? email : null
+}
+
 export function BookedPage({ garage }: { garage: Garage }): JSX.Element {
   const { reference = '' } = useParams()
-  const summary = summaryFor(useLocation().state, reference)
+  const state: unknown = useLocation().state
+  const summary = summaryFor(state, reference)
   const phone = <a href={telHref(garage.phone)}>{garage.phone}</a>
 
   if (summary === null) {
@@ -37,12 +45,39 @@ export function BookedPage({ garage }: { garage: Garage }): JSX.Element {
   }
 
   const zone = garage.timezone
+  const when = `${formatLongDate(summary.start, zone)}, ${formatTimeRange(summary.start, summary.end, zone)}`
+  if (summary.status === 'pending_approval') {
+    const email = emailIn(state)
+    return (
+      <main className="page booked">
+        <h1 className="step-title">Request sent</h1>
+        <p className="booked-when">{when}</p>
+        <ul className="booked-services">
+          {summary.services.map((service) => (
+            <li key={service.slug}>{service.name}</li>
+          ))}
+        </ul>
+        <p>{`${summary.registration} · ${summary.make} ${summary.model}`}</p>
+        <dl className="booked-reference">
+          <dt>Reference</dt>
+          <dd>{summary.reference}</dd>
+        </dl>
+        <p>
+          {`We're keeping this time for you while the garage checks your request. We'll email you${email ? ` at ${email}` : ''} within 48 hours: once it's approved, the email has a link to pay the deposit and confirm.`}
+        </p>
+        <p>
+          Questions? Call us on {phone}.
+        </p>
+        <p>
+          <Link to="/">Back to {garage.name}</Link>
+        </p>
+      </main>
+    )
+  }
   return (
     <main className="page booked">
       <h1 className="step-title">{"You're booked"}</h1>
-      <p className="booked-when">
-        {`${formatLongDate(summary.start, zone)}, ${formatTimeRange(summary.start, summary.end, zone)}`}
-      </p>
+      <p className="booked-when">{when}</p>
       <ul className="booked-services">
         {summary.services.map((service) => (
           <li key={service.slug}>{service.name}</li>

@@ -1,4 +1,12 @@
-import type { Availability, BookingPolicy, Checkout, CustomerDetails, Hold, HoldStatus } from './types.ts'
+import type {
+  Availability,
+  BookingPolicy,
+  BookingSummary,
+  Checkout,
+  CustomerDetails,
+  Hold,
+  HoldStatus,
+} from './types.ts'
 
 /** Every call resolves, never throws. `detail` is the server's message when it sent one. */
 export type Result<T> = { ok: true; data: T } | { ok: false; kind: 'error'; detail: string | null }
@@ -67,6 +75,17 @@ export function startCheckout(
 ): Promise<Result<Checkout> | Expired | Paid> {
   return request<Checkout, Expired | Paid>(holdUrl(reference, '/checkout'), post({ hold_token: token, ...details }), {
     409: { ok: false, kind: 'paid' },
+    410: { ok: false, kind: 'expired' },
+  })
+}
+
+/** Save the details and send a needs-approval visit to the garage. Nothing is paid yet. */
+export function sendRequest(
+  reference: string,
+  token: string,
+  details: CustomerDetails,
+): Promise<Result<BookingSummary> | Expired> {
+  return request<BookingSummary, Expired>(holdUrl(reference, '/request'), post({ hold_token: token, ...details }), {
     410: { ok: false, kind: 'expired' },
   })
 }

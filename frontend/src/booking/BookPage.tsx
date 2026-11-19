@@ -86,9 +86,11 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
     }
   }, [])
 
-  const bookable = new Set(services.filter((s) => s.approval_mode === 'instant').map((s) => s.slug))
+  const bookable = new Set(services.map((s) => s.slug))
   const chosen = parseSelection(location.search).filter((slug) => bookable.has(slug))
   if (chosen.length === 0) return <Navigate to="/" replace />
+  // Any needs-approval service makes the whole visit a request: no payment until approved.
+  const isRequest = services.some((s) => chosen.includes(s.slug) && s.approval_mode === 'needs_approval')
 
   const names = services.filter((s) => chosen.includes(s.slug)).map((s) => s.name)
   const zone = garage.timezone
@@ -98,6 +100,11 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
   function booked(summary: BookingSummary): void {
     unreleased.current = null // paid: never give it back
     void navigate(`/booked/${summary.reference}`, { state: summary })
+  }
+
+  function requested(summary: BookingSummary): void {
+    unreleased.current = null // a request now: the garage keeps the time
+    void navigate(`/booked/${summary.reference}`, { state: { ...summary, email: details.email.trim() } })
   }
 
   /** Where to go once the server says the hold is gone. `fallback` is for nothing paid. */
@@ -234,6 +241,8 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
           key={step.hold.reference}
           hold={step.hold}
           zone={zone}
+          request={isRequest}
+          depositPence={policy.data.deposit_amount_pence}
           values={details}
           onValuesChange={setDetails}
           onSubmittingChange={setBusy}
@@ -246,6 +255,7 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
             setStep({ kind: 'paying', hold: step.hold, checkout })
           }}
           onAlreadyPaid={() => void alreadyPaid(step.hold)}
+          onRequested={requested}
         />
       ) : (
         <PaymentStep

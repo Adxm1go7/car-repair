@@ -48,6 +48,7 @@ const SUMMARY: BookingSummary = {
   model: 'Focus',
   deposit_paid_pence: 2000,
 }
+const REQUESTED: BookingSummary = { ...SUMMARY, status: 'pending_approval', deposit_paid_pence: 0 }
 const HELD: HoldStatus = { status: 'held', deposit_status: 'unpaid', payment_pending: false, summary: null }
 const RELEASED: HoldStatus = { status: 'expired', deposit_status: 'unpaid', payment_pending: false, summary: null }
 const CONFIRMED: HoldStatus = { status: 'confirmed', deposit_status: 'paid', payment_pending: false, summary: SUMMARY }
@@ -66,6 +67,8 @@ type Stub = {
   checkoutSeconds?: number
   status?: HoldStatus
   cancel?: number | 'later'
+  /** The reply to sending a request: 201 (sent), 410 (hold ran out), or another error. */
+  requestStatus?: number
 }
 
 let releaseNow: () => void = () => {}
@@ -82,6 +85,7 @@ function stubApi({
   checkoutSeconds = 600,
   status,
   cancel = 204,
+  requestStatus = 201,
 }: Stub = {}): ReturnType<typeof vi.fn> {
   let releasedAlready = false
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
@@ -121,6 +125,10 @@ function stubApi({
       return Promise.resolve(json(status ?? (releasedAlready ? RELEASED : HELD)))
     }
     if (url === '/api/demo/checkout/demo_abc') return Promise.resolve(json({ status: 'confirmed' }))
+    if (url === '/api/holds/ABCD-EFGH/request') {
+      if (requestStatus === 201) return Promise.resolve(json(REQUESTED, 201))
+      return Promise.resolve(json({ detail: 'Your hold has expired' }, requestStatus))
+    }
     if (url === '/api/holds/ABCD-EFGH/checkout') {
       if (checkoutStatus === 0) return new Promise<Response>(() => {}) // never answers
       return Promise.resolve(
@@ -237,9 +245,9 @@ it('redirects to the services page with no services', async () => {
   expect(await screen.findByRole('heading', { level: 1, name: 'Hillside Motors' })).toBeInTheDocument()
 })
 
-it('redirects to the services page when only needs-approval services are chosen', async () => {
+it('redirects to the services page when no known service is chosen', async () => {
   stubApi()
-  renderAt('/book?services=clutch-replacement')
+  renderAt('/book?services=no-such-service')
   expect(await screen.findByRole('heading', { level: 1, name: 'Hillside Motors' })).toBeInTheDocument()
 })
 
@@ -488,4 +496,55 @@ it('a paid booking is never released', async () => {
   await screen.findByRole('heading', { level: 1, name: "You're booked" })
   window.dispatchEvent(new Event('pagehide'))
   expect(released(fetchMock)).toBeUndefined()
+})
+
+
+// --- requests (a needs-approval service) -------------------------------------------------
+
+it('sends a request instead of taking payment', async () => {
+  const fetchMock = stubApi()
+  renderAt('/book?services=clutch-replacement')
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  await screen.findByRole('heading', { name: 'Your details' })
+  expect(
+    screen.getByText(
+      "The garage will check your request and email you within 48 hours. The £20 deposit is only asked for once it's approved.",
+    ),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Continue to payment' })).not.toBeInTheDocument()
+  await fillDetails(user)
+  await user.click(screen.getByRole('button', { name: 'Send request' }))
+
+  expect(await screen.findByRole('heading', { name: 'Request sent' })).toBeInTheDocument()
+  expect(screen.getByText('ABCD-EFGH')).toBeInTheDocument()
+  expect(screen.getByText(/We'll email you at sam@example.com/)).toBeInTheDocument()
+  const urls = fetchMock.mock.calls.map(([url]) => String(url))
+  expect(urls).toContain('/api/holds/ABCD-EFGH/request')
+  expect(urls).not.toContain('/api/holds/ABCD-EFGH/checkout')
+  const [, init] = fetchMock.mock.calls.find(([url]) => url === '/api/holds/ABCD-EFGH/request') ?? []
+  expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({ hold_token: 'token', name: 'Sam Driver' })
+})
+
+it('goes back to the times when the request comes after the hold ran out', async () => {
+  stubApi({ requestStatus: 410 })
+  renderAt('/book?services=clutch-replacement')
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  await screen.findByRole('heading', { name: 'Your details' })
+  await fillDetails(user)
+  await user.click(screen.getByRole('button', { name: 'Send request' }))
+  expect(await screen.findByText('Your hold ran out, so we released that time.')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Choose a time' })).toBeInTheDocument()
+})
+
+it('says when a request could not be sent', async () => {
+  stubApi({ requestStatus: 503 })
+  renderAt('/book?services=clutch-replacement')
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '08:00 – 09:00' }))
+  await screen.findByRole('heading', { name: 'Your details' })
+  await fillDetails(user)
+  await user.click(screen.getByRole('button', { name: 'Send request' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Your hold has expired')
 })
