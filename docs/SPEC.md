@@ -38,6 +38,7 @@ These decisions are settled. Rows marked *proposed* are my defaults that you acc
 | Deposit | Flat £20 per booking in Stripe test mode, balance paid in person. Refundable when cancelled 24 hours or more ahead. For approval bookings it is requested after approval. |
 | Notifications | Email only in v1: confirmation, reminder, cancellation, garage-initiated change. SMS can be added later behind the same interface. There is no "car ready" message: when the work is done, the mechanic phones the customer if they've gone away, and payment is settled outside the system (decided Nov 16). |
 | Garage-initiated changes | Staff phone the customer first, then cancel or move the booking, optionally giving a reason. Each change records who made it. The system emails the customer: a move gives the new time staff chose, and a cancellation refunds the deposit. A moved booking keeps its deposit and follows the normal refund rules: if the customer then cancels inside the free-cancellation period, the deposit isn't refunded, even though the garage did the moving. The garage is trusted to move bookings fairly (decided Nov 16). |
+| Approval bookings | A customer can request a needs-approval service online. They pick a time and give their details but don't pay. The request keeps its time for up to 48 hours while staff decide, and it must be for a slot at least 24 hours ahead. Staff approve it, decline it (with an optional reason), or propose another time: they phone the customer first, then pick the new time, which also approves it. Approval asks for the deposit through the customer's booking link, in the same payment form as an instant booking, and paying confirms the booking. The customer has 24 hours to pay, and always at least 2 hours. Both waits end earlier if the start time is close (they stop at the booking cut-off), and a request or approval that runs out frees its time and emails the customer. These times are setup data. There's no separate page for accepting a proposed time: paying is accepting (decided Nov 19). |
 | Phone bookings | Staff can book a customer who phones in. A phone booking has no deposit, and the customer's email is optional (decided Nov 16). |
 | No-shows | Staff mark a no-show. It keeps the deposit and the booked time (nothing is refunded or freed), and sends no email (decided Nov 16). |
 | Admin settings | Admins can add a service; edit a service's name, category, description, price and duration; set its bay type and its instant or needs-approval mode only when it's created; hide or show a service; change the display order; add, rename, and take a bay out of use or put it back; add a bay type (it can't be renamed); edit opening hours and regular breaks; and edit the garage contact details. The booking rules (window, cut-off, free-cancellation period, deposit, reminder time, slot grid, bay buffer) can't be changed by admins and stay in setup data. A change that clashes with existing bookings, such as taking a bay out of use or cutting hours or adding a break over booked time, is refused until staff have moved or cancelled each clashing booking, and the refusal lists them. Bookings store their own service name, price and duration, so editing a service never changes existing bookings (decided Nov 16, built in Milestone 8). Opening hours change from a date the admin chooses (tomorrow at the earliest). Several future timetables can be lined up, such as winter and summer hours. Taking a bay out of use takes effect at once and is for a broken or retired bay. Planned time off uses blocks (decided Nov 18). |
@@ -55,7 +56,7 @@ There are three kinds of user, and only two of them log in.
 | Role | Logs in? | Can do |
 | --- | --- | --- |
 | Customer | No | Browse services, book, send an enquiry, and use their emailed token link to view or cancel one booking. |
-| Staff | Yes | See the shared schedule, make phone bookings, move or cancel bookings, block time, and set job status (in progress, completed, no show). Approving bookings and enquiries arrives in Milestone 9. |
+| Staff | Yes | See the shared schedule, make phone bookings, move or cancel bookings, block time, and set job status (in progress, completed, no show). Approve, propose another time for, or decline online booking requests (Milestone 9a); enquiries arrive in Milestone 9b. |
 | Admin | Yes | Everything staff can do, plus manage staff accounts, read the audit log, and (from Milestone 8) edit the settings listed under "Admin settings" in the decisions log. |
 
 Every staff endpoint checks the role on the server. Hiding a button in the interface is never the only protection.
@@ -93,9 +94,9 @@ Seven flows cover the whole product. Each should become at least one end-to-end 
 **2. Booking that needs approval (any selected service is needs-approval)**
 
 1. Steps 1 to 3 as above, but the customer does not pay yet.
-2. The booking is saved as pending, with the slot held for a longer, configurable period, and appears in the staff queue.
-3. Staff approve, propose another time, or decline. Each outcome sends an email.
-4. On approval the customer receives a payment link for the deposit. Payment confirms the booking.
+2. The booking is saved as pending, with the slot held for up to 48 hours (the slot must be at least 24 hours ahead), and appears in the staff queue.
+3. Staff approve, propose another time (after phoning the customer), or decline. Each outcome sends an email.
+4. On approval the customer's booking link asks for the deposit, payable within 24 hours. Payment confirms the booking. If nobody answers in time, or the deposit isn't paid in time, the time is released and the customer is emailed.
 
 **3. Diagnosis enquiry (unknown issue)**
 
@@ -150,7 +151,7 @@ This is the conceptual model, not yet a schema. Customer details live on the boo
 | EmailLog | recipient, template, related booking, status, attempts, next attempt at, last error, sent at | The send queue as well as the log. Doubles as a test and debugging aid. |
 | AuditEntry | staff user, action, entity, before, after, reason, time | Written for every staff change, in the same transaction. |
 
-**Booking statuses:** held, pending approval, confirmed, in progress, completed, cancelled, no show, expired.
+**Booking statuses:** held, pending approval, awaiting deposit (approved, not paid yet), confirmed, in progress, completed, cancelled, no show, expired.
 
 **Enquiry statuses:** new, needs information, approved, declined, converted to booking.
 
@@ -310,7 +311,9 @@ There is no deadline, so each milestone has a definition of done and the next on
 6. **Email and token self-service.** Templates, send log, token links, customer cancel within policy (no customer rescheduling). *Done when* flow 4 passes end to end and expired tokens fail safely.
 7. **Staff back office.** Login, staff accounts, roles, shared day and week schedule, phone bookings, move, cancel, block time, job status, audit log, mobile layout. *Done when* flow 5 and flow 6 pass and role checks are tested.
 8. **Admin settings.** Editing services, bays, bay types, opening hours, breaks and contact details, with clashing changes refused until the bookings in the way are moved or cancelled. *Done when* an admin can make each kind of change from the Settings page; a clashing change (a bay out of use with bookings, or hours that leave bookings outside opening time) is refused with those bookings listed, and nothing changes; the public site and the staff schedule show the right hours for every date, across a change of timetable; every change is in the audit log; and flow 7 passes end to end in CI.
-9. **Approval bookings and enquiries.** Needs-approval services, the staff queue, enquiry form, approve, decline and convert. *Done when* flows 2 and 3 pass end to end.
+9. **Approval bookings and enquiries**, split in two (Nov 19):
+   - **9a. Approval bookings.** Online requests for needs-approval services, the staff Requests page, approve, propose another time and decline, and the deposit paid from the booking link. *Done when* flow 2 passes end to end in CI.
+   - **9b. Enquiries.** The enquiry form (no photos), the staff queue, approve, decline, ask for more information, and convert to a booking. *Done when* flow 3 passes end to end.
 10. **Hardening and polish.** Rate limiting, accessibility pass, error pages, load test of the availability endpoint, security scans, documentation. *Done when* the checklist section is fully ticked.
 11. **Deployment.** Cloud environment from the same images, environment configuration, a seeded live demo, and a short walkthrough or recording. *Done when* the live demo passes the end-to-end suite.
 
@@ -322,7 +325,7 @@ These are the gaps still to close. None blocks milestones 1 to 3, so building ca
 - [ ] **Service list.** The actual services, durations, prices and which are instant or need approval. I can draft a fictional list when you ask for branding and sample data.
 - [ ] **Opening hours.** Confirm or replace the proposed weekday and weekend hours, and any lunch break.
 - [ ] **Slot grid.** Should start times fall every 15, 30 or 60 minutes, and is a buffer needed between jobs?
-- [ ] **Needs-approval hold.** How long is a pending booking's slot held while staff decide?
+- [x] **Needs-approval hold.** Up to 48 hours for staff to answer, then 24 hours to pay (Nov 19).
 - [x] **Reschedule rules.** No customer rescheduling: customers call the garage for a different time (Nov 14).
 - [x] **No-shows.** Staff mark a no-show; it keeps the deposit and the booked time, and sends no email (Nov 16).
 - [x] **Staff accounts.** An admin invites someone by email and they set their own password from the link; passwords are reset the same way (Nov 16).
