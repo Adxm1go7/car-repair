@@ -22,6 +22,7 @@ from app.repositories.bookings import get_booking_for_update
 from app.repositories.reservations import DEADLOCK_DETECTED, EXCLUSION_VIOLATION, SlotUnavailable
 from app.schedule.availability import infos_for_booking, staff_free_times
 from app.schedule.status_rules import ACTION_TARGET, Action, StatusAction, booking_actions
+from app.settings.lock import lock_shared
 from app.staff.audit import record_audit
 
 
@@ -55,6 +56,7 @@ def move_booking(
 ) -> Booking:
     """Move the booking to `start` in `bay_id`, which must be one of the staff free times.
     Raises SlotUnavailable, NotAllowed or LookupError."""
+    lock_shared(session)  # take turns with bay and opening-hours changes
     booking = _locked(session, reference, "move", now)
     reservation = booking.reservation
     if start.astimezone(UTC) == booking.start_at.astimezone(UTC) and bay_id == reservation.bay_id:
@@ -169,6 +171,9 @@ def change_status(
     """Start, complete, no-show, or undo one of those. A no-show keeps the deposit and the
     booked time, and sends no email."""
     booking = _locked(session, reference, action, now)
+    if action in ("undo_no_show", "undo_complete") and not booking.reservation.bay.active:
+        # Back to an active status in a bay that's out of use: staff move it instead.
+        raise NotAllowed("not_allowed")
     before = {"status": booking.status}
     booking.status = ACTION_TARGET[action]
     booking.status_changed_at = now

@@ -13,7 +13,6 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.holds import local_iso
 from app.models import Booking, Reservation
 from app.repositories.bookings import expired_hold
 from app.repositories.hours import WeekdayHours
@@ -86,7 +85,7 @@ def clash_body(bookings: Sequence[Booking], zone: ZoneInfo) -> dict[str, Any]:
     clashes = [
         Clash(
             reference=b.reference,
-            start=local_iso(b.start_at, zone),
+            start=b.start_at.astimezone(zone).isoformat(),  # "+00:00", never "Z"
             bay=b.reservation.bay.name,
             held=b.status == "held",
         )

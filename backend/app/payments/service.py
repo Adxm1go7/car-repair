@@ -17,7 +17,9 @@ from app.email.queue import queue_email
 from app.models import Booking, Payment
 from app.payments.provider import PaymentProvider, RefundStatus
 from app.payments.rules import CancelledBy, deposit_refundable
+from app.repositories.availability import load_policy
 from app.repositories.bookings import get_booking_for_update_by_id
+from app.repositories.hours import hours_on
 from app.repositories.payments import (
     count_payments,
     find_payment,
@@ -26,6 +28,8 @@ from app.repositories.payments import (
     paid_deposit,
 )
 from app.repositories.reservations import DEADLOCK_DETECTED, EXCLUSION_VIOLATION
+from app.settings.clashes import fits
+from app.settings.lock import lock_shared
 
 log = logging.getLogger("app.payments")
 
@@ -44,7 +48,15 @@ def _confirm(session: Session, booking: Booking, now: datetime) -> None:
 
 
 def _take_time_back(session: Session, booking: Booking) -> bool:
-    """Make an expired booking's reservation active again, if nobody has the time now."""
+    """Make an expired booking's reservation active again, if nobody has the time now, its
+    bay is still in use, and it still fits the opening hours in force on its date."""
+    lock_shared(session)  # take turns with bay and opening-hours changes
+    zone = load_policy(session).zone
+    start, end = booking.start_at.astimezone(zone), booking.end_at.astimezone(zone)
+    if not booking.reservation.bay.active:
+        return False
+    if not fits(hours_on(session, [start.date()])[start.date()], start, end):
+        return False
     try:
         with session.begin_nested():
             booking.reservation.active = True
@@ -89,7 +101,9 @@ def complete_deposit(
         if _take_time_back(session, booking):
             _confirm(session, booking, now)
         else:
-            log.info("late payment for %s: the time is taken, refunding", booking.reference)
+            log.info(
+                "late payment for %s: its time, bay or hours are gone, refunding", booking.reference
+            )
             refund_deposit(session, provider, deposit)
             session.flush()
             return None
