@@ -24,6 +24,7 @@ from app.db import make_engine
 from app.email.outbox import send_due_emails
 from app.email.reminders import queue_due_reminders
 from app.email.sender import SmtpSender
+from app.limits import delete_old_counts
 from app.payments.deps import make_provider
 from app.payments.provider import PaymentProvider, PaymentUnavailable
 from app.payments.service import close_open_deposit
@@ -65,6 +66,7 @@ def run_once(session: Session, now: datetime, provider: PaymentProvider) -> int:
     released = release_expired_holds(session, now)
     delete_expired_sessions(session, now)
     delete_old_attempts(session, now)
+    delete_old_counts(session, now)
     session.commit()
     close_stale_checkouts(session, provider, now)
     return released

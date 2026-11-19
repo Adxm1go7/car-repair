@@ -13,6 +13,7 @@ from app.models.catalogue import Bay, BayType, OpeningHours, OpeningHoursBreak, 
 from app.models.email import EMAIL_STATUSES, EMAIL_TEMPLATES, EmailLog
 from app.models.enquiry import ENQUIRY_STATUSES, Enquiry
 from app.models.payment import Payment, PaymentEvent
+from app.models.request_count import RequestCount
 from app.models.reservation import Reservation
 from app.models.setting import Setting
 from app.models.staff import (
@@ -51,6 +52,7 @@ __all__ = [
     "OpeningHoursBreak",
     "Payment",
     "PaymentEvent",
+    "RequestCount",
     "Reservation",
     "Service",
     "Setting",

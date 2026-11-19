@@ -69,7 +69,7 @@ def db_session(migrated_url: str) -> Iterator[Session]:
 
 @pytest.fixture
 def client(postgres_url: str) -> Iterator[TestClient]:
-    with TestClient(create_app(AppConfig(database_url=postgres_url))) as client:
+    with TestClient(create_app(AppConfig(database_url=postgres_url, environment="test"))) as client:
         yield client
 
 
@@ -98,7 +98,9 @@ def api_client(
 ) -> Iterator[TestClient]:
     """A client whose routes use the test's db_session, so test data is rolled back afterwards,
     and whose payments go to `fake_provider`."""
-    yield from _client_for(db_session, AppConfig(database_url=migrated_url), fake_provider)
+    yield from _client_for(
+        db_session, AppConfig(database_url=migrated_url, environment="test"), fake_provider
+    )
 
 
 @pytest.fixture
@@ -106,7 +108,9 @@ def webhook_client(
     db_session: Session, migrated_url: str, fake_provider: FakeProvider
 ) -> Iterator[TestClient]:
     """Like api_client, with a webhook secret so Stripe's signed messages are accepted."""
-    config = AppConfig(database_url=migrated_url, stripe_webhook_secret=WEBHOOK_SECRET)
+    config = AppConfig(
+        database_url=migrated_url, environment="test", stripe_webhook_secret=WEBHOOK_SECRET
+    )
     yield from _client_for(db_session, config, fake_provider)
 
 
