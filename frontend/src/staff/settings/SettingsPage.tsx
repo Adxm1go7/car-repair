@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { NavLink, useParams } from 'react-router'
 import { BaysTab } from './BaysTab.tsx'
+import { ContactTab } from './ContactTab.tsx'
 import { HoursTab } from './HoursTab.tsx'
 import { ServicesTab } from './ServicesTab.tsx'
 
@@ -26,7 +27,7 @@ function TabContent({ tab }: { tab: Tab }): JSX.Element {
     case 'hours':
       return <HoursTab />
     case 'contact':
-      return <p>Coming soon.</p>
+      return <ContactTab />
   }
 }
 

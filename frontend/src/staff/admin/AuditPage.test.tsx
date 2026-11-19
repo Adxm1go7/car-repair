@@ -122,3 +122,34 @@ it('shows a message when the log cannot load', async () => {
   renderAt('/staff/audit')
   expect(await screen.findByRole('alert')).toHaveTextContent("Sorry, we couldn't load the audit log.")
 })
+
+it('audit describes settings changes', async () => {
+  const settings = (action: string, before: Record<string, unknown> | null, after: Record<string, unknown> | null) =>
+    entry({ action, entity_type: 'settings', booking_reference: null, before, after })
+  const hours = { starts_on: '2026-12-01', days: [] }
+  const cases: [AuditEntry, string][] = [
+    [settings('service.create', null, { name: 'MOT test' }), 'Added service MOT test'],
+    [settings('service.update', { name: 'MOT test' }, { name: 'MOT test' }), 'Changed service MOT test'],
+    [settings('service.update', { name: 'MOT test' }, { name: 'MOT' }), 'Renamed service MOT test to MOT'],
+    [settings('service.hide', { name: 'Diagnostic check' }, { name: 'Diagnostic check' }), 'Hid service Diagnostic check'],
+    [settings('service.show', { name: 'Diagnostic check' }, { name: 'Diagnostic check' }), 'Showed service Diagnostic check'],
+    [settings('service.move', { name: 'MOT test', position: 2 }, { name: 'MOT test', position: 1 }), 'Moved service MOT test up'],
+    [settings('service.move', { name: 'MOT test', position: 1 }, { name: 'MOT test', position: 2 }), 'Moved service MOT test down'],
+    [settings('bay.create', null, { name: 'Bay 3' }), 'Added bay Bay 3'],
+    [settings('bay.rename', { name: 'Bay 3' }, { name: 'Front bay' }), 'Renamed bay Bay 3 to Front bay'],
+    [settings('bay.out_of_use', { name: 'Bay 3' }, { name: 'Bay 3' }), 'Took Bay 3 out of use'],
+    [settings('bay.back_in_use', { name: 'Bay 3' }, { name: 'Bay 3' }), 'Put Bay 3 back in use'],
+    [settings('bay_type.create', null, { name: 'Tyre bay' }), 'Added bay type Tyre bay'],
+    [settings('hours.create', null, hours), 'New hours from Tue 1 Dec'],
+    [settings('hours.update', hours, hours), 'Changed hours from Tue 1 Dec'],
+    [settings('hours.delete', hours, null), 'Deleted hours from Tue 1 Dec'],
+    [settings('contact.update', {}, {}), 'Changed contact details'],
+  ]
+  stubAudit({ 'GET /api/staff/audit?page=1': { status: 200, body: page(cases.map(([e]) => e), 1, false) } })
+  renderAt('/staff/audit')
+  const rows = await screen.findAllByRole('listitem')
+  expect(rows).toHaveLength(cases.length)
+  cases.forEach(([, words], index) => {
+    expect(within(rows[index]).getByText(words)).toBeInTheDocument()
+  })
+})

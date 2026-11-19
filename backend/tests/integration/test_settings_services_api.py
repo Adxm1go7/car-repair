@@ -238,8 +238,23 @@ def test_each_change_is_audited(admin_client: TestClient, db_session: Session) -
     create, update, hide, move = entries
     assert create.before is None
     assert create.after is not None and create.after["name"] == "Wheel alignment"
-    assert update.before == {"price_from_pence": 5900}
-    assert update.after == {"price_from_pence": 6900}
-    assert (hide.before, hide.after) == ({"active": True}, {"active": False})
+    # Each entry names the service, so the audit page can say which one.
+    name = "Wheel alignment"
+    assert update.before == {"name": name, "price_from_pence": 5900}
+    assert update.after == {"name": name, "price_from_pence": 6900}
+    assert (hide.before, hide.after) == (
+        {"name": name, "active": True},
+        {"name": name, "active": False},
+    )
     assert move.before is not None and move.after is not None
     assert move.after["position"] == move.before["position"] - 1
+    assert move.before["name"] == move.after["name"] == name
+
+
+def test_a_rename_is_audited_with_both_names(admin_client: TestClient, db_session: Session) -> None:
+    seed(db_session)
+    service = by_slug(db_session, "mot-test")
+    admin_client.patch(f"{URL}/{service.id}", json={"name": "MOT", "price_from_pence": 5000})
+    entry = db_session.scalars(select(AuditEntry)).one()
+    assert entry.before == {"name": "MOT test", "price_from_pence": 5485}
+    assert entry.after == {"name": "MOT", "price_from_pence": 5000}

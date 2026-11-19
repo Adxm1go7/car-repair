@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent, JSX } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { calendarNoon } from '../../booking/days.ts'
+import { shortDate } from '../../catalogue/hours.ts'
 import { fetchAudit, fetchTeam } from '../api.ts'
 import type { AuditFilters } from '../api.ts'
 import { STATUS_LABEL, localDate, localTime } from '../labels.ts'
@@ -76,6 +77,50 @@ function describe(entry: AuditEntry): string {
       return `Restored ${account}`
     case 'staff.reset_password':
       return `Sent ${account} a password reset`
+    default:
+      return describeSettings(entry)
+  }
+}
+
+/** Settings changes: services, bays, bay types, opening hours and contact details. */
+function describeSettings(entry: AuditEntry): string {
+  const name = text(entry.after, 'name') ?? text(entry.before, 'name') ?? ''
+  const oldName = text(entry.before, 'name')
+  const startsOn = text(entry.after, 'starts_on') ?? text(entry.before, 'starts_on')
+  const from = startsOn ? shortDate(startsOn) : ''
+  switch (entry.action) {
+    case 'service.create':
+      return `Added service ${name}`
+    case 'service.update':
+      return oldName && oldName !== name ? `Renamed service ${oldName} to ${name}` : `Changed service ${name}`
+    case 'service.hide':
+      return `Hid service ${name}`
+    case 'service.show':
+      return `Showed service ${name}`
+    case 'service.move': {
+      const before = entry.before?.position
+      const after = entry.after?.position
+      const up = typeof before === 'number' && typeof after === 'number' && after < before
+      return `Moved service ${name} ${up ? 'up' : 'down'}`
+    }
+    case 'bay.create':
+      return `Added bay ${name}`
+    case 'bay.rename':
+      return `Renamed bay ${oldName ?? ''} to ${name}`
+    case 'bay.out_of_use':
+      return `Took ${name} out of use`
+    case 'bay.back_in_use':
+      return `Put ${name} back in use`
+    case 'bay_type.create':
+      return `Added bay type ${name}`
+    case 'hours.create':
+      return `New hours from ${from}`
+    case 'hours.update':
+      return `Changed hours from ${from}`
+    case 'hours.delete':
+      return `Deleted hours from ${from}`
+    case 'contact.update':
+      return 'Changed contact details'
     default:
       return entry.action
   }

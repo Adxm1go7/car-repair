@@ -250,6 +250,7 @@ def test_bay_changes_are_audited(client: TestClient, db_session: Session) -> Non
     _, create, rename, out, back = entries
     assert create.after == {"slug": "bay-4", "name": "Bay 4", "bay_type": "General bay"}
     assert (rename.before, rename.after) == ({"name": "Bay 4"}, {"name": "Bay four"})
-    assert (out.before, out.after) == ({"active": True}, {"active": False})
-    assert (back.before, back.after) == ({"active": False}, {"active": True})
+    four = {"name": "Bay four"}
+    assert (out.before, out.after) == (four | {"active": True}, four | {"active": False})
+    assert (back.before, back.after) == (four | {"active": False}, four | {"active": True})
     assert all(e.entity_id == created["id"] for e in entries[1:])

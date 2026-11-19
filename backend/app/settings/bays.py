@@ -145,8 +145,8 @@ def update_bay(
             "bay.back_in_use" if active else "bay.out_of_use",
             "bay",
             bay.id,
-            before={"active": not active},
-            after={"active": active},
+            before={"name": bay.name, "active": not active},
+            after={"name": bay.name, "active": active},
             now=now,
         )
 

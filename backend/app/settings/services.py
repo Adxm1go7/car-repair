@@ -133,7 +133,8 @@ def update_service(
         edits.get("price_to_pence", service.price_to_pence),
     )
     if edits:
-        before = {field: getattr(service, field) for field in edits}
+        # Each entry names the service (as it was, and as it is now), so the log can say which.
+        before = {"name": service.name, **{field: getattr(service, field) for field in edits}}
         for field, value in edits.items():
             setattr(service, field, value)
         session.flush()
@@ -144,7 +145,7 @@ def update_service(
             "service",
             service.id,
             before=before,
-            after=edits,
+            after={"name": service.name, **edits},
             now=now,
         )
     active = changes.get("active")
@@ -157,8 +158,8 @@ def update_service(
             "service.show" if active else "service.hide",
             "service",
             service.id,
-            before={"active": not active},
-            after={"active": active},
+            before={"name": service.name, "active": not active},
+            after={"name": service.name, "active": active},
             now=now,
         )
 
@@ -184,7 +185,7 @@ def move_service(
         "service.move",
         "service",
         service.id,
-        before={"position": index + 1},
-        after={"position": other + 1},
+        before={"name": service.name, "position": index + 1},
+        after={"name": service.name, "position": other + 1},
         now=now,
     )

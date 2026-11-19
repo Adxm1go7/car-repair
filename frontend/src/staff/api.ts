@@ -281,3 +281,14 @@ export function replaceTimetable(id: number, days: OpeningDay[]): Promise<StaffR
 export function deleteTimetable(id: number): Promise<StaffResult<void>> {
   return staffRequest<void>(`${SETTINGS}/hours/${id}`, { method: 'DELETE' })
 }
+
+export type Contact = { name: string; address: string; phone: string; email: string }
+
+export function fetchContact(): Promise<StaffResult<Contact>> {
+  return staffRequest<Contact>(`${SETTINGS}/contact`)
+}
+
+/** Answers with the details as saved (trimmed, email in lower case). A 422's detail says what's wrong. */
+export function saveContact(contact: Contact): Promise<StaffResult<Contact>> {
+  return staffRequest<Contact>(`${SETTINGS}/contact`, post(contact, 'PUT'))
+}

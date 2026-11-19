@@ -20,14 +20,16 @@ function checkLength(value: string, low: number, high: number, what: string): st
   return null
 }
 
-function checkPhone(value: string): string | null {
+/** Null, or what's wrong with a phone number. Shared with the staff contact form. */
+export function checkPhone(value: string): string | null {
   const trimmed = value.trim()
   const digits = [...trimmed].filter((char) => char >= '0' && char <= '9').length
   const ok = trimmed.length >= 7 && trimmed.length <= 20 && PHONE_CHARACTERS.test(trimmed) && digits >= 7
   return ok ? null : 'Please enter a phone number we can call'
 }
 
-function checkEmail(value: string): string | null {
+/** Null, or what's wrong with an email address. Shared with the staff contact form. */
+export function checkEmail(value: string): string | null {
   const email = value.trim().toLowerCase()
   const at = email.indexOf('@')
   const local = at === -1 ? '' : email.slice(0, at)
