@@ -33,7 +33,10 @@ def new_hold_token() -> str:
 def customer_can_cancel(
     status: str, start_at: datetime, now: datetime, free_cancellation_hours: int
 ) -> bool:
-    """A customer may cancel a confirmed booking only while the deposit would come back."""
+    """A customer may cancel a confirmed booking only while the deposit would come back. A
+    request, or an approval not paid yet, can be cancelled at any time: nothing is paid."""
+    if status in ("pending_approval", "awaiting_deposit"):
+        return True
     return status == "confirmed" and deposit_refundable(
         start_at, now, free_cancellation_hours, "customer"
     )

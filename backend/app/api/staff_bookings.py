@@ -1,4 +1,5 @@
-"""Staff actions on bookings: phone bookings, the booking page, move, cancel and status."""
+"""Staff actions on bookings: phone bookings, the booking page, move, cancel and status, and
+answering online requests (the queue, approve, propose another time, decline)."""
 
 import logging
 from datetime import date, datetime
@@ -30,7 +31,9 @@ from app.repositories.availability import (
     load_free_cancellation_hours,
     load_policy,
 )
+from app.repositories.bookings import expired_hold
 from app.repositories.reservations import SlotUnavailable
+from app.schedule.approvals import approve_booking, decline_booking, propose_booking
 from app.schedule.availability import infos_for_booking, staff_free_times
 from app.schedule.changes import NotAllowed, change_status, garage_cancel, move_booking
 from app.schedule.phone import PhoneDetails, create_phone_booking
@@ -148,6 +151,8 @@ class StaffBookingOut(BaseModel):
     customer_email: str | None
     notes: str | None
     deposit_status: str
+    # A request: when it must be answered by. An approval: when the deposit is due by.
+    deadline: str | None
     actions: list[Action]
     starts_on_another_day: bool
     history: list[HistoryOut]
@@ -199,6 +204,12 @@ def _history_text(entry: AuditEntry, zone: ZoneInfo) -> str:
         text = f"Cancelled by {who}"
     elif entry.action == "booking.status":
         text = f"{STATUS_TEXT.get(after.get('status', ''), 'Status changed')} by {who}"
+    elif entry.action == "booking.approve":
+        text = f"Approved by {who}"
+    elif entry.action == "booking.propose":
+        text = f"New time proposed by {who}"
+    elif entry.action == "booking.decline":
+        text = f"Declined by {who}"
     else:
         text = f"{entry.action} by {who}"
     return f'{text} — "{entry.reason}"' if entry.reason else text
@@ -235,6 +246,10 @@ def staff_booking_out(
         customer_email=booking.customer_email,
         notes=booking.notes,
         deposit_status=booking.deposit_status,
+        deadline=local_iso(booking.hold_expires_at, zone)
+        if booking.status in ("pending_approval", "awaiting_deposit")
+        and booking.hold_expires_at is not None
+        else None,
         actions=booking_actions(booking.status, booking.start_at, booking.status_changed_at, now),
         starts_on_another_day=starts_on_another_day(booking.start_at, now, zone),
         history=history,
@@ -326,6 +341,112 @@ def set_status(
     zone = _zone(session)
     try:
         booking = change_status(session, staff, reference, body.action, now)
+    except LookupError as error:
+        raise NOT_FOUND from error
+    except NotAllowed as error:
+        raise _refused(session, error.detail) from error
+    session.commit()
+    return staff_booking_out(session, booking, now, zone)
+
+
+# --- requests ------------------------------------------------------------------------
+
+
+class RequestOut(BaseModel):
+    reference: str
+    customer_name: str | None
+    services: list[str]
+    start: str
+    bay: str
+    deadline: str
+    created_at: str
+
+
+@router.get("/requests")
+def requests(session: SessionDep, now: NowDep) -> list[RequestOut]:
+    """Requests waiting for an answer, oldest first. One past its deadline is left out: it
+    has already lapsed, and the worker is about to release it."""
+    zone = _zone(session)
+    waiting = session.scalars(
+        select(Booking)
+        .where(Booking.status == "pending_approval", ~expired_hold(now))
+        .options(selectinload(Booking.items), selectinload(Booking.reservation))
+        .order_by(Booking.created_at, Booking.id)
+    )
+    return [
+        RequestOut(
+            reference=booking.reference,
+            customer_name=booking.customer_name,
+            services=[item.service_name for item in booking.items],
+            start=local_iso(booking.start_at, zone),
+            bay=booking.reservation.bay.name,
+            deadline=local_iso(booking.hold_expires_at or now, zone),
+            created_at=local_iso(booking.created_at, zone),
+        )
+        for booking in waiting
+    ]
+
+
+def _settings_or_503(error: SettingsUnavailable) -> HTTPException:
+    return HTTPException(status_code=503, detail="Bookings unavailable")
+
+
+@router.post("/bookings/{reference}/approve")
+def approve(reference: str, staff: StaffDep, session: SessionDep, now: NowDep) -> StaffBookingOut:
+    zone = _zone(session)
+    try:
+        booking = approve_booking(session, staff, reference, now)
+    except LookupError as error:
+        raise NOT_FOUND from error
+    except NotAllowed as error:
+        raise _refused(session, error.detail) from error
+    except SettingsUnavailable as error:
+        session.rollback()
+        raise _settings_or_503(error) from error
+    session.commit()
+    return staff_booking_out(session, booking, now, zone)
+
+
+@router.post("/bookings/{reference}/propose")
+def propose(
+    reference: str,
+    body: MoveIn,
+    staff: StaffDep,
+    session: SessionDep,
+    now: NowDep,
+    provider: ProviderDep,
+) -> StaffBookingOut:
+    """Move a request (or an unpaid approval) to a time agreed on the phone, and ask for
+    the deposit for it."""
+    zone = _zone(session)
+    try:
+        booking = propose_booking(
+            session, provider, staff, reference, body.start, body.bay_id, body.reason, now
+        )
+    except LookupError as error:
+        raise NOT_FOUND from error
+    except NotAllowed as error:
+        raise _refused(session, error.detail) from error
+    except SlotUnavailable as error:
+        raise _refused(session, "taken") from error
+    except SettingsUnavailable as error:
+        session.rollback()
+        raise _settings_or_503(error) from error
+    except PaymentUnavailable as error:
+        session.rollback()
+        log.warning("propose for %s: payment provider failed: %s", reference, error)
+        raise HTTPException(status_code=503, detail="We couldn't change it just now") from error
+    session.commit()
+    return staff_booking_out(session, booking, now, zone)
+
+
+@router.post("/bookings/{reference}/decline")
+def decline(
+    reference: str, body: CancelIn, staff: StaffDep, session: SessionDep, now: NowDep
+) -> StaffBookingOut:
+    zone = _zone(session)
+    try:
+        booking = decline_booking(session, staff, reference, body.reason, now)
     except LookupError as error:
         raise NOT_FOUND from error
     except NotAllowed as error:

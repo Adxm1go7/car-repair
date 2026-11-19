@@ -12,10 +12,12 @@ from app.models import (
     Bay,
     Block,
     Booking,
+    BookingItem,
     OpeningHours,
     OpeningHoursBreak,
     Payment,
     Reservation,
+    Service,
     StaffUser,
     Timetable,
 )
@@ -71,6 +73,32 @@ def make_hold(
         deposit_status="paid" if status == "confirmed" else "unpaid",
     )
     session.add(booking)
+    session.flush()
+    return booking
+
+
+def make_request(
+    session: Session,
+    start: datetime,
+    deadline: datetime,
+    *,
+    status: str = "pending_approval",
+    bay_slug: str = "bay-1",
+) -> Booking:
+    """A one-hour diagnostic check (needs approval) waiting for staff, or with status
+    "awaiting_deposit" for its deposit, with customer details. Flushed."""
+    booking = make_hold(session, start, deadline, bay_slug=bay_slug, status=status)
+    check = session.scalars(select(Service).where(Service.slug == "diagnostic-check")).one()
+    booking.items = [
+        BookingItem(
+            service_id=check.id,
+            service_name=check.name,
+            price_from_pence=check.price_from_pence,
+            price_to_pence=check.price_to_pence,
+            duration_minutes=60,
+            position=0,
+        )
+    ]
     session.flush()
     return booking
 

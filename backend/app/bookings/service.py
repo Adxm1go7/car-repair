@@ -325,6 +325,24 @@ def send_request(
     return booking
 
 
+def settle_waiting(
+    session: Session, provider: PaymentProvider, booking: Booking, now: datetime
+) -> None:
+    """Bring a locked request or approval up to date: complete a payment the provider
+    already has (so the page doesn't depend on the webhook), and release it, closing its
+    form, if its deadline has passed. Never fails on the provider."""
+    open_deposit = get_open_deposit(session, booking.id)
+    if open_deposit is not None and booking.status in ("awaiting_deposit", "expired"):
+        try:
+            with session.begin_nested():  # see _close_quietly: a failure must undo it all
+                complete_deposit(session, provider, open_deposit.provider_ref, now)
+        except PaymentUnavailable:
+            log.warning("couldn't ask the provider about %s; still waiting", booking.reference)
+    if hold_has_expired(booking, now):
+        release_hold(session, booking)
+        _close_quietly(session, provider, booking, now)
+
+
 def hold_status(
     session: Session, provider: PaymentProvider, reference: str, token: str, now: datetime
 ) -> Booking:
