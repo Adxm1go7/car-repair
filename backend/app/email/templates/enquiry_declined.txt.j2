@@ -1,0 +1,12 @@
+Hello {{ c.customer_name }},
+
+We're sorry: {{ c.garage.name }} can't take on the work you asked about.
+{% if c.reason %}
+Reason: {{ c.reason }}
+{% endif %}
+
+{% include "_enquiry.txt.j2" %}
+
+If you'd like to talk it through, please call us on {{ c.garage.phone }}.
+
+{% include "_footer.txt.j2" %}

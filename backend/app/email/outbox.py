@@ -14,8 +14,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.bookings.links import create_link
-from app.email.message import EmailTemplate, OutgoingEmail, StaffTemplate
-from app.email.render import EmailContext, StaffEmailContext, render_email, render_staff_email
+from app.email.message import EmailTemplate, EnquiryTemplate, OutgoingEmail, StaffTemplate
+from app.email.render import (
+    EmailContext,
+    EnquiryEmailContext,
+    StaffEmailContext,
+    render_email,
+    render_enquiry_email,
+    render_staff_email,
+)
 from app.email.sender import EmailSender, EmailUnavailable
 from app.models import Booking, EmailLog, StaffUser
 from app.repositories.availability import (
@@ -150,6 +157,8 @@ def _prepare(
     (the booking moved on, or the staff member was removed) and must not be sent."""
     if email.staff_user_id is not None:
         return _prepare_staff(session, email, now, base_url)
+    if email.enquiry_id is not None:
+        return _prepare_enquiry(session, email)
     template: EmailTemplate = email.template  # type: ignore[assignment]  # checked in the DB
     booking = email.booking
     if booking is None or not email_still_applies(template, booking.status):
@@ -159,6 +168,27 @@ def _prepare(
         url = link_url(base_url, booking.reference, create_link(session, booking))
     context = _context(session, booking, url, now, email.context)
     return render_email(template, email.recipient, context)
+
+
+def _prepare_enquiry(session: Session, email: EmailLog) -> OutgoingEmail | None:
+    """A "received" email is still true after staff act; a "declined" one only while the
+    enquiry is declined."""
+    template: EnquiryTemplate = email.template  # type: ignore[assignment]  # checked in the DB
+    enquiry = email.enquiry
+    if enquiry is None or (template == "enquiry_declined" and enquiry.status != "declined"):
+        return None
+    reason = (email.context or {}).get("reason")
+    garage = get_setting(session, "garage_contact")
+    context = EnquiryEmailContext(
+        customer_name=enquiry.customer_name,
+        registration=enquiry.car_registration,
+        make=enquiry.car_make,
+        model=enquiry.car_model,
+        description=enquiry.description,
+        reason=reason if isinstance(reason, str) else None,
+        garage=garage if isinstance(garage, dict) else {},
+    )
+    return render_enquiry_email(template, email.recipient, context)
 
 
 def _prepare_staff(

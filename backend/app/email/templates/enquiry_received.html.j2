@@ -1,0 +1,7 @@
+{% extends "_enquiry_layout.html.j2" %}
+{% block content %}
+<p>Thanks for telling {{ c.garage.name }} about the problem with your car. We'll look at it and get back to you by phone or email, usually within a working day.</p>
+{% endblock %}
+{% block after %}
+<p>If it's urgent, please call us on {{ c.garage.phone }}.</p>
+{% endblock %}

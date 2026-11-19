@@ -5,8 +5,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.email.message import EmailTemplate, StaffTemplate
-from app.models import Booking, EmailLog, StaffUser
+from app.email.message import EmailTemplate, EnquiryTemplate, StaffTemplate
+from app.models import Booking, EmailLog, Enquiry, StaffUser
 
 
 def queue_email(
@@ -32,6 +32,22 @@ def queue_staff_email(session: Session, template: StaffTemplate, user: StaffUser
     """Add a queued account email for a staff member. Flushes, doesn't commit. The worker
     makes the link's token when it sends it."""
     email = EmailLog(template=template, staff_user=user, recipient=user.email)
+    session.add(email)
+    session.flush()
+    return email
+
+
+def queue_enquiry_email(
+    session: Session,
+    template: EnquiryTemplate,
+    enquiry: Enquiry,
+    context: dict[str, Any] | None = None,
+) -> EmailLog:
+    """Add a queued email about an enquiry. Flushes, doesn't commit. An enquiry always has an
+    email address."""
+    email = EmailLog(
+        template=template, enquiry=enquiry, recipient=enquiry.customer_email, context=context
+    )
     session.add(email)
     session.flush()
     return email

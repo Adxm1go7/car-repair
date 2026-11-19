@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
-from app.email.message import EmailTemplate, OutgoingEmail, StaffTemplate
+from app.email.message import EmailTemplate, EnquiryTemplate, OutgoingEmail, StaffTemplate
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,24 @@ class StaffEmailContext:
     link_url: str  # the set-password link, with its token
     valid_for: str  # "72 hours" or "1 hour"
 
+
+@dataclass(frozen=True)
+class EnquiryEmailContext:
+    """Everything an enquiry email says: what the customer sent, and why it was declined."""
+
+    customer_name: str
+    registration: str
+    make: str
+    model: str
+    description: str
+    reason: str | None
+    garage: dict[str, str]  # the garage_contact setting
+
+
+ENQUIRY_SUBJECTS: dict[EnquiryTemplate, str] = {
+    "enquiry_received": "We've got your enquiry",
+    "enquiry_declined": "We can't take on your enquiry",
+}
 
 STAFF_SUBJECTS: dict[StaffTemplate, str] = {
     "staff_invite": "You've been invited to {garage} bookings",
@@ -136,6 +154,18 @@ def render_staff_email(
     return OutgoingEmail(
         to=to,
         subject=STAFF_SUBJECTS[template].format(garage=context.garage.get("name", "")),
+        text=_environment.get_template(f"{template}.txt.j2").render(values),
+        html=_environment.get_template(f"{template}.html.j2").render(values),
+    )
+
+
+def render_enquiry_email(
+    template: EnquiryTemplate, to: str, context: EnquiryEmailContext
+) -> OutgoingEmail:
+    values = {"c": context}
+    return OutgoingEmail(
+        to=to,
+        subject=ENQUIRY_SUBJECTS[template],
         text=_environment.get_template(f"{template}.txt.j2").render(values),
         html=_environment.get_template(f"{template}.html.j2").render(values),
     )

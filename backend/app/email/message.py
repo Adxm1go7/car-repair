@@ -16,6 +16,8 @@ EmailTemplate = Literal[
     "request_expired",
     "deposit_expired",
 ]
+# Emails to a customer, about an enquiry:
+EnquiryTemplate = Literal["enquiry_received", "enquiry_declined"]
 # Emails to a staff member, about their account:
 StaffTemplate = Literal["staff_invite", "password_reset"]
 
