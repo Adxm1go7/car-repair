@@ -43,7 +43,7 @@ select = ["E", "F", "I", "B", "UP", "S", "SIM"]
 [tool.mypy]
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["app", "tests"]
+files = ["app", "tests", "scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

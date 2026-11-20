@@ -187,6 +187,35 @@ In CI the `compose` job runs the same test. It reads `STRIPE_SECRET_KEY` and
 missing. GitHub doesn't pass secrets to pull requests from forks or to Dependabot, so that
 check fails there.
 
+### Load test
+
+`backend/scripts/load_availability.py` runs a small load test of the busiest public lookup,
+`GET /api/availability`, against a running stack. It's run by hand, not in CI. It reads the first
+service and the next open day, then has 50 simulated users ask for that day's free times over
+and over for 30 seconds:
+
+```bash
+docker compose up --build -d --wait
+cd backend
+uv run python scripts/load_availability.py   # --base-url, --users, --seconds to change it
+```
+
+Result on 20 Nov 2026, against the local Compose stack through nginx (one API process), on an
+AMD Ryzen 7 5700X3D (8 cores, 16 threads) with 32 GB RAM, Windows 10 and Docker Desktop 29.9:
+
+```
+GET /api/availability?services=mot-test&date=2026-11-21 - 50 users, 30s
+requests: 2658
+requests per second: 87
+errors: 0
+p50: 569 ms
+p95: 893 ms
+p99: 1188 ms
+```
+
+Each request works out a whole day's free times from the opening hours, bays, bookings and
+blocks. The availability lookup has no rate limit, so these numbers aren't throttled.
+
 ## Security
 
 - **Rate limits:** the public forms (picking a time, paying, sending a request or an enquiry,
