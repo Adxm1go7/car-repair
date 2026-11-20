@@ -130,10 +130,12 @@ To run the API outside Docker against the Compose database (`docker compose up -
 export DATABASE_URL=postgresql+psycopg://garage:garage@localhost:5433/garage
 uv run alembic upgrade head
 uv run python -m app.seed
-uv run uvicorn --factory app.main:create_app --reload
+uv run uvicorn --factory app.main:create_app --reload --no-access-log
 ```
 
 On Windows PowerShell, set the variable with `$env:DATABASE_URL = "..."` instead of `export`.
+
+The API and the worker log one JSON object per line: one `app.request` line per request (method, path without the query string, status, time taken, and a request id also sent back as `X-Request-ID`), and one `app.worker` line per job that did something. Read them with `docker compose logs api worker`. Uvicorn's own access log is off, so requests aren't logged twice.
 
 ### Frontend (`frontend/`)
 
