@@ -18,6 +18,7 @@ it('explains what we keep, for how long, and how to reach the garage', () => {
     ),
   ).toBeInTheDocument()
   expect(screen.getByText(/we never see your card details/i)).toBeInTheDocument()
+  expect(screen.getByText(/we give Stripe your email address/i)).toBeInTheDocument()
   expect(screen.getByRole('link', { name: '01632 960123' })).toHaveAttribute('href', 'tel:01632960123')
   expect(screen.getByRole('link', { name: 'bookings@example.com' })).toHaveAttribute(
     'href',

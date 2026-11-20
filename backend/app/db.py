@@ -9,6 +9,9 @@ def make_engine(database_url: str) -> Engine:
     return create_engine(
         database_url,
         pool_pre_ping=True,
+        # Never put parameter values in error text: they can be a customer's email or phone,
+        # and error text ends up in the logs.
+        hide_parameters=True,
         connect_args={"connect_timeout": 5},
     )
 

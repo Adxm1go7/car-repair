@@ -35,7 +35,11 @@ export function PrivacyPage({ garage }: { garage: Garage }): JSX.Element {
       <h2>Other services we use</h2>
       <ul>
         <li>An email provider, to send your booking emails.</li>
-        <li>Stripe, to take deposits. Stripe handles your card, so we never see your card details.</li>
+        <li>
+          Stripe, to take deposits. Stripe handles your card, so we never see your card details. We
+          give Stripe your email address for the payment, and Stripe keeps its own record of the
+          payment under its own privacy policy.
+        </li>
       </ul>
 
       <h2>How long we keep it</h2>
