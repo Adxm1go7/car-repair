@@ -282,10 +282,10 @@ These are the items that usually come only with experience. Each should map to a
 - [ ] Staff passwords hashed with a modern algorithm, with login throttling and secure session or token handling.
 - [ ] Role check on every staff endpoint, tested for each role.
 - [x] Token links are random, hashed in storage, expiring, and limited to one booking.
-- [ ] Rate limiting and a honeypot or CAPTCHA on the booking and enquiry forms.
+- [x] Rate limiting and a honeypot or CAPTCHA on the booking and enquiry forms.
 - [ ] Input validation on every field, with output escaping in emails and pages.
 - [ ] CORS, security headers and HTTPS settings in the deployed environment.
-- [ ] Dependency and container image scanning in CI.
+- [x] Dependency and container image scanning in CI.
 - [ ] No secrets in the repository; separate configuration per environment.
 
 **Privacy**
@@ -314,7 +314,9 @@ There is no deadline, so each milestone has a definition of done and the next on
 9. **Approval bookings and enquiries**, split in two (Nov 19):
    - **9a. Approval bookings.** Online requests for needs-approval services, the staff Requests page, approve, propose another time and decline, and the deposit paid from the booking link. *Done when* flow 2 passes end to end in CI.
    - **9b. Enquiries.** The enquiry form (description only, no photos), the staff queue, approve with a slot (converting to a booking), and decline. *Done when* flow 3 passes end to end.
-10. **Hardening and polish.** Rate limiting, accessibility pass, error pages, load test of the availability endpoint, security scans, documentation. *Done when* the checklist section is fully ticked.
+10. **Hardening and polish**, kept basic (Nov 20), split in two:
+   - **10a. Security hardening.** Rate limits and a honeypot on the public forms, security headers, dependency and image scans in CI, and the leftover security fixes. *Done when* those are in and the e2e suite passes under the new headers.
+   - **10b. Polish.** Error pages, structured logs, an accessibility check, a load test of the availability endpoint, a privacy note and retention rule, and documentation. *Done when* the checklist section is fully ticked.
 11. **Deployment.** Cloud environment from the same images, environment configuration, a seeded live demo, and a short walkthrough or recording. *Done when* the live demo passes the end-to-end suite.
 
 ## Open questions and next steps

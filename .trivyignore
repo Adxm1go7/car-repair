@@ -1,0 +1,5 @@
+# Image vulnerabilities the CI scan may skip. One ID per line, each with a comment above
+# saying why it doesn't apply and when to look again, e.g.:
+#
+# # Only reachable through the untgz tool, which the image never runs. Re-check 2027-01.
+# CVE-0000-00000

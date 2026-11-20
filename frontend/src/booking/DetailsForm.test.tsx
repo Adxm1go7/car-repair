@@ -52,19 +52,36 @@ type Handlers = {
 }
 
 /** Holds the typed values the way BookPage does. */
-function Harness({ initial, handlers }: { initial: CustomerDetails; handlers: Handlers }): JSX.Element {
+function Harness({
+  initial,
+  handlers,
+  request = false,
+}: {
+  initial: CustomerDetails
+  handlers: Handlers
+  request?: boolean
+}): JSX.Element {
   const [values, setValues] = useState(initial)
-  return <DetailsForm hold={HOLD} zone="Europe/London" values={values} onValuesChange={setValues} {...handlers} />
+  return (
+    <DetailsForm
+      hold={HOLD}
+      zone="Europe/London"
+      request={request}
+      values={values}
+      onValuesChange={setValues}
+      {...handlers}
+    />
+  )
 }
 
-function renderForm(initial: CustomerDetails = EMPTY): Handlers {
+function renderForm(initial: CustomerDetails = EMPTY, request = false): Handlers {
   const handlers: Handlers = {
     onExpired: vi.fn<() => void>(),
     onCheckout: vi.fn<(checkout: Checkout) => void>(),
     onAlreadyPaid: vi.fn<() => void>(),
     onSubmittingChange: vi.fn<(submitting: boolean) => void>(),
   }
-  render(<Harness initial={initial} handlers={handlers} />)
+  render(<Harness initial={initial} handlers={handlers} request={request} />)
   return handlers
 }
 
@@ -196,7 +213,7 @@ it('starts checkout with the typed details and hands the checkout to the page', 
   await vi.waitFor(() => expect(onCheckout).toHaveBeenCalledWith(CHECKOUT))
   const [url, init] = fetchMock.mock.calls[0]
   expect(url).toBe('/api/holds/ABCD-EFGH/checkout')
-  expect(JSON.parse(String((init as RequestInit).body))).toEqual({ hold_token: 'token', ...DETAILS })
+  expect(JSON.parse(String((init as RequestInit).body))).toEqual({ hold_token: 'token', ...DETAILS, website: '' })
 })
 
 it('shows Starting payment… and aria-busy while waiting', async () => {
@@ -241,4 +258,58 @@ it('shows a field error the server sends back against that field', async () => {
   await userEvent.setup().click(confirmButton())
   expect(await screen.findByLabelText('Email')).toHaveAccessibleDescription('Please enter a valid email address')
   expect(confirmButton()).toBeEnabled()
+})
+
+// --- rate limits and the honeypot ---------------------------------------------------
+
+const TOO_MANY = 'Too many attempts. Please wait a few minutes and try again.'
+
+it('a 429 from checkout shows the server message', async () => {
+  answer(429, { detail: TOO_MANY })
+  renderForm(DETAILS)
+  await userEvent.setup().click(confirmButton())
+  expect(await screen.findByRole('alert')).toHaveTextContent(TOO_MANY)
+  expect(confirmButton()).toBeEnabled()
+})
+
+it('a 429 from sending a request shows the server message', async () => {
+  answer(429, { detail: TOO_MANY })
+  renderForm(DETAILS, true)
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Send request' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent(TOO_MANY)
+})
+
+it('the honeypot is hidden and empty', async () => {
+  const fetchMock = answer(200, CHECKOUT)
+  const { container } = render(<Harness initial={DETAILS} handlers={{
+    onExpired: vi.fn<() => void>(),
+    onCheckout: vi.fn<(checkout: Checkout) => void>(),
+    onAlreadyPaid: vi.fn<() => void>(),
+    onSubmittingChange: vi.fn<(submitting: boolean) => void>(),
+  }} />)
+  const trap = container.querySelector('input[name="website"]')
+  expect(trap).not.toBeNull()
+  expect(trap).toHaveAttribute('tabindex', '-1')
+  expect(trap).toHaveAttribute('autocomplete', 'off')
+  expect(trap?.closest('[aria-hidden="true"]')).not.toBeNull()
+  expect(screen.queryByRole('textbox', { name: /leave this empty/i })).toBeNull()
+  await userEvent.setup().click(confirmButton())
+  await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled())
+  expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).website).toBe('')
+})
+
+it('a filled honeypot is sent', async () => {
+  const fetchMock = answer(422, { detail: 'Please check your details and try again.' })
+  const { container } = render(<Harness initial={DETAILS} handlers={{
+    onExpired: vi.fn<() => void>(),
+    onCheckout: vi.fn<(checkout: Checkout) => void>(),
+    onAlreadyPaid: vi.fn<() => void>(),
+    onSubmittingChange: vi.fn<(submitting: boolean) => void>(),
+  }} />)
+  const trap = container.querySelector('input[name="website"]') as HTMLInputElement
+  fireEvent.change(trap, { target: { value: 'http://spam.test' } })
+  await userEvent.setup().click(confirmButton())
+  await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled())
+  expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).website).toBe('http://spam.test')
+  expect(await screen.findByRole('alert')).toHaveTextContent('Please check your details and try again.')
 })

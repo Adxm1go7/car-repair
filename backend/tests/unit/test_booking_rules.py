@@ -139,3 +139,13 @@ def test_token_matches_only_its_hash() -> None:
 
 def test_tokens_are_different_each_time() -> None:
     assert new_hold_token() != new_hold_token()
+
+
+@pytest.mark.parametrize(
+    "clean",
+    [clean_name, clean_make_or_model, clean_notes, clean_email],
+)
+def test_nul_refused(clean: object) -> None:
+    assert callable(clean)
+    with pytest.raises(ValueError, match="^Please remove unusual characters$"):
+        clean("Sam\x00@example.com")

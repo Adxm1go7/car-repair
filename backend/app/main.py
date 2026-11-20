@@ -1,8 +1,8 @@
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -27,6 +27,7 @@ from app.api import (
 )
 from app.config import AppConfig, get_config
 from app.db import make_engine
+from app.limits import TOO_MANY, TooManyAttempts
 from app.payments.stripe_provider import StripeProvider
 
 # uvicorn configures this logger; one of our own would print nothing under it.
@@ -43,6 +44,15 @@ def validation_message(error: RequestValidationError) -> str:
     field = fields[-1] if fields else "request"
     message = str(first.get("msg", "Invalid value")).removeprefix("Value error, ")
     return f"{field}: {message}"
+
+
+async def too_many_attempts_handler(request: Request, error: Exception) -> JSONResponse:
+    assert isinstance(error, TooManyAttempts)  # noqa: S101 - registered only for this type
+    return JSONResponse(
+        status_code=429,
+        content={"detail": TOO_MANY},
+        headers={"Retry-After": str(error.retry_after)},
+    )
 
 
 async def validation_error_handler(request: Request, error: Exception) -> JSONResponse:
@@ -70,6 +80,16 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     )
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=config.trusted_proxies)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
+    app.add_exception_handler(TooManyAttempts, too_many_attempts_handler)
+
+    @app.middleware("http")
+    async def no_sniffing(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
     app.include_router(health.router, prefix="/api")
     app.include_router(catalogue.router, prefix="/api")
     app.include_router(availability.router, prefix="/api")

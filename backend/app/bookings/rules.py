@@ -53,8 +53,15 @@ def token_matches(token: str, stored_hash: str | None) -> bool:
     return hmac.compare_digest(hash_token(token), stored_hash)
 
 
+def reject_control_chars(value: str) -> str:
+    """A NUL can't be stored in PostgreSQL text, so refuse it instead of failing later."""
+    if "\x00" in value:
+        raise ValueError("Please remove unusual characters")
+    return value
+
+
 def _length(value: str, low: int, high: int, what: str) -> str:
-    value = value.strip()
+    value = reject_control_chars(value).strip()
     if not value:
         raise ValueError(f"Please enter your {what}")
     if not low <= len(value) <= high:
@@ -75,7 +82,7 @@ def clean_phone(value: str) -> str:
 
 
 def clean_email(value: str) -> str:
-    value = value.strip().lower()
+    value = reject_control_chars(value).strip().lower()
     local, at, domain = value.partition("@")
     if (
         len(value) > 254
@@ -103,7 +110,7 @@ def clean_make_or_model(value: str) -> str:
 def clean_notes(value: str | None) -> str | None:
     if value is None or not value.strip():
         return None
-    value = value.strip()
+    value = reject_control_chars(value).strip()
     if len(value) > 1000:
         raise ValueError("Notes can be at most 1000 characters")
     return value

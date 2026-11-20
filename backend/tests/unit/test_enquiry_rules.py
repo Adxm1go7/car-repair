@@ -31,3 +31,8 @@ def test_description_limits_accept(value: str, expected: str) -> None:
 def test_description_limits(value: str, message: str) -> None:
     with pytest.raises(ValueError, match=f"^{message}$"):
         clean_description(value)
+
+
+def test_description_nul_refused() -> None:
+    with pytest.raises(ValueError, match="^Please remove unusual characters$"):
+        clean_description("Rattle from the\x00 front left")

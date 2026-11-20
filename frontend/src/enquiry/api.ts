@@ -6,6 +6,6 @@ import type { CustomerDetails } from '../booking/types.ts'
 export type EnquiryDetails = Omit<CustomerDetails, 'notes'> & { description: string }
 
 /** Send an enquiry. The reply says where the "we've got it" email is going. */
-export function sendEnquiry(details: EnquiryDetails): Promise<Result<{ email: string }>> {
-  return request<{ email: string }>('/api/enquiries', post(details))
+export function sendEnquiry(details: EnquiryDetails, website = ''): Promise<Result<{ email: string }>> {
+  return request<{ email: string }>('/api/enquiries', post({ ...details, website }))
 }

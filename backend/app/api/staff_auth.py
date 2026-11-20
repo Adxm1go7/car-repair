@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import AfterValidator, BaseModel, StringConstraints
 from sqlalchemy import select
 
+from app.bookings.rules import reject_control_chars
 from app.config import AppConfig
 from app.email.queue import queue_staff_email
 from app.models import StaffUser
@@ -40,12 +41,12 @@ _DUMMY_HASH: Final = hash_password("not anyone's password")
 
 
 class LoginIn(BaseModel):
-    email: Annotated[str, StringConstraints(max_length=254)]
+    email: Annotated[str, StringConstraints(max_length=254), AfterValidator(reject_control_chars)]
     password: Annotated[str, StringConstraints(max_length=200)]
 
 
 class ForgotIn(BaseModel):
-    email: Annotated[str, StringConstraints(max_length=254)]
+    email: Annotated[str, StringConstraints(max_length=254), AfterValidator(reject_control_chars)]
 
 
 class SetPasswordIn(BaseModel):

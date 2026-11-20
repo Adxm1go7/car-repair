@@ -33,6 +33,7 @@ from app.bookings.self_service import (
 )
 from app.clock import utc_now
 from app.db import get_session
+from app.limits import limited
 from app.models import Booking
 from app.payments.deps import get_payment_provider
 from app.payments.provider import PaymentProvider, PaymentUnavailable
@@ -116,7 +117,7 @@ def view(
     return out
 
 
-@router.post("/bookings/{reference}/pay")
+@router.post("/bookings/{reference}/pay", dependencies=[Depends(limited("pay"))])
 def pay(
     reference: str, body: LinkIn, session: SessionDep, now: NowDep, provider: ProviderDep
 ) -> CheckoutOut:
@@ -146,7 +147,7 @@ def pay(
     return CheckoutOut(**asdict(result))
 
 
-@router.post("/bookings/{reference}/cancel")
+@router.post("/bookings/{reference}/cancel", dependencies=[Depends(limited("link"))])
 def cancel(
     reference: str, body: LinkIn, session: SessionDep, now: NowDep, provider: ProviderDep
 ) -> MyBookingOut:

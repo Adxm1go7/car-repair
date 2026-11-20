@@ -4,10 +4,11 @@ and no payment; staff answer from the Enquiries page."""
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import AfterValidator, BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.validation import caught_bot
 from app.bookings.rules import (
     clean_email,
     clean_make_or_model,
@@ -19,6 +20,7 @@ from app.clock import utc_now
 from app.db import get_session
 from app.enquiries.actions import EnquiryDetails, create_enquiry
 from app.enquiries.rules import clean_description
+from app.limits import limited
 
 router = APIRouter()
 
@@ -34,14 +36,19 @@ class EnquiryIn(BaseModel):
     make: Annotated[str, AfterValidator(clean_make_or_model)]
     model: Annotated[str, AfterValidator(clean_make_or_model)]
     description: Annotated[str, AfterValidator(clean_description)]
+    website: str | None = None  # the honeypot: people never see it
 
 
 class EnquirySentOut(BaseModel):
     email: str  # where the "we've got it" email is going
 
 
-@router.post("/enquiries", status_code=201)
-def send_enquiry(body: EnquiryIn, session: SessionDep, now: NowDep) -> EnquirySentOut:
+@router.post("/enquiries", status_code=201, dependencies=[Depends(limited("enquiry"))])
+def send_enquiry(
+    body: EnquiryIn, incoming: Request, session: SessionDep, now: NowDep
+) -> EnquirySentOut:
+    if caught_bot(body.website, "/api/enquiries", incoming):
+        return EnquirySentOut(email=body.email)  # looks sent; nothing is stored or emailed
     details = EnquiryDetails(
         name=body.name,
         phone=body.phone,

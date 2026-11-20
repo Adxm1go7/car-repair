@@ -1,16 +1,37 @@
 """Input checks shared by public routes, so availability and holds refuse the same things."""
 
+import logging
 from datetime import date, datetime, timedelta
+from typing import Annotated
 from zoneinfo import ZoneInfo
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Path, Request
 from sqlalchemy.orm import Session
 
 from app.models import Service
 from app.repositories.availability import find_active_services
+from app.staff.deps import client_ip
+
+# uvicorn configures this logger, so these lines reach `docker compose logs api`.
+log = logging.getLogger("uvicorn.error")
 
 MAX_SERVICES = 20
+# An id in a URL: a PostgreSQL integer, so anything else is a 422, never a database error.
+ResourceId = Annotated[int, Path(ge=1, le=2_147_483_647)]
 MAX_SLUG_LENGTH = 64  # Service.slug is String(64)
+
+
+def is_bot(website: str | None) -> bool:
+    """The hidden `website` field (the honeypot) is filled in: only a bot sees it."""
+    return website is not None and website.strip() != ""
+
+
+def caught_bot(website: str | None, route: str, request: Request) -> bool:
+    """True, and logged without the form's contents, when the honeypot is filled in."""
+    if not is_bot(website):
+        return False
+    log.warning("honeypot filled on %s from %s", route, client_ip(request))
+    return True
 
 
 def reject(detail: str) -> HTTPException:

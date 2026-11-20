@@ -6,11 +6,11 @@ from datetime import datetime
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import AfterValidator, AwareDatetime, BaseModel, StringConstraints
 from sqlalchemy.orm import Session
 
-from app.api.validation import check_bookable_date, reject, resolve_services
+from app.api.validation import caught_bot, check_bookable_date, reject, resolve_services
 from app.bookings.approval import enough_notice, needs_approval, request_deadline
 from app.bookings.rules import (
     clean_email,
@@ -37,6 +37,7 @@ from app.bookings.service import (
 )
 from app.clock import utc_now
 from app.db import get_session
+from app.limits import limited
 from app.models import Booking
 from app.payments.deps import get_payment_provider
 from app.payments.provider import PaymentProvider, PaymentUnavailable
@@ -55,6 +56,7 @@ from app.repositories.reservations import SlotUnavailable
 router = APIRouter()
 # uvicorn configures this logger, so these lines reach `docker compose logs api`.
 log = logging.getLogger("uvicorn.error")
+BOT_REFUSED = "Please check your details and try again."
 
 SessionDep = Annotated[Session, Depends(get_session)]
 NowDep = Annotated[datetime, Depends(utc_now)]
@@ -91,7 +93,7 @@ class HoldOut(BaseModel):
     services: list[ServiceSummaryOut]
 
 
-@router.post("/holds", status_code=201)
+@router.post("/holds", status_code=201, dependencies=[Depends(limited("hold"))])
 def hold(body: HoldIn, session: SessionDep, now: NowDep) -> HoldOut:
     """Hold `start` for these services. Only the returned `hold_token` can confirm it."""
     try:
@@ -146,6 +148,7 @@ class CheckoutIn(BaseModel):
     make: Annotated[str, AfterValidator(clean_make_or_model)]
     model: Annotated[str, AfterValidator(clean_make_or_model)]
     notes: Annotated[str | None, AfterValidator(clean_notes)] = None
+    website: str | None = None  # the honeypot: people never see it
 
 
 class TokenIn(BaseModel):
@@ -207,11 +210,18 @@ class StatusOut(BaseModel):
     summary: BookingSummaryOut | None
 
 
-@router.post("/holds/{reference}/checkout")
+@router.post("/holds/{reference}/checkout", dependencies=[Depends(limited("pay"))])
 def checkout(
-    reference: str, body: CheckoutIn, session: SessionDep, now: NowDep, provider: ProviderDep
+    reference: str,
+    body: CheckoutIn,
+    incoming: Request,
+    session: SessionDep,
+    now: NowDep,
+    provider: ProviderDep,
 ) -> CheckoutOut:
     """Save the details and open the deposit's payment form. A repeat returns the same form."""
+    if caught_bot(body.website, "/api/holds/{reference}/checkout", incoming):
+        raise reject(BOT_REFUSED)
     _check_reference(reference)
     try:
         zone = load_policy(session).zone
@@ -258,11 +268,15 @@ def checkout(
     return CheckoutOut(**asdict(result))
 
 
-@router.post("/holds/{reference}/request", status_code=201)
+@router.post(
+    "/holds/{reference}/request", status_code=201, dependencies=[Depends(limited("request"))]
+)
 def request(
-    reference: str, body: CheckoutIn, session: SessionDep, now: NowDep
+    reference: str, body: CheckoutIn, incoming: Request, session: SessionDep, now: NowDep
 ) -> BookingSummaryOut:
     """Save the details and send a needs-approval visit to staff. Nothing is paid yet."""
+    if caught_bot(body.website, "/api/holds/{reference}/request", incoming):
+        raise reject(BOT_REFUSED)
     _check_reference(reference)
     try:
         policy = load_policy(session)

@@ -111,7 +111,11 @@ def test_reads_need_no_origin(staff_client: TestClient) -> None:
 def test_dev_origin_allowed_only_in_development(
     client_for: ClientFor, migrated_url: str, environment: str, allowed: bool
 ) -> None:
-    keys = {"stripe_secret_key": "sk_test_x", "stripe_publishable_key": "pk_test_x"}
+    keys = {
+        "stripe_secret_key": "sk_test_x",
+        "stripe_publishable_key": "pk_test_x",
+        "stripe_webhook_secret": "whsec_x",
+    }
     config = AppConfig(
         database_url=migrated_url,
         environment=environment,
