@@ -167,3 +167,19 @@ it('shows a page-not-found page with links home and to booking for an unknown ad
   expect(screen.getByRole('link', { name: 'Book a service' })).toHaveAttribute('href', '/book')
   expect(document.title).toBe('Page not found')
 })
+
+it('links every customer page to the privacy note', async () => {
+  stubApi()
+  renderApp('/')
+  await screen.findByRole('heading', { level: 1, name: 'Hillside Motors' })
+  expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Privacy' })).toHaveAttribute(
+    'href',
+    '/privacy',
+  )
+})
+
+it('shows the privacy note at /privacy', async () => {
+  stubApi()
+  renderApp('/privacy')
+  expect(await screen.findByRole('heading', { level: 1, name: 'Privacy' })).toBeInTheDocument()
+})

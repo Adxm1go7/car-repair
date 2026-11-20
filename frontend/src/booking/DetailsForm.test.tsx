@@ -313,3 +313,10 @@ it('a filled honeypot is sent', async () => {
   expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).website).toBe('http://spam.test')
   expect(await screen.findByRole('alert')).toHaveTextContent('Please check your details and try again.')
 })
+
+it('links to the privacy note in a new tab, so the hold is kept', () => {
+  renderForm()
+  const link = screen.getByRole('link', { name: /How we use your details/ })
+  expect(link).toHaveAttribute('href', '/privacy')
+  expect(link).toHaveAttribute('target', '_blank')
+})

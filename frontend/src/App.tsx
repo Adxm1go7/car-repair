@@ -10,10 +10,12 @@ import { formatDuration, formatPrice } from './catalogue/format.ts'
 import { shortDate } from './catalogue/hours.ts'
 import { openTodayText } from './catalogue/openToday.ts'
 import type { Catalogue, OpeningDay, Service } from './catalogue/types.ts'
+import { CustomerFooter } from './CustomerFooter.tsx'
 import { EnquiryPage } from './enquiry/EnquiryPage.tsx'
 import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { ManageBookingPage } from './manage/ManageBookingPage.tsx'
 import { NotFoundPage } from './NotFoundPage.tsx'
+import { PrivacyPage } from './PrivacyPage.tsx'
 import { StaffApp } from './staff/StaffApp.tsx'
 
 type PageState =
@@ -215,13 +217,17 @@ function CustomerApp({ now }: { now: () => Date }): JSX.Element {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<CataloguePage catalogue={state.catalogue} now={now()} />} />
-      <Route path="/book" element={<BookPage catalogue={state.catalogue} now={now} />} />
-      <Route path="/booked/:reference" element={<BookedPage garage={state.catalogue.garage} />} />
-      <Route path="/booking/:reference" element={<ManageBookingPage garage={state.catalogue.garage} />} />
-      <Route path="/enquiry" element={<EnquiryPage garage={state.catalogue.garage} />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<CataloguePage catalogue={state.catalogue} now={now()} />} />
+        <Route path="/book" element={<BookPage catalogue={state.catalogue} now={now} />} />
+        <Route path="/booked/:reference" element={<BookedPage garage={state.catalogue.garage} />} />
+        <Route path="/booking/:reference" element={<ManageBookingPage garage={state.catalogue.garage} />} />
+        <Route path="/enquiry" element={<EnquiryPage garage={state.catalogue.garage} />} />
+        <Route path="/privacy" element={<PrivacyPage garage={state.catalogue.garage} />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+      <CustomerFooter />
+    </>
   )
 }

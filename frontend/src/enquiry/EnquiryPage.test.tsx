@@ -159,3 +159,11 @@ it('the enquiry honeypot is hidden and sent', async () => {
   const [call] = enquiryCalls(mock)
   expect(JSON.parse((call[1] as RequestInit).body as string).website).toBe('spam')
 })
+
+it('links to the privacy note in a new tab, so the typed enquiry is kept', async () => {
+  stub()
+  renderAt('/enquiry')
+  const link = await screen.findByRole('link', { name: /How we use your details/ })
+  expect(link).toHaveAttribute('href', '/privacy')
+  expect(link).toHaveAttribute('target', '_blank')
+})
