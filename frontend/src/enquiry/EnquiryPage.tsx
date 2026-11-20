@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent, JSX } from 'react'
 import { Link } from 'react-router'
 import { Honeypot } from '../booking/Honeypot.tsx'
+import { PrivacyLink } from '../PrivacyLink.tsx'
 import { checkDescription, validateDetails } from '../booking/validation.ts'
 import type { Garage } from '../catalogue/types.ts'
 import { sendEnquiry } from './api.ts'
@@ -163,6 +164,8 @@ export function EnquiryPage({ garage }: { garage: Garage }): JSX.Element {
         )}
 
         <Honeypot value={website} onChange={setWebsite} />
+
+        <PrivacyLink />
 
         <button type="submit" className="button" disabled={sending}>
           {sending ? 'Sending…' : 'Send enquiry'}

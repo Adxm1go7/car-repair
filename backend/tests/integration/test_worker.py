@@ -1,7 +1,9 @@
 """The worker releases expired holds and closes their payment forms, committing as it goes."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from alembic import command
 from conftest import alembic_config
 from factories import make_deposit, make_hold, make_staff
@@ -14,7 +16,7 @@ from app.models import Booking, EmailLog, LoginAttempt, Payment, StaffSession
 from app.seed import seed
 from app.staff.sessions import create_session, find_session_user
 from app.staff.throttle import record_attempt
-from app.worker import run_once
+from app.worker import run_job, run_once
 
 NOW = datetime(2026, 11, 9, 9, tzinfo=UTC)
 
@@ -34,7 +36,7 @@ def test_run_once_releases_and_commits(fresh_database_url: str) -> None:
             session.commit()
 
         with Session(engine) as session:
-            assert run_once(session, NOW, FakeProvider()) == 1
+            assert run_once(session, NOW, FakeProvider())["holds_released"] == 1
 
         with Session(engine) as session:  # a new session only sees committed work
             statuses = dict(session.execute(select(Booking.reference, Booking.status)).all())
@@ -51,7 +53,7 @@ def test_run_once_with_nothing_to_do_returns_zero(fresh_database_url: str) -> No
             seed(session)
             session.commit()
         with Session(engine) as session:
-            assert run_once(session, NOW, FakeProvider()) == 0
+            assert run_once(session, NOW, FakeProvider())["holds_released"] == 0
     finally:
         engine.dispose()
 
@@ -90,7 +92,7 @@ def test_worker_closes_checkout_of_a_released_hold(fresh_database_url: str) -> N
         reference = paying_hold(engine, NOW - timedelta(minutes=1))
         provider = FakeProvider()
         with Session(engine) as session:
-            assert run_once(session, NOW, provider) == 1
+            assert run_once(session, NOW, provider)["holds_released"] == 1
         assert provider.called("close_checkout") == [{"session_ref": "cs_fake_1"}]
         assert state(engine, reference) == ("expired", "unpaid", "expired")
     finally:
@@ -116,12 +118,14 @@ def test_worker_retries_a_failed_close_next_cycle(fresh_database_url: str) -> No
         reference = paying_hold(engine, NOW - timedelta(minutes=1))
         provider = FakeProvider(fail=True)
         with Session(engine) as session:
-            assert run_once(session, NOW, provider) == 1  # the release still happens
+            assert (
+                run_once(session, NOW, provider)["holds_released"] == 1
+            )  # the release still happens
         assert state(engine, reference) == ("expired", "unpaid", "open")
 
         provider.fail = False
         with Session(engine) as session:
-            assert run_once(session, NOW + timedelta(minutes=1), provider) == 0
+            assert run_once(session, NOW + timedelta(minutes=1), provider)["holds_released"] == 0
         assert state(engine, reference) == ("expired", "unpaid", "expired")
     finally:
         engine.dispose()
@@ -168,7 +172,7 @@ def test_worker_leaves_an_approvals_live_payment_form_open(fresh_database_url: s
         reference = paying_hold(engine, NOW + timedelta(hours=5), status="awaiting_deposit")
         provider = FakeProvider()
         with Session(engine) as session:
-            assert run_once(session, NOW, provider) == 0
+            assert run_once(session, NOW, provider)["holds_released"] == 0
         assert provider.calls == []
         assert state(engine, reference) == ("awaiting_deposit", "unpaid", "open")
     finally:
@@ -181,7 +185,7 @@ def test_worker_expires_an_unpaid_approval_and_tells_the_customer(fresh_database
         reference = paying_hold(engine, NOW - timedelta(minutes=1), status="awaiting_deposit")
         provider = FakeProvider()
         with Session(engine) as session:
-            assert run_once(session, NOW, provider) == 1
+            assert run_once(session, NOW, provider)["holds_released"] == 1
         assert provider.called("close_checkout") == [{"session_ref": "cs_fake_1"}]
         assert state(engine, reference) == ("expired", "unpaid", "expired")
         with Session(engine) as session:
@@ -189,3 +193,27 @@ def test_worker_expires_an_unpaid_approval_and_tells_the_customer(fresh_database
         assert templates == ["deposit_expired"]
     finally:
         engine.dispose()
+
+
+def test_run_job_logs_only_when_work_was_done(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO, logger="app.worker"):
+        run_job("email", lambda: 0)
+        assert caplog.records == []
+        run_job("email", lambda: 2)
+    [rec] = caplog.records
+    assert rec.getMessage() == "job finished"
+    assert rec.__dict__["job"] == "email"
+    assert rec.__dict__["count"] == 2
+    assert isinstance(rec.__dict__["duration_ms"], int)
+
+
+def test_run_job_logs_failure_and_continues(caplog: pytest.LogCaptureFixture) -> None:
+    def broken() -> int:
+        raise RuntimeError("mail server down")
+
+    with caplog.at_level(logging.INFO, logger="app.worker"):
+        run_job("email", broken)  # doesn't raise
+    [rec] = caplog.records
+    assert rec.levelno == logging.ERROR
+    assert rec.__dict__["job"] == "email"
+    assert rec.exc_info is not None

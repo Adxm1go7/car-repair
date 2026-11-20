@@ -83,3 +83,10 @@ it('logs out and goes to the login page', async () => {
   expect(await screen.findByRole('heading', { level: 1, name: 'Staff login' })).toBeInTheDocument()
   expect(mock.mock.calls.some(([url, init]) => url === '/api/staff/logout' && init?.method === 'POST')).toBe(true)
 })
+
+it('shows a page-not-found page with a link back to the schedule for an unknown staff address', async () => {
+  stubFetch({ 'GET /api/staff/me': { status: 200, body: STAFF_ME } })
+  renderAt('/staff/nope')
+  expect(await screen.findByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: "Back to today's schedule" })).toHaveAttribute('href', '/staff')
+})

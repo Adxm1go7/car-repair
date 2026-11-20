@@ -18,4 +18,4 @@ COPY app ./app
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
 USER app
 EXPOSE 8000
-CMD ["sh", "-c", "alembic upgrade head && python -m app.seed && uvicorn --factory app.main:create_app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && python -m app.seed && uvicorn --factory app.main:create_app --host 0.0.0.0 --port 8000 --no-access-log"]

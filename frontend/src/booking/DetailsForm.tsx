@@ -6,6 +6,7 @@ import type { BookingSummary, Checkout, CustomerDetails, Hold } from './types.ts
 import { formatCountdown, useCountdown } from './useCountdown.ts'
 import { formatPrice } from '../catalogue/format.ts'
 import { Honeypot } from './Honeypot.tsx'
+import { PrivacyLink } from '../PrivacyLink.tsx'
 import { validateDetails } from './validation.ts'
 import type { FieldErrors } from './validation.ts'
 
@@ -239,6 +240,8 @@ export function DetailsForm(props: Props): JSX.Element {
       )}
 
       <Honeypot value={website} onChange={setWebsite} />
+
+      <PrivacyLink />
 
       <button type="submit" className="button" disabled={submitting}>
         {request

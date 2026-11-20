@@ -130,10 +130,12 @@ To run the API outside Docker against the Compose database (`docker compose up -
 export DATABASE_URL=postgresql+psycopg://garage:garage@localhost:5433/garage
 uv run alembic upgrade head
 uv run python -m app.seed
-uv run uvicorn --factory app.main:create_app --reload
+uv run uvicorn --factory app.main:create_app --reload --no-access-log
 ```
 
 On Windows PowerShell, set the variable with `$env:DATABASE_URL = "..."` instead of `export`.
+
+The API and the worker log one JSON object per line: one `app.request` line per request (method, path without the query string, status, time taken, and a request id also sent back as `X-Request-ID`), and one `app.worker` line per job that did something. Read them with `docker compose logs api worker`. Uvicorn's own access log is off, so requests aren't logged twice.
 
 ### Frontend (`frontend/`)
 
@@ -164,7 +166,8 @@ then add and delete future hours that clash with nothing. Flow 2 has a customer 
 diagnostic check without paying, staff approve it from the Requests page, and the customer pay
 the deposit from the link in the approval email. Flow 3 has a customer send an enquiry,
 staff book it in from the Enquiries page, and the customer open the confirmed booking from
-the email; it needs no Stripe keys. The others need
+the email; it needs no Stripe keys. An accessibility check runs axe (WCAG 2 A and AA) on the
+main customer and staff pages and fails on any serious or critical problem. The others need
 the stack running with Stripe test keys ([docs/stripe-setup.md](docs/stripe-setup.md)) and
 fail at once, with a clear message, in demo mode. Start the stack first:
 
@@ -185,6 +188,35 @@ In CI the `compose` job runs the same test. It reads `STRIPE_SECRET_KEY` and
 missing. GitHub doesn't pass secrets to pull requests from forks or to Dependabot, so that
 check fails there.
 
+### Load test
+
+`backend/scripts/load_availability.py` runs a small load test of the busiest public lookup,
+`GET /api/availability`, against a running stack. It's run by hand, not in CI. It reads the first
+service and the next open day, then has 50 simulated users ask for that day's free times over
+and over for 30 seconds:
+
+```bash
+docker compose up --build -d --wait
+cd backend
+uv run python scripts/load_availability.py   # --base-url, --users, --seconds to change it
+```
+
+Result on 20 Nov 2026, against the local Compose stack through nginx (one API process), on an
+AMD Ryzen 7 5700X3D (8 cores, 16 threads) with 32 GB RAM, Windows 10 and Docker Desktop 29.9:
+
+```
+GET /api/availability?services=mot-test&date=2026-11-21 - 50 users, 30s
+requests: 2658
+requests per second: 87
+errors: 0
+p50: 569 ms
+p95: 893 ms
+p99: 1188 ms
+```
+
+Each request works out a whole day's free times from the opening hours, bays, bookings and
+blocks. The availability lookup has no rate limit, so these numbers aren't throttled.
+
 ## Security
 
 - **Rate limits:** the public forms (picking a time, paying, sending a request or an enquiry,
@@ -197,6 +229,18 @@ check fails there.
   the site itself and Stripe ([frontend/security-headers.conf](frontend/security-headers.conf)).
 - **Scans:** the CI `scan` job audits the Python and npm packages and scans the built images
   with Trivy. Allowed exceptions go in `.trivyignore`, each with its reason.
+
+## Privacy
+
+- **Privacy note:** `/privacy` on the public site says what's collected, why, who sees it and
+  for how long. Every customer page links to it in the footer, and the booking and enquiry
+  forms link to it next to the submit button.
+- **12-month rule:** once a day the worker blanks the customer's details on bookings whose
+  appointment ended more than 12 months ago, and on enquiries older than that which weren't
+  booked in ([backend/app/privacy/retention.py](backend/app/privacy/retention.py)). The rows
+  stay, so the schedule history and the audit trail stay whole: the name, phone, email and
+  registration become "removed", notes are cleared, and the copies in the audit log and email
+  log go too. Car make and model are kept.
 
 ## Documentation
 

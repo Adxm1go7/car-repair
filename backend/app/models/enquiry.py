@@ -44,6 +44,8 @@ class Enquiry(Base):
     handled_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id"))
     decline_reason: Mapped[str | None] = mapped_column(String(500))
     booking_id: Mapped[int | None] = mapped_column(ForeignKey("bookings.id"), unique=True)
+    # When the 12-month rule replaced the customer's details with placeholders.
+    details_removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     handler: Mapped[StaffUser | None] = relationship()
     booking: Mapped[Booking | None] = relationship()

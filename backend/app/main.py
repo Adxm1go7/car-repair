@@ -28,10 +28,10 @@ from app.api import (
 from app.config import AppConfig, get_config
 from app.db import make_engine
 from app.limits import TOO_MANY, TooManyAttempts
+from app.logs import RequestLogMiddleware, configure_logging
 from app.payments.stripe_provider import StripeProvider
 
-# uvicorn configures this logger; one of our own would print nothing under it.
-log = logging.getLogger("uvicorn.error")
+log = logging.getLogger("uvicorn.error")  # JSON like every other logger (app/logs.py)
 
 LOCATION_PARTS = {"body", "query", "path", "header", "cookie"}
 
@@ -62,6 +62,7 @@ async def validation_error_handler(request: Request, error: Exception) -> JSONRe
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
     config = config or get_config()
+    configure_logging()
     engine = make_engine(config.database_url)
 
     @asynccontextmanager
@@ -89,6 +90,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         return response
+
+    app.add_middleware(RequestLogMiddleware)  # added last, so outermost: sees the final status
 
     app.include_router(health.router, prefix="/api")
     app.include_router(catalogue.router, prefix="/api")
