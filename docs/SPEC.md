@@ -267,37 +267,40 @@ Testing is the main thing that separates this from a typical demo project, so it
 
 These are the items that usually come only with experience. Each should map to a task or a test.
 
+Each ticked item names what proves it: a test (`file::test`) or, where a test can't, the file that does it.
+
 **Correctness and reliability**
 
-- [ ] Double-booking blocked by a database constraint, not just application code.
-- [ ] Slot holds expire through a background job, and expiry is tested.
-- [x] Payment webhooks are idempotent: a repeated or out-of-order event changes nothing twice.
-- [x] Email sending is retried, logged, and never blocks a booking from completing.
-- [ ] All times stored in UTC, displayed in garage-local time, tested across clock changes.
-- [ ] Policies live in settings, with changes recorded in the audit log.
-- [ ] Health check endpoint, structured logs, and clear error pages.
+- [x] Double-booking blocked by a database constraint, not just application code. — proven by: `backend/tests/integration/test_reservation_constraints.py::test_overlapping_active_reservations_in_one_bay_are_rejected`, `test_reserve_concurrency.py::test_two_simultaneous_reserves_of_one_bay_have_exactly_one_winner`, `test_hold_concurrency.py::test_two_simultaneous_holds_have_exactly_one_winner`
+- [x] Slot holds expire through a background job, and expiry is tested. — proven by: `backend/tests/integration/test_worker.py::test_run_once_releases_and_commits`, `test_hold_expiry.py::test_release_expired_holds_releases_only_expired_held`, `backend/tests/unit/test_hold_expiry_rule.py::test_hold_expired_exactly_at_expiry`
+- [x] Payment webhooks are idempotent: a repeated or out-of-order event changes nothing twice. — proven by: `backend/tests/integration/test_stripe_webhook.py::test_duplicate_event_changes_nothing`, `::test_expired_after_completed_leaves_booking_confirmed`
+- [x] Email sending is retried, logged, and never blocks a booking from completing. — proven by: `backend/tests/integration/test_outbox.py::test_failure_backs_off_then_fails`, `::test_one_failure_does_not_block_the_batch` (email is queued in `email_log` and sent by the worker)
+- [x] All times stored in UTC, displayed in garage-local time, tested across clock changes. — proven by: `backend/tests/unit/test_availability_clock_changes.py::test_spring_forward_skips_missing_times_and_measures_elapsed_time`, `::test_fall_back_uses_first_occurrence_and_never_duplicates`, `backend/tests/integration/test_hours_in_force.py::test_free_times_switch_timetable_across_clock_change`, `backend/tests/unit/test_render_email.py::test_times_are_garage_local_across_clock_change`
+- [x] Policies live in settings, with changes recorded in the audit log. — proven by: `backend/tests/integration/test_payment_settings.py::test_seeded_value_loads`, `test_settings_services_api.py::test_each_change_is_audited`, `test_settings_bays_api.py::test_bay_changes_are_audited`, `test_settings_hours_api.py::test_hours_changes_are_audited`, `test_settings_contact_api.py::test_contact_change_is_audited`
+- [x] Health check endpoint, structured logs, and clear error pages. — proven by: `backend/tests/integration/test_health.py::test_health_reports_503_when_database_unreachable`, `backend/tests/unit/test_logs.py::test_line_is_json_with_standard_keys`, `backend/tests/integration/test_request_log.py::test_request_is_logged_without_query`, `frontend/src/App.test.tsx` ("shows a page-not-found page…"), `frontend/src/staff/StaffApp.test.tsx` ("shows a page-not-found page…"), `frontend/src/ErrorBoundary.test.tsx`
 
 **Security**
 
-- [ ] Staff passwords hashed with a modern algorithm, with login throttling and secure session or token handling.
-- [ ] Role check on every staff endpoint, tested for each role.
+- [x] Staff passwords hashed with a modern algorithm, with login throttling and secure session or token handling. — proven by: `backend/app/staff/passwords.py` (argon2id), `backend/tests/unit/test_passwords.py::test_password_matches_after_hash`, `backend/tests/integration/test_throttle.py::test_tenth_failure_locks_the_email`, `test_staff_sessions.py::test_token_is_stored_hashed`, `::test_session_past_30_days_is_gone_even_when_used`
+- [x] Role check on every staff endpoint, tested for each role. — proven by: `backend/tests/integration/test_staff_route_guards.py::test_every_staff_route_needs_a_session`, `::test_staff_get_403_on_every_admin_route`, `::test_settings_routes_are_admin_only`
 - [x] Token links are random, hashed in storage, expiring, and limited to one booking.
 - [x] Rate limiting and a honeypot or CAPTCHA on the booking and enquiry forms.
-- [ ] Input validation on every field, with output escaping in emails and pages.
-- [ ] CORS, security headers and HTTPS settings in the deployed environment.
+- [x] Input validation on every field, with output escaping in emails and pages. — proven by: `backend/tests/integration/test_input_hardening_api.py::test_nul_in_public_forms_is_422`, `::test_out_of_range_ids_are_422`, `test_validation_errors.py`, `frontend/src/booking/validation.test.ts`, `backend/tests/unit/test_render_email.py::test_html_escapes_customer_text`; pages are React, which escapes all text, and nothing uses `dangerouslySetInnerHTML`
+- [x] CORS and security headers. — proven by: the API sends no CORS headers (it's same-origin behind nginx, so other sites can't read it) and staff writes need our own `Origin`: `backend/tests/integration/test_staff_route_guards.py::test_write_with_foreign_origin_is_403`; headers in `frontend/security-headers.conf`, checked by the CI step "The site sends its security headers" (`.github/workflows/ci.yml`) and `backend/tests/integration/test_input_hardening_api.py::test_api_sends_nosniff`
+- [ ] HTTPS in the deployed environment (Milestone 11).
 - [x] Dependency and container image scanning in CI.
-- [ ] No secrets in the repository; separate configuration per environment.
+- [x] No secrets in the repository; separate configuration per environment. — proven by: `.gitignore` (ignores `.env`), `.env.example` (placeholders only), the Stripe keys read from GitHub Actions secrets (`.github/workflows/ci.yml`), `backend/tests/unit/test_config.py::test_config_rejects_unknown_environment`
 
 **Privacy**
 
-- [ ] Use fake data throughout the demo.
-- [ ] Collect only the fields needed to run a booking.
-- [ ] Write a short privacy note and a retention rule for old bookings and enquiries, even though this is a demo.
+- [x] Use fake data throughout the demo. — proven by: `backend/app/demo_data.py` (made-up garage, `example.com` addresses), `backend/tests/integration/test_seed.py::test_seed_inserts_demo_catalogue`; the privacy note says so
+- [x] Collect only the fields needed to run a booking. — proven by: `backend/app/models/booking.py` and `enquiry.py` (name, phone, email, car registration, make and model, and notes or a description), listed on the privacy note
+- [x] Write a short privacy note and a retention rule for old bookings and enquiries, even though this is a demo. — proven by: `frontend/src/PrivacyPage.test.tsx`, `backend/tests/integration/test_retention.py::test_old_booking_is_blanked`, `::test_audit_and_email_rows_are_blanked`, `::test_recent_and_waiting_are_untouched`
 
 **User experience**
 
-- [ ] Mobile-first layout for the public site and the staff schedule.
-- [ ] Keyboard navigation, labelled form fields and sufficient contrast.
+- [x] Mobile-first layout for the public site and the staff schedule. — proven by: `frontend/src/App.css` and `frontend/src/staff/staff.css`, single-column by default with `min-width` media queries widening the layout (no phone-width test, agreed Nov 20)
+- [x] Keyboard navigation, labelled form fields and sufficient contrast. — proven by: `e2e/tests/accessibility.spec.ts` (axe, WCAG 2 A and AA, no serious or critical problems on the main customer and staff pages); the e2e flows find every field by its label
 
 ## Build order
 
@@ -316,7 +319,7 @@ There is no deadline, so each milestone has a definition of done and the next on
    - **9b. Enquiries.** The enquiry form (description only, no photos), the staff queue, approve with a slot (converting to a booking), and decline. *Done when* flow 3 passes end to end.
 10. **Hardening and polish**, kept basic (Nov 20), split in two:
    - **10a. Security hardening.** Rate limits and a honeypot on the public forms, security headers, dependency and image scans in CI, and the leftover security fixes. *Done when* those are in and the e2e suite passes under the new headers.
-   - **10b. Polish.** Error pages, structured logs, an accessibility check, a load test of the availability endpoint, a privacy note and retention rule, and documentation. *Done when* the checklist section is fully ticked.
+   - **10b. Polish.** Error pages, structured logs, an accessibility check, a load test of the availability endpoint, a privacy note and retention rule, and documentation. *Done when* the checklist section is fully ticked, apart from HTTPS, which comes with deployment (Nov 20).
 11. **Deployment.** Cloud environment from the same images, environment configuration, a seeded live demo, and a short walkthrough or recording. *Done when* the live demo passes the end-to-end suite.
 
 ## Open questions and next steps

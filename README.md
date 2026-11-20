@@ -166,7 +166,8 @@ then add and delete future hours that clash with nothing. Flow 2 has a customer 
 diagnostic check without paying, staff approve it from the Requests page, and the customer pay
 the deposit from the link in the approval email. Flow 3 has a customer send an enquiry,
 staff book it in from the Enquiries page, and the customer open the confirmed booking from
-the email; it needs no Stripe keys. The others need
+the email; it needs no Stripe keys. An accessibility check runs axe (WCAG 2 A and AA) on the
+main customer and staff pages and fails on any serious or critical problem. The others need
 the stack running with Stripe test keys ([docs/stripe-setup.md](docs/stripe-setup.md)) and
 fail at once, with a clear message, in demo mode. Start the stack first:
 
@@ -228,6 +229,18 @@ blocks. The availability lookup has no rate limit, so these numbers aren't throt
   the site itself and Stripe ([frontend/security-headers.conf](frontend/security-headers.conf)).
 - **Scans:** the CI `scan` job audits the Python and npm packages and scans the built images
   with Trivy. Allowed exceptions go in `.trivyignore`, each with its reason.
+
+## Privacy
+
+- **Privacy note:** `/privacy` on the public site says what's collected, why, who sees it and
+  for how long. Every customer page links to it in the footer, and the booking and enquiry
+  forms link to it next to the submit button.
+- **12-month rule:** once a day the worker blanks the customer's details on bookings whose
+  appointment ended more than 12 months ago, and on enquiries older than that which weren't
+  booked in ([backend/app/privacy/retention.py](backend/app/privacy/retention.py)). The rows
+  stay, so the schedule history and the audit trail stay whole: the name, phone, email and
+  registration become "removed", notes are cleared, and the copies in the audit log and email
+  log go too. Car make and model are kept.
 
 ## Documentation
 
