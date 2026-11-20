@@ -118,6 +118,8 @@ class Booking(Base):
     created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id"))
     # When staff last changed the status: the 24-hour undo limit counts from here.
     status_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the 12-month rule replaced the customer's details with placeholders.
+    details_removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     reservation: Mapped[Reservation] = relationship()
     items: Mapped[list["BookingItem"]] = relationship(

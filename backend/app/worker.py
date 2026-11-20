@@ -1,5 +1,6 @@
-"""Background worker: queues reminders and sends queued email, releases expired holds, and
-closes the payment forms of released ones.
+"""Background worker: queues reminders and sends queued email, releases expired holds,
+closes the payment forms of released ones, and once a day blanks customer details older than
+12 months (app/privacy/retention.py).
 
 Availability already ignores expired holds, so releasing is housekeeping: it makes the
 database say what the rule already means. Closing the forms matters more: until it's done,
@@ -31,6 +32,7 @@ from app.logs import configure_logging
 from app.payments.deps import make_provider
 from app.payments.provider import PaymentProvider, PaymentUnavailable
 from app.payments.service import close_open_deposit
+from app.privacy.retention import RETENTION_INTERVAL, remove_old_details
 from app.repositories.availability import load_reminder_hours_before
 from app.repositories.bookings import get_booking_for_update_by_id, release_expired_holds
 from app.repositories.payments import stale_open_deposits
@@ -114,6 +116,11 @@ def send_emails(engine: Engine, sender: SmtpSender, public_base_url: str) -> int
         return send_due_emails(session, sender, utc_now(), public_base_url)
 
 
+def remove_details(engine: Engine) -> int:
+    with Session(engine) as session:
+        return remove_old_details(session, utc_now())
+
+
 def release_holds(engine: Engine, config: AppConfig) -> dict[str, int]:
     with Session(engine) as session:
         return run_once(session, utc_now(), make_provider(config, session))
@@ -139,6 +146,7 @@ def main() -> None:
         config.payment_provider,
     )
     last_holds_run: float | None = None
+    last_retention_run: float | None = None
     try:
         while not stop.is_set():
             # Each step on its own, so a broken mail server never stops holds being released.
@@ -153,6 +161,11 @@ def main() -> None:
             if due:
                 last_holds_run = time.monotonic()
                 run_job("holds", lambda: release_holds(engine, config))
+            if last_retention_run is None or (
+                time.monotonic() - last_retention_run >= RETENTION_INTERVAL.total_seconds()
+            ):
+                last_retention_run = time.monotonic()
+                run_job("retention", lambda: remove_details(engine))
             stop.wait(config.email_interval_seconds)
     finally:
         engine.dispose()
