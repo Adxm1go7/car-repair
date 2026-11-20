@@ -158,3 +158,12 @@ it('home page shows new hours from a date', async () => {
     RESPONSES['/api/opening-hours'] = { timetables: TIMETABLES }
   }
 })
+
+it('shows a page-not-found page with links home and to booking for an unknown address', async () => {
+  stubApi()
+  renderApp('/no-such-page')
+  expect(await screen.findByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
+  expect(screen.getByRole('link', { name: 'Book a service' })).toHaveAttribute('href', '/book')
+  expect(document.title).toBe('Page not found')
+})

@@ -572,3 +572,11 @@ a {
   flex: 1 1 160px;
   margin: 0;
 }
+
+/* Not-found and something-went-wrong pages: the ways back, side by side. */
+.not-found-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}

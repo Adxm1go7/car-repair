@@ -11,7 +11,9 @@ import { shortDate } from './catalogue/hours.ts'
 import { openTodayText } from './catalogue/openToday.ts'
 import type { Catalogue, OpeningDay, Service } from './catalogue/types.ts'
 import { EnquiryPage } from './enquiry/EnquiryPage.tsx'
+import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { ManageBookingPage } from './manage/ManageBookingPage.tsx'
+import { NotFoundPage } from './NotFoundPage.tsx'
 import { StaffApp } from './staff/StaffApp.tsx'
 
 type PageState =
@@ -166,10 +168,12 @@ function CataloguePage({ catalogue, now }: { catalogue: Catalogue; now: Date }):
 /** Staff pages first, so they never wait for the catalogue the customer pages load. */
 export function App({ now = () => new Date() }: { now?: () => Date }): JSX.Element {
   return (
-    <Routes>
-      <Route path="/staff/*" element={<StaffApp />} />
-      <Route path="*" element={<CustomerApp now={now} />} />
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route path="/staff/*" element={<StaffApp />} />
+        <Route path="*" element={<CustomerApp now={now} />} />
+      </Routes>
+    </ErrorBoundary>
   )
 }
 
@@ -217,6 +221,7 @@ function CustomerApp({ now }: { now: () => Date }): JSX.Element {
       <Route path="/booked/:reference" element={<BookedPage garage={state.catalogue.garage} />} />
       <Route path="/booking/:reference" element={<ManageBookingPage garage={state.catalogue.garage} />} />
       <Route path="/enquiry" element={<EnquiryPage garage={state.catalogue.garage} />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
 }

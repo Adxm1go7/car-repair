@@ -20,6 +20,7 @@ import { WeekView } from './schedule/WeekView.tsx'
 import { SettingsPage } from './settings/SettingsPage.tsx'
 import { LOGIN_PATH, StaffContext, loginUrl, useGarage, useStaff } from './StaffContext.ts'
 import { StaffLayout } from './StaffLayout.tsx'
+import { StaffNotFoundPage } from './StaffNotFoundPage.tsx'
 import type { StaffMe } from './types.ts'
 import './staff.css'
 
@@ -139,7 +140,7 @@ export function StaffApp(): JSX.Element {
             </AdminOnly>
           }
         />
-        <Route path="*" element={<p>Page not found</p>} />
+        <Route path="*" element={<StaffNotFoundPage />} />
       </Route>
     </Routes>
   )
