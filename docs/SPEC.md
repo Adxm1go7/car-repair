@@ -214,7 +214,7 @@ Both front ends call the same API, and the availability engine sits in the servi
 | Database | PostgreSQL | Exclusion constraints give database-level double-booking protection. |
 | Migrations | Alembic | Versioned schema changes, tested in CI. |
 | Background jobs | A small worker process, with a scheduler for periodic tasks | Expires held slots, sends reminders, retries emails. |
-| Email | A mail catcher locally, a free-tier provider when deployed | No cost, and the same interface in both. |
+| Email | A mail catcher locally; on the live demo, a Demo inbox page (nothing is sent) | No cost, and nobody can make a public demo email a stranger. |
 | Payments | Stripe in test mode | Real integration pattern, no real money. |
 | Containers | Docker Compose for local, the same images in the cloud | Moving to hosting should not need a redesign. |
 | CI | GitHub Actions | Free, and runs the whole test suite on every push. |
@@ -334,7 +334,7 @@ These are the gaps still to close. None blocks milestones 1 to 3, so building ca
 - [x] **Reschedule rules.** No customer rescheduling: customers call the garage for a different time (Nov 14).
 - [x] **No-shows.** Staff mark a no-show; it keeps the deposit and the booked time, and sends no email (Nov 16).
 - [x] **Staff accounts.** An admin invites someone by email and they set their own password from the link; passwords are reset the same way (Nov 16).
-- [ ] **Hosting.** Which free cloud tier to target when the time comes.
+- [x] **Hosting.** Oracle Cloud Always Free: one Arm server running the same Compose setup, built on the server, with Caddy for HTTPS (Nov 21). See docs/deployment.md.
 
 **Suggested next steps**
 

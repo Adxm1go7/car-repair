@@ -26,3 +26,24 @@ it('explains what we keep, for how long, and how to reach the garage', () => {
   )
   expect(document.title).toBe('Privacy')
 })
+
+const DEMO_NOTE =
+  "On this live demo nothing is really emailed: emails are kept in a Demo inbox that everyone can see, and everything is wiped every night."
+
+it('on the live demo says emails are public and wiped nightly', () => {
+  render(
+    <MemoryRouter>
+      <PrivacyPage garage={{ ...GARAGE, demo_site: true }} />
+    </MemoryRouter>,
+  )
+  expect(screen.getByText(DEMO_NOTE)).toBeInTheDocument()
+})
+
+it('says nothing about a Demo inbox elsewhere', () => {
+  render(
+    <MemoryRouter>
+      <PrivacyPage garage={GARAGE} />
+    </MemoryRouter>,
+  )
+  expect(screen.queryByText(DEMO_NOTE)).not.toBeInTheDocument()
+})

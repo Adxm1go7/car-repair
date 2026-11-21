@@ -3,6 +3,37 @@
 Online booking system for a car repair garage: a public booking site and a staff back office,
 backed by a FastAPI API and PostgreSQL.
 
+## Live demo
+
+**<https://LIVE-DEMO-ADDRESS>** <!-- filled in when the demo goes live -->
+
+It's a demo: no real email is sent and no real money moves.
+
+- **Pay** with Stripe's test card `4242 4242 4242 4242`, any future expiry date and any CVC.
+- **Emails** appear in the **Demo inbox** (linked in the footer) instead of being sent.
+  Everyone can see that inbox, so don't type real names, emails or car details.
+- **Staff side:** open `/staff` and log in as `admin@example.test` / `demo-admin-pass` or
+  `staff@example.test` / `demo-staff-pass`. These two logins can't be locked, reset or
+  changed.
+- **Everything resets** to the demo data at 03:00 UK time every night.
+
+A five-minute walkthrough:
+
+1. **Book.** On the home page, tick **MOT test**, click **Choose a time**, pick a time, enter
+   made-up details and pay with the test card. You land on "You're booked".
+2. **Read the email.** Open the **Demo inbox** and the confirmation email. Its link opens your
+   booking, where you could cancel it.
+3. **Log in as staff.** Go to `/staff` and log in as the admin. Your booking is on the day
+   view.
+4. **Move it.** Open the booking, choose **Move**, and pick another time or bay.
+5. **See what the customer got.** Back in the Demo inbox, the "moved" email shows the old and
+   new times.
+
+<!-- Screenshots (docs/images/demo-*.png) are added when the demo goes live. -->
+
+How it's hosted (a free Oracle Cloud server, Caddy for HTTPS), and how to deploy or rebuild
+it: [docs/deployment.md](docs/deployment.md).
+
 ## Quick start
 
 Prerequisite: [Docker Desktop](https://www.docker.com/products/docker-desktop/).
@@ -38,7 +69,7 @@ after 1, 5, 15 and 60 minutes. `PUBLIC_BASE_URL` is the address the links point 
 `SMTP_FROM` is the sender.
 
 **Staff back office.** Open http://localhost:8080/staff and log in with one of the sample
-accounts. The seed adds them everywhere except production:
+accounts. The seed adds them everywhere except production (and on the live demo):
 
 | Role | Email | Password |
 | --- | --- | --- |
@@ -246,4 +277,5 @@ blocks. The availability lookup has no rate limit, so these numbers aren't throt
 
 - [Specification](docs/SPEC.md)
 - [Setting up Stripe (test mode)](docs/stripe-setup.md)
+- [Deploying the live demo](docs/deployment.md)
 - [Implementation plans](docs/superpowers/plans/)
