@@ -1,6 +1,7 @@
 """Background worker: queues reminders and sends queued email, releases expired holds,
 closes the payment forms of released ones, and once a day blanks customer details older than
-12 months (app/privacy/retention.py).
+12 months (app/privacy/retention.py). On the live demo it also resets everything at 03:00
+London time (app/demo/reset.py).
 
 Availability already ignores expired holds, so releasing is housekeeping: it makes the
 database say what the rule already means. Closing the forms matters more: until it's done,
@@ -24,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.clock import utc_now
 from app.config import AppConfig, get_config
 from app.db import make_engine
+from app.demo.reset import RESET_ZONE, reset_demo, reset_due
 from app.email.outbox import send_due_emails
 from app.email.reminders import queue_due_reminders
 from app.email.sender import DemoInboxSender, EmailSender, SmtpSender
@@ -129,6 +131,13 @@ def remove_details(engine: Engine) -> int:
         return remove_old_details(session, utc_now())
 
 
+def reset_demo_site(engine: Engine) -> int:
+    with Session(engine) as session:
+        reset_demo(session)
+        session.commit()
+    return 1
+
+
 def release_holds(engine: Engine, config: AppConfig) -> dict[str, int]:
     with Session(engine) as session:
         return run_once(session, utc_now(), make_provider(config, session))
@@ -155,6 +164,7 @@ def main() -> None:
     )
     last_holds_run: float | None = None
     last_retention_run: float | None = None
+    last_demo_reset: datetime | None = None
     try:
         while not stop.is_set():
             # Each step on its own, so a broken mail server never stops holds being released.
@@ -171,6 +181,10 @@ def main() -> None:
             ):
                 last_retention_run = time.monotonic()
                 run_job("retention", lambda: remove_details(engine))
+            now = utc_now()
+            if config.demo_site and reset_due(last_demo_reset, now, RESET_ZONE):
+                last_demo_reset = now
+                run_job("demo_reset", lambda: reset_demo_site(engine))
             stop.wait(config.email_interval_seconds)
     finally:
         engine.dispose()
