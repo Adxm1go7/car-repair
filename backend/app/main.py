@@ -10,6 +10,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.api import (
     availability,
     catalogue,
+    demo_inbox,
     demo_payments,
     enquiries,
     health,
@@ -109,6 +110,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(staff_enquiries.router, prefix="/api")
     app.include_router(staff_audit.router, prefix="/api")
     app.include_router(staff_settings.router, prefix="/api")
+    if config.demo_site:  # the live demo's shared inbox; nothing is ever sent there
+        app.include_router(demo_inbox.router, prefix="/api")
     if config.payment_provider == "demo":  # never with Stripe keys, so never in production
         app.include_router(demo_payments.router, prefix="/api")
     return app
