@@ -144,6 +144,7 @@ def render_email(template: EmailTemplate, to: str, context: EmailContext) -> Out
         subject=subject,
         text=_environment.get_template(f"{template}.txt.j2").render(values),
         html=_environment.get_template(f"{template}.html.j2").render(values),
+        template=template,
     )
 
 
@@ -156,6 +157,7 @@ def render_staff_email(
         subject=STAFF_SUBJECTS[template].format(garage=context.garage.get("name", "")),
         text=_environment.get_template(f"{template}.txt.j2").render(values),
         html=_environment.get_template(f"{template}.html.j2").render(values),
+        template=template,
     )
 
 
@@ -168,4 +170,5 @@ def render_enquiry_email(
         subject=ENQUIRY_SUBJECTS[template],
         text=_environment.get_template(f"{template}.txt.j2").render(values),
         html=_environment.get_template(f"{template}.html.j2").render(values),
+        template=template,
     )

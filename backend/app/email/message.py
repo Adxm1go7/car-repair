@@ -30,3 +30,4 @@ class OutgoingEmail:
     subject: str
     text: str
     html: str
+    template: str  # which email it is, e.g. "confirmation"

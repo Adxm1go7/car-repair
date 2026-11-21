@@ -272,3 +272,11 @@ def test_downgrade_refuses_with_two_timetables(fresh_database_url: str) -> None:
         )
     with pytest.raises(RuntimeError, match="more than one timetable"):
         command.downgrade(cfg, "0008")
+
+
+def test_0014_creates_and_drops_demo_inbox(fresh_database_url: str) -> None:
+    cfg = alembic_config(fresh_database_url)
+    command.upgrade(cfg, "0014")
+    assert "demo_inbox" in inspect(make_engine(fresh_database_url)).get_table_names()
+    command.downgrade(cfg, "0013")
+    assert "demo_inbox" not in inspect(make_engine(fresh_database_url)).get_table_names()

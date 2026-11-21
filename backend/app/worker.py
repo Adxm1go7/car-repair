@@ -26,7 +26,7 @@ from app.config import AppConfig, get_config
 from app.db import make_engine
 from app.email.outbox import send_due_emails
 from app.email.reminders import queue_due_reminders
-from app.email.sender import SmtpSender
+from app.email.sender import DemoInboxSender, EmailSender, SmtpSender
 from app.limits import delete_old_counts
 from app.logs import configure_logging
 from app.payments.deps import make_provider
@@ -111,9 +111,17 @@ def queue_reminders(engine: Engine) -> int:
     return queued
 
 
-def send_emails(engine: Engine, sender: SmtpSender, public_base_url: str) -> int:
+def make_sender(config: AppConfig, session: Session) -> EmailSender:
+    """The live demo keeps emails in its Demo inbox; everywhere else they go out by SMTP."""
+    if config.demo_site:
+        return DemoInboxSender(session)
+    return SmtpSender(config.smtp_host, config.smtp_port, config.smtp_from)
+
+
+def send_emails(engine: Engine, config: AppConfig) -> int:
     with Session(engine) as session:
-        return send_due_emails(session, sender, utc_now(), public_base_url)
+        sender = make_sender(config, session)
+        return send_due_emails(session, sender, utc_now(), config.public_base_url)
 
 
 def remove_details(engine: Engine) -> int:
@@ -138,12 +146,12 @@ def main() -> None:
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
 
-    sender = SmtpSender(config.smtp_host, config.smtp_port, config.smtp_from)
     log.info(
-        "worker started: email every %d seconds, holds every %d seconds, payments: %s",
+        "worker started: email every %d seconds, holds every %d seconds, payments: %s, emails: %s",
         config.email_interval_seconds,
         config.worker_interval_seconds,
         config.payment_provider,
+        "demo inbox" if config.demo_site else "smtp",
     )
     last_holds_run: float | None = None
     last_retention_run: float | None = None
@@ -151,10 +159,7 @@ def main() -> None:
         while not stop.is_set():
             # Each step on its own, so a broken mail server never stops holds being released.
             run_job("reminders", lambda: queue_reminders(engine))
-            run_job(
-                "email",
-                lambda: send_emails(engine, sender, config.public_base_url),
-            )
+            run_job("email", lambda: send_emails(engine, config))
             due = last_holds_run is None or (
                 time.monotonic() - last_holds_run >= config.worker_interval_seconds
             )
