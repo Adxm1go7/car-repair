@@ -1,0 +1,60 @@
+# The live demo on one server. Use it on top of docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --wait
+# Settings come from .env next to this file (copy .env.production.example). See
+# docs/deployment.md.
+#
+# What changes from the local stack:
+# - Caddy is the only thing reachable from outside, on 80 and 443. It gets the HTTPS
+#   certificate itself, adds HSTS and passes everything to nginx (web).
+# - No other service publishes a port, and Mailpit doesn't run (the demo site keeps emails
+#   in its Demo inbox instead).
+# - Everything restarts by itself after a crash or a reboot.
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env, e.g. yourname.duckdns.org}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      default:
+        ipv4_address: 172.28.0.11  # fixed, so nginx can trust it for the visitor's address
+    depends_on:
+      web:
+        condition: service_started
+
+  db:
+    restart: unless-stopped
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD in .env}
+
+  mailpit:
+    profiles: ["local"]  # never started here
+    ports: !reset []
+
+  api:
+    restart: unless-stopped
+    ports: !reset []
+
+  worker:
+    restart: unless-stopped
+    depends_on: !override
+      api:
+        condition: service_healthy  # the api runs the migrations on start
+
+  web:
+    restart: unless-stopped
+    ports: !reset []
+
+volumes:
+  caddy_data:  # the certificate: keep it, or Let's Encrypt may rate-limit a rebuild
+  caddy_config:

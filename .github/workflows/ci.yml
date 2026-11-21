@@ -120,6 +120,10 @@ jobs:
           sleep 5
           # It must still be running, or no webhook reaches the api.
           if ! kill -0 $! 2>/dev/null; then cat stripe-listen.log; exit 1; fi
+      - name: The live demo's compose file is valid
+        run: >-
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml
+          --env-file .env.production.example config -q
       - run: docker compose up --build -d --wait --wait-timeout 180
       - run: curl -fsS http://localhost:8080/api/health | grep '"status":"ok"'
       - name: The site sends its security headers
