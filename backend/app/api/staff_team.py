@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import AfterValidator, BaseModel
 from sqlalchemy import select
 
@@ -18,6 +18,7 @@ from app.staff.accounts import (
     staff_state,
     update_staff,
 )
+from app.staff.demo_accounts import DEMO_ACCOUNT_LOCKED, is_demo_account
 from app.staff.deps import AdminDep, NowDep, SessionDep, check_origin, require_admin
 
 router = APIRouter(
@@ -60,6 +61,14 @@ def _get(session: SessionDep, user_id: ResourceId) -> StaffUser:
     return user
 
 
+def _get_changeable(request: Request, session: SessionDep, user_id: ResourceId) -> StaffUser:
+    """The account, unless it's one of the live demo's shared logins (409)."""
+    user = _get(session, user_id)
+    if is_demo_account(request.app.state.config, user.email):
+        raise HTTPException(status_code=409, detail=DEMO_ACCOUNT_LOCKED)
+    return user
+
+
 @router.get("")
 def list_team(session: SessionDep) -> list[TeamMemberOut]:
     users = session.scalars(select(StaffUser).order_by(StaffUser.active.desc(), StaffUser.name))
@@ -78,9 +87,14 @@ def invite(body: InviteIn, admin: AdminDep, session: SessionDep, now: NowDep) ->
 
 @router.patch("/{user_id}")
 def update(
-    user_id: ResourceId, body: UpdateIn, admin: AdminDep, session: SessionDep, now: NowDep
+    user_id: ResourceId,
+    body: UpdateIn,
+    request: Request,
+    admin: AdminDep,
+    session: SessionDep,
+    now: NowDep,
 ) -> TeamMemberOut:
-    user = _get(session, user_id)
+    user = _get_changeable(request, session, user_id)
     try:
         update_staff(session, admin, user, role=body.role, active=body.active, now=now)
     except LastAdmin as error:
@@ -94,9 +108,9 @@ def update(
 
 @router.post("/{user_id}/reset-password", status_code=202)
 def reset_password(
-    user_id: ResourceId, admin: AdminDep, session: SessionDep, now: NowDep
+    user_id: ResourceId, request: Request, admin: AdminDep, session: SessionDep, now: NowDep
 ) -> TeamMemberOut:
-    user = _get(session, user_id)
+    user = _get_changeable(request, session, user_id)
     admin_reset_password(session, admin, user, now)
     session.commit()
     return member_out(user)
