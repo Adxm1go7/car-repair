@@ -100,3 +100,7 @@ def test_production_needs_webhook_secret() -> None:
         stripe_webhook_secret=TEST_SECRET,
     )
     assert config.stripe_webhook_secret == TEST_SECRET
+
+
+def test_demo_site_defaults_off() -> None:
+    assert AppConfig(database_url="x").demo_site is False

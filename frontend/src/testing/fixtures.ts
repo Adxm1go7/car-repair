@@ -55,4 +55,5 @@ export const GARAGE: Garage = {
   phone: '01632 960123',
   email: 'bookings@example.com',
   timezone: 'Europe/London',
+  demo_site: false,
 }

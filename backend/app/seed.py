@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.config import get_config
+from app.config import AppConfig, get_config
 from app.db import make_engine
 from app.demo_data import (
     DEMO_BAY_TYPES,
@@ -47,10 +47,15 @@ DEFAULT_SETTINGS: Final[dict[str, Any]] = {
 }
 
 
+def sample_accounts_wanted(config: AppConfig) -> bool:
+    """The demo logins: everywhere except production, and on the live demo site."""
+    return config.environment != "production" or config.demo_site
+
+
 def seed(session: Session, *, sample_accounts: bool = False) -> None:
     """Insert whatever is missing, never overwriting or re-creating data. The caller commits.
 
-    `sample_accounts` adds the demo logins: never in production."""
+    `sample_accounts` adds the demo logins: in production only on the demo site."""
     _seed_settings(session)
     _seed_catalogue(session)
     if sample_accounts:
@@ -164,7 +169,7 @@ def main() -> None:
     config = get_config()
     engine = make_engine(config.database_url)
     with Session(engine) as session:
-        seed(session, sample_accounts=config.environment != "production")
+        seed(session, sample_accounts=sample_accounts_wanted(config))
         session.commit()
     engine.dispose()
     print("Seed complete")
