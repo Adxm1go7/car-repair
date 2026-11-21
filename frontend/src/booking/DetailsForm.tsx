@@ -7,6 +7,7 @@ import { formatCountdown, useCountdown } from './useCountdown.ts'
 import { formatPrice } from '../catalogue/format.ts'
 import { Honeypot } from './Honeypot.tsx'
 import { PrivacyLink } from '../PrivacyLink.tsx'
+import { DemoWarning } from '../demo/DemoBanner.tsx'
 import { validateDetails } from './validation.ts'
 import type { FieldErrors } from './validation.ts'
 
@@ -19,6 +20,8 @@ type Props = {
   zone: string
   /** A needs-approval visit: send it to the garage instead of paying. */
   request?: boolean
+  /** The live demo: warn that the shared Demo inbox shows what's typed here. */
+  demoSite?: boolean
   /** The deposit a request will ask for once approved, in pence. */
   depositPence?: number
   values: CustomerDetails
@@ -66,7 +69,7 @@ function fieldError(detail: string | null): FieldErrors | null {
 
 export function DetailsForm(props: Props): JSX.Element {
   const { hold, zone, values, onValuesChange, onSubmittingChange, onExpired, onCheckout, onAlreadyPaid } = props
-  const { request = false, depositPence = 2000, onRequested } = props
+  const { request = false, depositPence = 2000, onRequested, demoSite = false } = props
   const [errors, setErrors] = useState<FieldErrors>({})
   const [problem, setProblem] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -241,6 +244,7 @@ export function DetailsForm(props: Props): JSX.Element {
 
       <Honeypot value={website} onChange={setWebsite} />
 
+      {demoSite && <DemoWarning />}
       <PrivacyLink />
 
       <button type="submit" className="button" disabled={submitting}>

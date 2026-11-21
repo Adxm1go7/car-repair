@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
+import { GARAGE } from '../testing/fixtures.ts'
 import { DAY_HEADING, STAFF_ME, WEEK_HEADING, renderAt, sentBody, stubFetch } from '../testing/staffApi.tsx'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -59,4 +60,18 @@ it('links to forgotten password', () => {
     'href',
     '/staff/forgot-password',
   )
+})
+
+it('shows the demo logins and banner only on the demo site', async () => {
+  stubFetch({ '/api/garage': { status: 200, body: { ...GARAGE, demo_site: true } } })
+  renderAt('/staff/login')
+  expect(await screen.findByText('admin@example.test')).toBeInTheDocument()
+  expect(screen.getByRole('note')).toHaveTextContent(/This is a demo/)
+})
+
+it('shows no demo logins elsewhere', async () => {
+  stubFetch({})
+  renderAt('/staff/login')
+  expect(await screen.findByRole('heading', { level: 1, name: 'Staff login' })).toBeInTheDocument()
+  expect(screen.queryByText('admin@example.test')).not.toBeInTheDocument()
 })

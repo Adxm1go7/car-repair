@@ -320,3 +320,26 @@ it('links to the privacy note in a new tab, so the hold is kept', () => {
   expect(link).toHaveAttribute('href', '/privacy')
   expect(link).toHaveAttribute('target', '_blank')
 })
+
+it('warns that the demo inbox is public, only on the demo site', () => {
+  const handlers = {
+    onExpired: vi.fn<() => void>(),
+    onCheckout: vi.fn<(checkout: Checkout) => void>(),
+    onAlreadyPaid: vi.fn<() => void>(),
+    onSubmittingChange: vi.fn<(submitting: boolean) => void>(),
+  }
+  const form = (demoSite: boolean): JSX.Element => (
+    <DetailsForm
+      hold={HOLD}
+      zone="Europe/London"
+      values={EMPTY}
+      onValuesChange={() => {}}
+      demoSite={demoSite}
+      {...handlers}
+    />
+  )
+  const { rerender } = render(form(false))
+  expect(screen.queryByText(/Everyone can see this inbox/)).not.toBeInTheDocument()
+  rerender(form(true))
+  expect(screen.getByText(/Everyone can see this inbox/)).toBeInTheDocument()
+})

@@ -594,3 +594,70 @@ a {
 .privacy-link {
   font-size: 0.9rem;
 }
+
+/* The public live demo (demo_site): a notice strip, the form warning, the shared inbox. */
+.demo-banner {
+  margin: 0;
+  padding: 8px 16px;
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.demo-warning {
+  padding: 8px 12px;
+  border-left: 4px solid var(--badge-text);
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-size: 0.9rem;
+}
+
+.demo-logins dl {
+  margin: 0;
+}
+
+.demo-logins dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.demo-logins dt {
+  font-weight: 600;
+}
+
+.demo-logins dd {
+  margin: 0;
+}
+
+.demo-inbox-list {
+  list-style: none;
+  padding: 0;
+}
+
+.demo-inbox-list li {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.demo-inbox-meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.demo-email-text {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+}
+
+.site-footer a + a {
+  margin-left: 16px;
+}

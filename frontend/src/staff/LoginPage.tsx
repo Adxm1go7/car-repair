@@ -2,7 +2,8 @@ import { useState } from 'react'
 import type { FormEvent, JSX } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { login } from './api.ts'
-import { safeNext } from './StaffContext.ts'
+import { DemoBanner, DemoLogins } from '../demo/DemoBanner.tsx'
+import { safeNext, useGarage } from './StaffContext.ts'
 
 const WRONG = 'Email or password is wrong'
 const FAILED = 'Something went wrong. Please try again.'
@@ -14,6 +15,7 @@ export function LoginPage(): JSX.Element {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const demoSite = useGarage()?.demo_site ?? false
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
@@ -29,7 +31,9 @@ export function LoginPage(): JSX.Element {
 
   return (
     <main className="staff-auth">
+      {demoSite && <DemoBanner />}
       <h1>Staff login</h1>
+      {demoSite && <DemoLogins />}
       <form className="staff-form" onSubmit={(event) => void submit(event)}>
         <div className="field">
           <label htmlFor="staff-email">Email</label>

@@ -183,3 +183,26 @@ it('shows the privacy note at /privacy', async () => {
   renderApp('/privacy')
   expect(await screen.findByRole('heading', { level: 1, name: 'Privacy' })).toBeInTheDocument()
 })
+
+it('has no Demo inbox, banner or inbox link unless it is the demo site', async () => {
+  stubApi()
+  renderApp('/demo-inbox')
+  expect(await screen.findByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument()
+  expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Demo inbox' })).not.toBeInTheDocument()
+})
+
+it('on the demo site shows the banner, the inbox link and the inbox page', async () => {
+  RESPONSES['/api/garage'] = { ...GARAGE, demo_site: true }
+  RESPONSES['/api/demo-inbox'] = []
+  try {
+    stubApi()
+    renderApp('/demo-inbox')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Demo inbox' })).toBeInTheDocument()
+    expect(screen.getByRole('note')).toHaveTextContent(/This is a demo/)
+    expect(screen.getByRole('link', { name: 'Demo inbox' })).toHaveAttribute('href', '/demo-inbox')
+  } finally {
+    RESPONSES['/api/garage'] = GARAGE
+    delete RESPONSES['/api/demo-inbox']
+  }
+})
