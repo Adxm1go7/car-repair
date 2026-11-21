@@ -81,7 +81,7 @@ def run_once(session: Session, now: datetime, provider: PaymentProvider) -> dict
     return counts
 
 
-def run_job(job: str, work: Callable[[], int | dict[str, int]]) -> None:
+def run_job(job: str, work: Callable[[], int | dict[str, int]]) -> bool:
     """Run one step of the worker loop and log one line if it did anything. A dict result
     counts its first value and logs every value. A failure is logged, not raised, so one
     broken step (a mail server down) never stops the others."""
@@ -90,7 +90,7 @@ def run_job(job: str, work: Callable[[], int | dict[str, int]]) -> None:
         result = work()
     except Exception:
         log.exception("job failed", extra={"job": job})
-        return
+        return False
     fields = result if isinstance(result, dict) else {}
     count = next(iter(result.values()), 0) if isinstance(result, dict) else result
     if count > 0 or any(fields.values()):
@@ -103,6 +103,7 @@ def run_job(job: str, work: Callable[[], int | dict[str, int]]) -> None:
                 **fields,
             },
         )
+    return True
 
 
 def queue_reminders(engine: Engine) -> int:
@@ -136,6 +137,14 @@ def reset_demo_site(engine: Engine) -> int:
         reset_demo(session)
         session.commit()
     return 1
+
+
+def demo_reset_step(engine: Engine, last_reset: datetime | None, now: datetime) -> datetime | None:
+    """Reset the live demo if it's due. Returns when it last succeeded: a failed reset (a
+    table in use, a deadlock) is tried again on the next loop."""
+    if not reset_due(last_reset, now, RESET_ZONE):
+        return last_reset
+    return now if run_job("demo_reset", lambda: reset_demo_site(engine)) else last_reset
 
 
 def release_holds(engine: Engine, config: AppConfig) -> dict[str, int]:
@@ -181,10 +190,8 @@ def main() -> None:
             ):
                 last_retention_run = time.monotonic()
                 run_job("retention", lambda: remove_details(engine))
-            now = utc_now()
-            if config.demo_site and reset_due(last_demo_reset, now, RESET_ZONE):
-                last_demo_reset = now
-                run_job("demo_reset", lambda: reset_demo_site(engine))
+            if config.demo_site:
+                last_demo_reset = demo_reset_step(engine, last_demo_reset, utc_now())
             stop.wait(config.email_interval_seconds)
     finally:
         engine.dispose()

@@ -1,6 +1,7 @@
 """The live demo's reset: every data table emptied, then the normal seed, in one go."""
 
 import threading
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -104,9 +105,8 @@ def test_reset_waits_for_bookings_in_progress(migrated_url: str) -> None:
     try:
         assert holding.wait(10)
         with Session(engine) as session:
-            session.execute(text("SET lock_timeout = '1s'"))
             with pytest.raises(OperationalError, match="lock timeout"):
-                reset_demo(session)
+                reset_demo(session, wait_seconds=1)
             session.rollback()
     finally:
         release.set()
@@ -119,3 +119,44 @@ def test_demo_reset_command_refuses_when_off(
 ) -> None:
     assert demo_reset_main(AppConfig(database_url=migrated_url)) == 1
     assert "DEMO_SITE is off: refusing to reset" in capsys.readouterr().err
+
+
+def test_reset_gives_way_to_a_booking_that_read_first(migrated_url: str) -> None:
+    """A booking reads settings, then takes the shared lock. The reset must neither deadlock
+    with it nor make it wait: it gives up at once, to be tried again."""
+    engine = make_engine(migrated_url)
+    has_read = threading.Event()
+    reset_tried = threading.Event()
+    booking_errors: list[Exception] = []
+
+    def make_a_booking() -> None:
+        with Session(engine) as booking_session:
+            booking_session.execute(text("SET lock_timeout = '2s'"))
+            booking_session.execute(text("SELECT count(*) FROM settings"))
+            has_read.set()
+            reset_tried.wait(10)
+            try:
+                lock_shared(booking_session)
+            except OperationalError as error:
+                booking_errors.append(error)
+            booking_session.rollback()
+
+    booker = threading.Thread(target=make_a_booking)
+    booker.start()
+    try:
+        assert has_read.wait(10)
+        with Session(engine) as session:
+            session.execute(text("SET statement_timeout = '5s'"))
+            started = time.monotonic()
+            with pytest.raises(OperationalError):
+                reset_demo(session)
+            took = time.monotonic() - started
+            session.rollback()
+        reset_tried.set()
+        booker.join()
+        assert took < 2
+        assert booking_errors == []
+    finally:
+        reset_tried.set()
+        booker.join()
+        engine.dispose()

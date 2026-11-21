@@ -2,6 +2,7 @@
 
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import pytest
 from alembic import command
@@ -11,6 +12,7 @@ from fakes import FakeProvider
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
+from app import worker
 from app.db import make_engine
 from app.models import Booking, EmailLog, LoginAttempt, Payment, StaffSession
 from app.seed import seed
@@ -217,3 +219,37 @@ def test_run_job_logs_failure_and_continues(caplog: pytest.LogCaptureFixture) ->
     assert rec.levelno == logging.ERROR
     assert rec.__dict__["job"] == "email"
     assert rec.exc_info is not None
+
+
+def test_failed_demo_reset_is_tried_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(engine: object) -> int:
+        raise RuntimeError("deadlock detected")
+
+    monkeypatch.setattr(worker, "reset_demo_site", broken)
+    last = datetime(2026, 11, 20, 3, tzinfo=UTC)
+    now = datetime(2026, 11, 21, 3, 0, 5, tzinfo=UTC)
+
+    assert worker.demo_reset_step(cast(Engine, None), last, now) == last
+
+
+def test_successful_demo_reset_is_remembered(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker, "reset_demo_site", lambda engine: 1)
+    last = datetime(2026, 11, 20, 3, tzinfo=UTC)
+    now = datetime(2026, 11, 21, 3, 0, 5, tzinfo=UTC)
+
+    assert worker.demo_reset_step(cast(Engine, None), last, now) == now
+
+
+def test_demo_reset_step_does_nothing_when_not_due(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[object] = []
+
+    def counting(engine: object) -> int:
+        calls.append(engine)
+        return 1
+
+    monkeypatch.setattr(worker, "reset_demo_site", counting)
+    last = datetime(2026, 11, 21, 3, tzinfo=UTC)
+    now = datetime(2026, 11, 21, 12, tzinfo=UTC)
+
+    assert worker.demo_reset_step(cast(Engine, None), last, now) == last
+    assert calls == []
