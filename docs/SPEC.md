@@ -287,7 +287,7 @@ Each ticked item names what proves it: a test (`file::test`) or, where a test ca
 - [x] Rate limiting and a honeypot or CAPTCHA on the booking and enquiry forms. — proven by: `backend/tests/integration/test_rate_limits_api.py::test_each_action_is_limited`, `::test_limits_are_per_action_and_ip`, `backend/tests/integration/test_honeypot_api.py::test_enquiry_honeypot_pretends`, `::test_checkout_honeypot_refused`
 - [x] Input validation on every field, with output escaping in emails and pages. — proven by: `backend/tests/integration/test_input_hardening_api.py::test_nul_in_public_forms_is_422`, `::test_out_of_range_ids_are_422`, `test_validation_errors.py`, `frontend/src/booking/validation.test.ts`, `backend/tests/unit/test_render_email.py::test_html_escapes_customer_text`; pages are React, which escapes all text, and nothing uses `dangerouslySetInnerHTML`
 - [x] CORS and security headers. — proven by: the API sends no CORS headers (it's same-origin behind nginx, so other sites can't read it) and staff writes need our own `Origin`: `backend/tests/integration/test_staff_route_guards.py::test_write_with_foreign_origin_is_403`; headers in `frontend/security-headers.conf`, checked by the CI step "The site sends its security headers" (`.github/workflows/ci.yml`) and `backend/tests/integration/test_input_hardening_api.py::test_api_sends_nosniff`
-- [ ] HTTPS in the deployed environment (Milestone 11).
+- [x] HTTPS in the deployed environment. — proven by: Caddy gets the certificate and sends `Strict-Transport-Security: max-age=31536000` (`Caddyfile`); the guide's check step reads that header from the live site (`docs/deployment.md`, step 9); the full e2e suite passed over HTTPS against <https://garage-demo.duckdns.org> on Nov 22
 - [x] Dependency and container image scanning in CI. — proven by: the `scan` job in `.github/workflows/ci.yml` (pip-audit, npm audit, and Trivy on the built images)
 - [x] No secrets in the repository; separate configuration per environment. — proven by: `.gitignore` (ignores `.env`), `.env.example` (placeholders only), the Stripe keys read from GitHub Actions secrets (`.github/workflows/ci.yml`), `backend/tests/unit/test_config.py::test_config_rejects_unknown_environment`
 
@@ -320,7 +320,7 @@ There is no deadline, so each milestone has a definition of done and the next on
 10. **Hardening and polish**, kept basic (Nov 20), split in two:
    - **10a. Security hardening.** Rate limits and a honeypot on the public forms, security headers, dependency and image scans in CI, and the leftover security fixes. *Done when* those are in and the e2e suite passes under the new headers.
    - **10b. Polish.** Error pages, structured logs, an accessibility check, a load test of the availability endpoint, a privacy note and retention rule, and documentation. *Done when* the checklist section is fully ticked, apart from HTTPS, which comes with deployment (Nov 20).
-11. **Deployment.** Cloud environment from the same images, environment configuration, a seeded live demo, and a short walkthrough or recording. *Done when* the live demo passes the end-to-end suite.
+11. **Deployment.** Cloud environment from the same images, environment configuration, a seeded live demo, and a short walkthrough or recording. *Done when* the live demo passes the end-to-end suite. **Done Nov 22:** live at <https://garage-demo.duckdns.org>, and all 11 end-to-end tests passed against it.
 
 ## Open questions and next steps
 

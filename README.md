@@ -5,7 +5,7 @@ backed by a FastAPI API and PostgreSQL.
 
 ## Live demo
 
-**<https://LIVE-DEMO-ADDRESS>** <!-- filled in when the demo goes live -->
+**<https://garage-demo.duckdns.org>**
 
 It's a demo: no real email is sent and no real money moves.
 
@@ -29,7 +29,13 @@ A five-minute walkthrough:
 5. **See what the customer got.** Back in the Demo inbox, the "moved" email shows the old and
    new times.
 
-<!-- Screenshots (docs/images/demo-*.png) are added when the demo goes live. -->
+| Choosing services | Picking a time |
+| --- | --- |
+| ![The home page: services in groups with prices and times](docs/images/demo-home.png) | ![Choose a time: a day strip and morning and afternoon slots](docs/images/demo-book.png) |
+| **Staff day view** | **Demo inbox** |
+| ![The staff day view: bookings in columns, one per bay](docs/images/demo-staff-day.png) | ![The Demo inbox: booking confirmation emails, newest first](docs/images/demo-inbox.png) |
+| **Admin settings** | **On a phone** |
+| ![Settings: the services list with prices, durations and reorder buttons](docs/images/demo-settings.png) | ![The home page on a phone](docs/images/demo-phone.png) |
 
 How it's hosted (a free Oracle Cloud server, Caddy for HTTPS), and how to deploy or rebuild
 it: [docs/deployment.md](docs/deployment.md).
