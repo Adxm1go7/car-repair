@@ -40,8 +40,9 @@ Then go to **Compute → Instances → Create instance** and set:
 
 - **Name:** `garage-demo`
 - **Image:** Canonical Ubuntu 24.04 (not Minimal)
-- **Shape:** Ampere, `VM.Standard.A1.Flex`, 2 OCPUs and 12 GB memory (well inside the free
-  allowance of 4 OCPUs and 24 GB)
+- **Shape:** Ampere, `VM.Standard.A1.Flex`, 2 OCPUs and 12 GB memory. That's inside the free
+  allowance: the cost estimate shows no charge for the server itself. Oracle changes the
+  allowance from time to time, so check that the shape says **Always Free-eligible**.
 - **Networking:** the existing `garage-vcn` and its **public** subnet, with **Automatically
   assign public IPv4 address** turned on
 - **SSH keys:** **Save private key**. Keep the file. It's the only way in.
