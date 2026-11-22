@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { DemoBanner } from '../demo/DemoBanner.tsx'
 import { fetchEnquiries, fetchRequests, logout } from './api.ts'
 import { LOGIN_PATH, useStaff } from './StaffContext.ts'
 
@@ -36,6 +37,7 @@ export function StaffLayout(): JSX.Element {
 
   return (
     <div className="staff">
+      {garage?.demo_site && <DemoBanner />}
       <header className="staff-bar">
         <span className="staff-garage">{garageName ?? 'Staff'}</span>
         <nav className="staff-nav" aria-label="Staff">

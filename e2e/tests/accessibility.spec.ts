@@ -45,6 +45,14 @@ test('customer pages have no serious accessibility problems', async ({ page }) =
   await page.goto('/no-such-page')
   await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible()
   await expectNoSeriousViolations(page, 'the page-not-found page')
+
+  // Only the live demo has a Demo inbox.
+  const garage = (await (await page.request.get('/api/garage')).json()) as { demo_site: boolean }
+  if (garage.demo_site) {
+    await page.goto('/demo-inbox')
+    await expect(page.getByRole('heading', { level: 1, name: 'Demo inbox' })).toBeVisible()
+    await expectNoSeriousViolations(page, 'the Demo inbox')
+  }
 })
 
 test('booking, my-booking and staff pages have no serious accessibility problems', async ({ page, request }) => {

@@ -40,11 +40,15 @@ def _failures(
     return count or 0
 
 
-def is_locked(session: Session, email: str, ip: str, now: datetime) -> bool:
-    return (
-        _failures(session, LoginAttempt.email, normalise_email(email), now) >= EMAIL_LIMIT
-        or _failures(session, LoginAttempt.ip, ip, now) >= IP_LIMIT
-    )
+def is_locked(
+    session: Session, email: str, ip: str, now: datetime, *, skip_email_limit: bool = False
+) -> bool:
+    """`skip_email_limit`: count only the IP's failures (the live demo's public logins)."""
+    if _failures(session, LoginAttempt.ip, ip, now) >= IP_LIMIT:
+        return True
+    if skip_email_limit:
+        return False
+    return _failures(session, LoginAttempt.email, normalise_email(email), now) >= EMAIL_LIMIT
 
 
 def record_attempt(session: Session, email: str, ip: str, succeeded: bool, now: datetime) -> None:

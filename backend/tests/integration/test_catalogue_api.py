@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime, time
 from typing import Any, cast
 from unittest.mock import ANY
 
+from conftest import ClientFor
 from factories import first_day, make_timetable
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.clock import utc_now
+from app.config import AppConfig
 from app.models import Service, Setting
 from app.seed import seed
 
@@ -130,6 +132,7 @@ def test_garage_returns_contact_and_timezone(api_client: TestClient, db_session:
         "phone": "01632 960123",
         "email": "bookings@example.com",
         "timezone": "Europe/London",
+        "demo_site": False,
     }
 
 
@@ -150,3 +153,12 @@ def test_garage_returns_503_when_contact_is_malformed(
     response = api_client.get("/api/garage")
     assert response.status_code == 503
     assert response.json() == {"detail": "Garage details unavailable"}
+
+
+def test_garage_says_when_it_is_the_demo_site(
+    db_session: Session, client_for: ClientFor, migrated_url: str
+) -> None:
+    seed(db_session)
+    config = AppConfig(database_url=migrated_url, environment="test", demo_site=True)
+    with client_for(config) as client:
+        assert client.get("/api/garage").json()["demo_site"] is True

@@ -238,6 +238,7 @@ export function BookPage({ catalogue, now }: Props): JSX.Element {
         />
       ) : step.kind === 'details' ? (
         <DetailsForm
+          demoSite={garage.demo_site}
           key={step.hold.reference}
           hold={step.hold}
           zone={zone}

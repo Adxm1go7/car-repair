@@ -167,3 +167,14 @@ it('links to the privacy note in a new tab, so the typed enquiry is kept', async
   expect(link).toHaveAttribute('href', '/privacy')
   expect(link).toHaveAttribute('target', '_blank')
 })
+
+it('warns that the demo inbox is public, only on the demo site', async () => {
+  CATALOGUE['/api/garage'] = { ...GARAGE, demo_site: true }
+  try {
+    stub()
+    renderAt('/enquiry')
+    expect(await screen.findByText(/Everyone can see this inbox/)).toBeInTheDocument()
+  } finally {
+    CATALOGUE['/api/garage'] = GARAGE
+  }
+})

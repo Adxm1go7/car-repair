@@ -4,6 +4,7 @@ from factories import first_day
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import AppConfig
 from app.db import make_engine
 from app.demo_data import DEMO_STAFF
 from app.models import (
@@ -17,7 +18,7 @@ from app.models import (
     StaffUser,
     Timetable,
 )
-from app.seed import DEFAULT_SETTINGS, seed
+from app.seed import DEFAULT_SETTINGS, sample_accounts_wanted, seed
 from app.staff.passwords import password_matches
 
 CATALOGUE_MODELS: tuple[type[Base], ...] = (
@@ -202,3 +203,21 @@ def test_sample_password_logs_in(db_session: Session) -> None:
     by_email = {u.email: u for u in db_session.scalars(select(StaffUser))}
     for demo in DEMO_STAFF:
         assert password_matches(demo.password, by_email[demo.email].password_hash)
+
+
+def test_sample_accounts_wanted() -> None:
+    def config(environment: str, demo_site: bool) -> AppConfig:
+        return AppConfig.model_validate(
+            {
+                "database_url": "x",
+                "environment": environment,
+                "demo_site": demo_site,
+                "stripe_secret_key": "sk_test_x",
+                "stripe_publishable_key": "pk_test_x",
+                "stripe_webhook_secret": "whsec_x",
+            }
+        )
+
+    assert sample_accounts_wanted(config("production", False)) is False
+    assert sample_accounts_wanted(config("production", True)) is True
+    assert sample_accounts_wanted(config("development", False)) is True

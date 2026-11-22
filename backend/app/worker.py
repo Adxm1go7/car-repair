@@ -1,6 +1,7 @@
 """Background worker: queues reminders and sends queued email, releases expired holds,
 closes the payment forms of released ones, and once a day blanks customer details older than
-12 months (app/privacy/retention.py).
+12 months (app/privacy/retention.py). On the live demo it also resets everything at 03:00
+London time (app/demo/reset.py).
 
 Availability already ignores expired holds, so releasing is housekeeping: it makes the
 database say what the rule already means. Closing the forms matters more: until it's done,
@@ -24,9 +25,10 @@ from sqlalchemy.orm import Session
 from app.clock import utc_now
 from app.config import AppConfig, get_config
 from app.db import make_engine
+from app.demo.reset import RESET_ZONE, reset_demo, reset_due
 from app.email.outbox import send_due_emails
 from app.email.reminders import queue_due_reminders
-from app.email.sender import SmtpSender
+from app.email.sender import DemoInboxSender, EmailSender, SmtpSender
 from app.limits import delete_old_counts
 from app.logs import configure_logging
 from app.payments.deps import make_provider
@@ -79,7 +81,7 @@ def run_once(session: Session, now: datetime, provider: PaymentProvider) -> dict
     return counts
 
 
-def run_job(job: str, work: Callable[[], int | dict[str, int]]) -> None:
+def run_job(job: str, work: Callable[[], int | dict[str, int]]) -> bool:
     """Run one step of the worker loop and log one line if it did anything. A dict result
     counts its first value and logs every value. A failure is logged, not raised, so one
     broken step (a mail server down) never stops the others."""
@@ -88,7 +90,7 @@ def run_job(job: str, work: Callable[[], int | dict[str, int]]) -> None:
         result = work()
     except Exception:
         log.exception("job failed", extra={"job": job})
-        return
+        return False
     fields = result if isinstance(result, dict) else {}
     count = next(iter(result.values()), 0) if isinstance(result, dict) else result
     if count > 0 or any(fields.values()):
@@ -101,6 +103,7 @@ def run_job(job: str, work: Callable[[], int | dict[str, int]]) -> None:
                 **fields,
             },
         )
+    return True
 
 
 def queue_reminders(engine: Engine) -> int:
@@ -111,14 +114,37 @@ def queue_reminders(engine: Engine) -> int:
     return queued
 
 
-def send_emails(engine: Engine, sender: SmtpSender, public_base_url: str) -> int:
+def make_sender(config: AppConfig, session: Session) -> EmailSender:
+    """The live demo keeps emails in its Demo inbox; everywhere else they go out by SMTP."""
+    if config.demo_site:
+        return DemoInboxSender(session)
+    return SmtpSender(config.smtp_host, config.smtp_port, config.smtp_from)
+
+
+def send_emails(engine: Engine, config: AppConfig) -> int:
     with Session(engine) as session:
-        return send_due_emails(session, sender, utc_now(), public_base_url)
+        sender = make_sender(config, session)
+        return send_due_emails(session, sender, utc_now(), config.public_base_url)
 
 
 def remove_details(engine: Engine) -> int:
     with Session(engine) as session:
         return remove_old_details(session, utc_now())
+
+
+def reset_demo_site(engine: Engine) -> int:
+    with Session(engine) as session:
+        reset_demo(session)
+        session.commit()
+    return 1
+
+
+def demo_reset_step(engine: Engine, last_reset: datetime | None, now: datetime) -> datetime | None:
+    """Reset the live demo if it's due. Returns when it last succeeded: a failed reset (a
+    table in use, a deadlock) is tried again on the next loop."""
+    if not reset_due(last_reset, now, RESET_ZONE):
+        return last_reset
+    return now if run_job("demo_reset", lambda: reset_demo_site(engine)) else last_reset
 
 
 def release_holds(engine: Engine, config: AppConfig) -> dict[str, int]:
@@ -138,23 +164,21 @@ def main() -> None:
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
 
-    sender = SmtpSender(config.smtp_host, config.smtp_port, config.smtp_from)
     log.info(
-        "worker started: email every %d seconds, holds every %d seconds, payments: %s",
+        "worker started: email every %d seconds, holds every %d seconds, payments: %s, emails: %s",
         config.email_interval_seconds,
         config.worker_interval_seconds,
         config.payment_provider,
+        "demo inbox" if config.demo_site else "smtp",
     )
     last_holds_run: float | None = None
     last_retention_run: float | None = None
+    last_demo_reset: datetime | None = None
     try:
         while not stop.is_set():
             # Each step on its own, so a broken mail server never stops holds being released.
             run_job("reminders", lambda: queue_reminders(engine))
-            run_job(
-                "email",
-                lambda: send_emails(engine, sender, config.public_base_url),
-            )
+            run_job("email", lambda: send_emails(engine, config))
             due = last_holds_run is None or (
                 time.monotonic() - last_holds_run >= config.worker_interval_seconds
             )
@@ -166,6 +190,8 @@ def main() -> None:
             ):
                 last_retention_run = time.monotonic()
                 run_job("retention", lambda: remove_details(engine))
+            if config.demo_site:
+                last_demo_reset = demo_reset_step(engine, last_demo_reset, utc_now())
             stop.wait(config.email_interval_seconds)
     finally:
         engine.dispose()

@@ -13,6 +13,7 @@ from app.bookings.rules import reject_control_chars
 from app.config import AppConfig
 from app.email.queue import queue_staff_email
 from app.models import StaffUser
+from app.staff.demo_accounts import is_demo_account
 from app.staff.deps import (
     COOKIE_NAME,
     NowDep,
@@ -80,7 +81,8 @@ def login(
 ) -> StaffMeOut:
     email = normalise_email(body.email)
     ip = client_ip(request)
-    if is_locked(session, email, ip, now):
+    demo = is_demo_account(request.app.state.config, email)
+    if is_locked(session, email, ip, now, skip_email_limit=demo):
         record_attempt(session, email, ip, False, now)
         session.commit()
         raise WRONG
@@ -112,7 +114,8 @@ def forgot_password(
     record_attempt(session, email, ip, False, now)
     if not locked:
         user = session.scalars(select(StaffUser).where(StaffUser.email == email)).one_or_none()
-        if user is not None and user.active:
+        demo = is_demo_account(request.app.state.config, email)
+        if user is not None and user.active and not demo:
             queue_staff_email(session, "password_reset", user)
     session.commit()
     return MessageOut(detail=LINK_SENT)

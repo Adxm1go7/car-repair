@@ -38,6 +38,8 @@ export type Garage = {
   phone: string
   email: string
   timezone: string
+  /** The public live demo: banner, demo logins, the Demo inbox. */
+  demo_site: boolean
 }
 
 export type Catalogue = {

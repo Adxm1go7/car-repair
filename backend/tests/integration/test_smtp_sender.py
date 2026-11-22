@@ -19,6 +19,7 @@ MESSAGE = OutgoingEmail(
     subject="Your booking is confirmed — ABCD-EFGH",
     text="Plain words £20",
     html="<p>HTML words £20</p>",
+    template="confirmation",
 )
 
 

@@ -19,6 +19,12 @@ export function PrivacyPage({ garage }: { garage: Garage }): JSX.Element {
       </p>
       <h1>Privacy</h1>
       <p className="note">This is a demo garage. Every name, car and booking in it is made up.</p>
+      {garage.demo_site && (
+        <p className="note">
+          On this live demo nothing is really emailed: emails are kept in a Demo inbox that everyone
+          can see, and everything is wiped every night.
+        </p>
+      )}
 
       <h2>What we collect</h2>
       <p>

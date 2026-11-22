@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { Link, Route, Routes, useSearchParams } from 'react-router'
+import { DemoBanner } from './demo/DemoBanner.tsx'
+import { DemoEmailPage, DemoInboxPage } from './demo/DemoInboxPage.tsx'
 import './App.css'
 import { BookedPage } from './booking/BookedPage.tsx'
 import { BookPage } from './booking/BookPage.tsx'
@@ -216,8 +218,10 @@ function CustomerApp({ now }: { now: () => Date }): JSX.Element {
     )
   }
 
+  const { garage } = state.catalogue
   return (
     <>
+      {garage.demo_site && <DemoBanner />}
       <Routes>
         <Route path="/" element={<CataloguePage catalogue={state.catalogue} now={now()} />} />
         <Route path="/book" element={<BookPage catalogue={state.catalogue} now={now} />} />
@@ -225,9 +229,11 @@ function CustomerApp({ now }: { now: () => Date }): JSX.Element {
         <Route path="/booking/:reference" element={<ManageBookingPage garage={state.catalogue.garage} />} />
         <Route path="/enquiry" element={<EnquiryPage garage={state.catalogue.garage} />} />
         <Route path="/privacy" element={<PrivacyPage garage={state.catalogue.garage} />} />
+        {garage.demo_site && <Route path="/demo-inbox" element={<DemoInboxPage zone={garage.timezone} />} />}
+        {garage.demo_site && <Route path="/demo-inbox/:id" element={<DemoEmailPage zone={garage.timezone} />} />}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-      <CustomerFooter />
+      <CustomerFooter demoSite={garage.demo_site} />
     </>
   )
 }

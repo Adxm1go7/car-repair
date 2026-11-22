@@ -1,0 +1,11 @@
+# The live demo's front door (docker-compose.prod.yml). Caddy gets and renews the HTTPS
+# certificate for SITE_ADDRESS by itself, sends plain-HTTP visitors to HTTPS, and passes
+# every request to nginx. It replaces any X-Forwarded-For a visitor sends with the
+# visitor's real address, which nginx then believes (frontend/nginx.conf).
+{$SITE_ADDRESS} {
+	encode gzip
+	# Browsers use HTTPS only for this site for a year. No includeSubDomains or preload: the
+	# parent domain (e.g. duckdns.org) isn't ours.
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy web:80
+}

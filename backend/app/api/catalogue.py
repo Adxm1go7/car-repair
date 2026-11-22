@@ -59,6 +59,7 @@ class GarageOut(BaseModel):
     phone: str
     email: str
     timezone: str
+    demo_site: bool
 
 
 def _hhmm(value: time) -> str:
@@ -148,13 +149,16 @@ def booking_policy(request: Request, session: SessionDep) -> BookingPolicyOut:
 
 
 @router.get("/garage")
-def garage(session: SessionDep) -> GarageOut:
+def garage(request: Request, session: SessionDep) -> GarageOut:
+    config: AppConfig = request.app.state.config
     contact = get_setting(session, "garage_contact")
     timezone = get_setting(session, "garage_timezone")
     unavailable = HTTPException(status_code=503, detail="Garage details unavailable")
     if not isinstance(contact, dict):
         raise unavailable
     try:
-        return GarageOut.model_validate({**contact, "timezone": timezone})
+        return GarageOut.model_validate(
+            {**contact, "timezone": timezone, "demo_site": config.demo_site}
+        )
     except ValidationError as error:
         raise unavailable from error

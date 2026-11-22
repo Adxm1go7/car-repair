@@ -29,6 +29,9 @@ class AppConfig(BaseSettings):
     stripe_secret_key: str = Field(default="", repr=False)
     stripe_publishable_key: str = ""
     stripe_webhook_secret: str = Field(default="", repr=False)
+    # The public live demo: adds the demo staff logins (even in production), keeps emails in
+    # the Demo inbox instead of sending them, and resets the data every night.
+    demo_site: bool = False
 
     @property
     def allowed_origins(self) -> frozenset[str]:
