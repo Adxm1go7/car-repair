@@ -32,14 +32,23 @@ over SSH.
 
 ## 2. The server
 
-In the Oracle console, go to **Compute → Instances → Create instance** and set:
+First make the network. The create-instance form can make one too, but then it won't let
+you turn on the public IP address. Go to **Networking → Virtual cloud networks → Start VCN
+Wizard → Create VCN with Internet Connectivity**, name it `garage-vcn`, and create it.
+
+Then go to **Compute → Instances → Create instance** and set:
 
 - **Name:** `garage-demo`
-- **Image:** Canonical Ubuntu 24.04
-- **Shape:** Ampere, `VM.Standard.A1.Flex`, 2 OCPUs and 12 GB memory (the most the free
-  allowance covers)
-- **Networking:** the default new network, with **Assign a public IPv4 address** ticked
+- **Image:** Canonical Ubuntu 24.04 (not Minimal)
+- **Shape:** Ampere, `VM.Standard.A1.Flex`, 2 OCPUs and 12 GB memory (well inside the free
+  allowance of 4 OCPUs and 24 GB)
+- **Networking:** the existing `garage-vcn` and its **public** subnet, with **Automatically
+  assign public IPv4 address** turned on
 - **SSH keys:** **Save private key**. Keep the file. It's the only way in.
+- Leave everything else as it is.
+
+The cost estimate shows a small monthly charge for the boot volume. It ignores the free
+allowance, which covers 200 GB of disk, so a Free Tier account isn't charged.
 
 If creation fails with **Out of capacity**, try another availability domain (the dropdown
 in the Placement section), or try again later. Free Arm capacity comes and goes.
@@ -100,9 +109,16 @@ Reconnect with the same `ssh` command, then check: `docker compose version`.
 git clone https://github.com/Adxm1go7/car-repair.git
 cd car-repair
 cp .env.production.example .env
-openssl rand -base64 32   # a password for the database: copy it
+openssl rand -hex 32   # a password for the database: copy it
 nano .env
 ```
+
+Use `-hex`, not `-base64`. The password goes inside the database address, where a `/` or
+`+` would break it.
+
+If you can't paste into `nano`, fill in a copy of `.env.production.example` on your PC
+instead (outside the project folder), upload it with
+`scp -i <key> <file> ubuntu@<public-ip>:car-repair/.env`, then delete the copy on your PC.
 
 In `.env`, set:
 
